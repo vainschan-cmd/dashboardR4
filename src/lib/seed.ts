@@ -4,99 +4,49 @@ import { Branch, Department, User, KPIIndicator, TemplateConfig, KPIDirection, S
 export function runSeed(force = false) {
   const db = getDb();
 
-  const countRow = db.prepare('SELECT COUNT(*) as count FROM branches').get() as { count: number };
-  if (countRow.count > 0 && !force) {
-    console.log('Database already has data. Skipping seed.');
-    return;
-  }
-
-  console.log('Seeding initial data for Executive Dashboard Pelabuhan...');
+  console.log('Seeding official Pelindo Regional 4 (R4 PortSight) Master & Simulation Data...');
 
   // Clear existing if force
-  if (force) {
-    db.exec(`
-      DELETE FROM monthly_records;
-      DELETE FROM kpi_indicators;
-      DELETE FROM templates;
-      DELETE FROM users;
-      DELETE FROM departments;
-      DELETE FROM branches;
-      DELETE FROM import_batches;
-      DELETE FROM audit_logs;
-      DELETE FROM integration_settings;
-    `);
-  }
+  db.exec(`
+    DELETE FROM monthly_records;
+    DELETE FROM kpi_indicators;
+    DELETE FROM templates;
+    DELETE FROM users;
+    DELETE FROM departments;
+    DELETE FROM branches;
+    DELETE FROM import_batches;
+    DELETE FROM audit_logs;
+    DELETE FROM integration_settings;
+  `);
 
-  // 1. Branches
+  // 1. Branches (8 Terminals of Pelindo Regional 4)
   const branches: Branch[] = [
     {
-      id: 'br_tgprk',
-      code: 'CBG-TGPRK',
-      name: 'Cabang Tanjung Priok',
-      region: 'Regional 2 (DKI & Jawa Barat)',
-      address: 'Jl. Raya Pelabuhan No. 9, Tanjung Priok, Jakarta Utara',
-      phone: '(021) 4301080',
-      email: 'priok@pelindo.co.id',
+      id: 'term_new_makassar',
+      code: 'TRM-NMK',
+      name: 'New Makassar',
+      region: 'Regional 4 (Sulawesi Selatan)',
+      address: 'Makassar New Port (MNP), Kaluku Bodoa, Tallo, Makassar',
+      phone: '(0411) 362400',
+      email: 'mnp@pelindo.co.id',
       active: true,
       facilities: {
-        dermaga_length_m: 4850,
-        kolam_depth_mlws: -14.0,
-        lapangan_sqm: 1450000,
-        gudang_sqm: 120000,
-        crane_units: 32,
-        forklift_units: 65,
-        tugboat_units: 14,
-        pilotboat_units: 8,
+        dermaga_length_m: 1600,
+        kolam_depth_mlws: -16.0,
+        lapangan_sqm: 480000,
+        gudang_sqm: 45000,
+        crane_units: 10,
+        forklift_units: 25,
+        tugboat_units: 6,
+        pilotboat_units: 3,
       },
-      overview: 'Pelabuhan tersibuk dan terbesar di Indonesia yang melayani lebih dari 50% arus kargo ekspor-impor nasional.',
+      overview: 'Hub utama petikemas Kawasan Timur Indonesia (KTI) modern berkapasitas 2,5 juta TEUs per tahun.',
     },
     {
-      id: 'br_tgperak',
-      code: 'CBG-TGBRK',
-      name: 'Cabang Tanjung Perak',
-      region: 'Regional 3 (Jawa Timur & Nusra)',
-      address: 'Jl. Perak Timur No. 610, Surabaya, Jawa Timur',
-      phone: '(031) 3291991',
-      email: 'perak@pelindo.co.id',
-      active: true,
-      facilities: {
-        dermaga_length_m: 3600,
-        kolam_depth_mlws: -12.5,
-        lapangan_sqm: 980000,
-        gudang_sqm: 95000,
-        crane_units: 24,
-        forklift_units: 48,
-        tugboat_units: 10,
-        pilotboat_units: 6,
-      },
-      overview: 'Hub utama maritim di wilayah Indonesia Timur dengan konektivitas antarpulau terlengkap.',
-    },
-    {
-      id: 'br_belawan',
-      code: 'CBG-BLW',
-      name: 'Cabang Belawan',
-      region: 'Regional 1 (Sumatera Bagian Utara)',
-      address: 'Jl. Krakatau No. 100, Belawan, Medan, Sumatera Utara',
-      phone: '(061) 641401',
-      email: 'belawan@pelindo.co.id',
-      active: true,
-      facilities: {
-        dermaga_length_m: 2800,
-        kolam_depth_mlws: -11.0,
-        lapangan_sqm: 620000,
-        gudang_sqm: 75000,
-        crane_units: 18,
-        forklift_units: 35,
-        tugboat_units: 8,
-        pilotboat_units: 5,
-      },
-      overview: 'Gerbang utama logistik dan komoditas perkebunan (sawit, karet) di Selat Malaka.',
-    },
-    {
-      id: 'br_makassar',
-      code: 'CBG-MKS',
-      name: 'Cabang Makassar',
-      region: 'Regional 4 (Sulawesi, Maluku, Papua)',
+      id: 'term_makassar',
+      code: 'TRM-MKS',
+      name: 'Makassar',
+      region: 'Regional 4 (Sulawesi Selatan)',
       address: 'Jl. Soekarno No. 1, Makassar, Sulawesi Selatan',
       phone: '(0411) 316521',
       email: 'makassar@pelindo.co.id',
@@ -104,35 +54,140 @@ export function runSeed(force = false) {
       facilities: {
         dermaga_length_m: 2100,
         kolam_depth_mlws: -12.0,
-        lapangan_sqm: 540000,
-        gudang_sqm: 50000,
-        crane_units: 14,
-        forklift_units: 30,
-        tugboat_units: 6,
-        pilotboat_units: 4,
+        lapangan_sqm: 320000,
+        gudang_sqm: 35000,
+        crane_units: 8,
+        forklift_units: 20,
+        tugboat_units: 4,
+        pilotboat_units: 3,
       },
-      overview: 'Simpul logistik strategis Kawasan Timur Indonesia (KTI) yang terintegrasi dengan Makassar New Port (MNP).',
+      overview: 'Terminal petikemas & konvensional eksisting pelabuhan Soekarno Hatta Makassar.',
     },
     {
-      id: 'br_balikpapan',
-      code: 'CBG-BPN',
-      name: 'Cabang Balikpapan',
-      region: 'Regional 4 (Kalimantan & IKN)',
+      id: 'term_bitung',
+      code: 'TRM-BTG',
+      name: 'Bitung',
+      region: 'Regional 4 (Sulawesi Utara)',
+      address: 'Jl. Sam Ratulangi No. 1, Bitung, Sulawesi Utara',
+      phone: '(0438) 21115',
+      email: 'bitung@pelindo.co.id',
+      active: true,
+      facilities: {
+        dermaga_length_m: 1350,
+        kolam_depth_mlws: -14.0,
+        lapangan_sqm: 260000,
+        gudang_sqm: 25000,
+        crane_units: 6,
+        forklift_units: 16,
+        tugboat_units: 4,
+        pilotboat_units: 2,
+      },
+      overview: 'Pelabuhan Hub Internasional Indonesia Timur menghadap Samudra Pasifik.',
+    },
+    {
+      id: 'term_ambon',
+      code: 'TRM-AMB',
+      name: 'Ambon',
+      region: 'Regional 4 (Maluku)',
+      address: 'Jl. Yos Sudarso, Ambon, Maluku',
+      phone: '(0911) 352441',
+      email: 'ambon@pelindo.co.id',
+      active: true,
+      facilities: {
+        dermaga_length_m: 850,
+        kolam_depth_mlws: -11.5,
+        lapangan_sqm: 140000,
+        gudang_sqm: 18000,
+        crane_units: 4,
+        forklift_units: 12,
+        tugboat_units: 3,
+        pilotboat_units: 2,
+      },
+      overview: 'Pintu gerbang logistik laut Kepulauan Maluku dan sentra ekspor perikanan nasional.',
+    },
+    {
+      id: 'term_sorong',
+      code: 'TRM-SRG',
+      name: 'Sorong',
+      region: 'Regional 4 (Papua Barat Daya)',
+      address: 'Jl. Jenderal Sudirman No. 1, Sorong, Papua Barat Daya',
+      phone: '(0951) 321882',
+      email: 'sorong@pelindo.co.id',
+      active: true,
+      facilities: {
+        dermaga_length_m: 750,
+        kolam_depth_mlws: -12.0,
+        lapangan_sqm: 120000,
+        gudang_sqm: 15000,
+        crane_units: 3,
+        forklift_units: 10,
+        tugboat_units: 3,
+        pilotboat_units: 2,
+      },
+      overview: 'Hub maritim utama Tanah Papua dengan konektivitas feeder tol laut.',
+    },
+    {
+      id: 'term_balikpapan',
+      code: 'TRM-BPN',
+      name: 'Balikpapan',
+      region: 'Regional 4 (Kalimantan Timur & IKN)',
       address: 'Jl. Yos Sudarso No. 30, Balikpapan, Kalimantan Timur',
       phone: '(0542) 732040',
       email: 'balikpapan@pelindo.co.id',
       active: true,
       facilities: {
-        dermaga_length_m: 1650,
+        dermaga_length_m: 1850,
         kolam_depth_mlws: -13.0,
-        lapangan_sqm: 420000,
+        lapangan_sqm: 380000,
         gudang_sqm: 40000,
-        crane_units: 10,
-        forklift_units: 24,
+        crane_units: 6,
+        forklift_units: 22,
         tugboat_units: 8,
         pilotboat_units: 4,
       },
-      overview: 'Pelabuhan pintu gerbang utama material konstruksi logistik Ibu Kota Nusantara (IKN) dan migas Kalimantan.',
+      overview: 'Terminal Multipurpose strategis penyangga logistik konstruksi Ibu Kota Nusantara (IKN).',
+    },
+    {
+      id: 'term_pantoloan',
+      code: 'TRM-PTL',
+      name: 'Pantoloan',
+      region: 'Regional 4 (Sulawesi Tengah)',
+      address: 'Jl. Pelabuhan Pantoloan, Palu, Sulawesi Tengah',
+      phone: '(0451) 491200',
+      email: 'pantoloan@pelindo.co.id',
+      active: true,
+      facilities: {
+        dermaga_length_m: 650,
+        kolam_depth_mlws: -12.0,
+        lapangan_sqm: 110000,
+        gudang_sqm: 12000,
+        crane_units: 3,
+        forklift_units: 8,
+        tugboat_units: 2,
+        pilotboat_units: 2,
+      },
+      overview: 'Terminal Multipurpose di Teluk Palu untuk distribusi logistik dan komoditas tambang.',
+    },
+    {
+      id: 'term_ternate',
+      code: 'TRM-TTE',
+      name: 'Ternate',
+      region: 'Regional 4 (Maluku Utara)',
+      address: 'Jl. Ahmad Yani No. 1, Ternate, Maluku Utara',
+      phone: '(0921) 3121544',
+      email: 'ternate@pelindo.co.id',
+      active: true,
+      facilities: {
+        dermaga_length_m: 550,
+        kolam_depth_mlws: -11.0,
+        lapangan_sqm: 85000,
+        gudang_sqm: 10000,
+        crane_units: 2,
+        forklift_units: 8,
+        tugboat_units: 2,
+        pilotboat_units: 1,
+      },
+      overview: 'Terminal Multipurpose melayani Kepulauan Halmahera dan rempah-rempah Maluku Utara.',
     },
   ];
 
@@ -146,13 +201,12 @@ export function runSeed(force = false) {
 
   // 2. Departments
   const departments: Department[] = [
-    { id: 'dept_pel', code: 'PEL', name: 'Pelanggan', pic_name: 'Dian Permatasari', pic_email: 'dian.pelanggan@pelabuhan.co.id', active: true, description: 'Pengelolaan relasi pelanggan, survei kepuasan, dan manajemen pengaduan/keluhan.' },
-    { id: 'dept_hsse', code: 'HSSE', name: 'HSSE', pic_name: 'Capt. Rian Pratama', pic_email: 'rian.hsse@pelabuhan.co.id', active: true, description: 'Health, Safety, Security, and Environment (K3 & Lingkungan Hidup).' },
-    { id: 'dept_keu', code: 'KEU', name: 'Keuangan', pic_name: 'Siti Rahma, SE, Ak.', pic_email: 'siti.keuangan@pelabuhan.co.id', active: true, description: 'Monitoring pendapatan, realisasi anggaran RKAP, biaya operasional, dan profitabilitas.' },
-    { id: 'dept_kom', code: 'KOM', name: 'Komersial', pic_name: 'Eko Sulistyo', pic_email: 'eko.komersial@pelabuhan.co.id', active: true, description: 'Pengembangan pasar, utilisasi fasilitas, kontrak kerja sama bisnis, dan volume jasa.' },
-    { id: 'dept_ops', code: 'OPS', name: 'Operasional', pic_name: 'Rudi Hartono, ST', pic_email: 'rudi.ops@pelabuhan.co.id', active: true, description: 'Pelayanan kapal, bongkar muat barang/petikemas, utilisasi dermaga (BOR), dan TRT/WT.' },
-    { id: 'dept_tek', code: 'TEK', name: 'Teknik', pic_name: 'Ir. Agus Santoso', pic_email: 'agus.teknik@pelabuhan.co.id', active: true, description: 'Kesiapan fasilitas & alat (RFU), pemeliharaan preventif/korektif, dan progres investasi.' },
-    { id: 'dept_sdm', code: 'SDM', name: 'SDM', pic_name: 'Dewi Kartika, M.M.', pic_email: 'dewi.sdm@pelabuhan.co.id', active: true, description: 'Manajemen tenaga kerja, produktivitas pegawai, diklat, sertifikasi, dan absensi.' },
+    { id: 'dept_ops', code: 'OPS', name: 'Operasional', pic_name: 'Capt. Rudi Hartono', pic_email: 'rudi.ops@pelindo.co.id', active: true, description: 'Arus kapal, petikemas, barang, produktivitas BSH/BCH, dan BOR/YOR.' },
+    { id: 'dept_sdm', code: 'SDM', name: 'SDM', pic_name: 'Dewi Kartika, M.M.', pic_email: 'dewi.sdm@pelindo.co.id', active: true, description: 'Organik, outsourcing, rasio OS:organik, demografi usia, dan pensiun.' },
+    { id: 'dept_tek', code: 'TEK', name: 'Teknik', pic_name: 'Ir. Agus Santoso', pic_email: 'agus.teknik@pelindo.co.id', active: true, description: 'Kesiapan alat (RFU), status CC/RTG, MTTR, MTBF, breakdown, dan uptime TI.' },
+    { id: 'dept_hsse', code: 'HSSE', name: 'HSSE', pic_name: 'Capt. Rian Pratama', pic_email: 'rian.hsse@pelindo.co.id', active: true, description: 'Hari tanpa LTI, piramida keselamatan, patroli YTD, dan peta temuan.' },
+    { id: 'dept_keu', code: 'KEU', name: 'Keuangan', pic_name: 'Siti Rahma, SE, Ak.', pic_email: 'siti.keu@pelindo.co.id', active: true, description: 'Pendapatan usaha, beban usaha, EBITDA, laba usaha, dan realisasi RKAP.' },
+    { id: 'dept_pel', code: 'PEL', name: 'Pelanggan', pic_name: 'Dian Permatasari', pic_email: 'dian.pel@pelindo.co.id', active: true, description: 'Kepatuhan SLA, CSAT 1-5, keluhan masuk, umur tiket, dan kategori keluhan.' },
   ];
 
   const stmtDept = db.prepare(`
@@ -165,13 +219,11 @@ export function runSeed(force = false) {
 
   // 3. Users (RBAC)
   const users: User[] = [
-    { id: 'usr_super', username: 'superadmin', name: 'Budi Santoso', email: 'superadmin@pelabuhan.co.id', role: 'super_admin', active: true },
-    { id: 'usr_adminreg', username: 'adminreg', name: 'Hendra Wijaya', email: 'admin.regional@pelabuhan.co.id', role: 'admin_regional', active: true },
-    { id: 'usr_pic_ops', username: 'pic_ops', name: 'Rudi Hartono', email: 'rudi.ops@pelabuhan.co.id', role: 'pic_dept_regional', department_id: 'dept_ops', active: true },
-    { id: 'usr_pic_keu', username: 'pic_keu', name: 'Siti Rahma', email: 'siti.keuangan@pelabuhan.co.id', role: 'pic_dept_regional', department_id: 'dept_keu', active: true },
-    { id: 'usr_pic_priok', username: 'pic_priok', name: 'Ahmad Dahlan', email: 'ahmad.priok@pelabuhan.co.id', role: 'pic_cabang', branch_id: 'br_tgprk', active: true },
-    { id: 'usr_pic_perak', username: 'pic_perak', name: 'Bambang Sutrisno', email: 'bambang.perak@pelabuhan.co.id', role: 'pic_cabang', branch_id: 'br_tgperak', active: true },
-    { id: 'usr_viewer', username: 'viewer_dir', name: 'Dr. Ir. Wahyu Wibowo (Direksi)', email: 'direksi@pelabuhan.co.id', role: 'viewer', active: true },
+    { id: 'usr_super', username: 'superadmin', name: 'Budi Santoso', email: 'superadmin@pelindo.co.id', role: 'super_admin', active: true },
+    { id: 'usr_adminreg', username: 'adminreg', name: 'Hendra Wijaya', email: 'admin.r4@pelindo.co.id', role: 'admin_regional', active: true },
+    { id: 'usr_pic_ops', username: 'pic_ops', name: 'Capt. Rudi Hartono', email: 'rudi.ops@pelindo.co.id', role: 'pic_dept_regional', department_id: 'dept_ops', active: true },
+    { id: 'usr_pic_nmk', username: 'pic_nmk', name: 'Ahmad Dahlan', email: 'ahmad.nmk@pelindo.co.id', role: 'pic_cabang', branch_id: 'term_new_makassar', active: true },
+    { id: 'usr_viewer', username: 'bod_regional', name: 'Board of Directors Regional 4', email: 'bod.r4@pelindo.co.id', role: 'viewer', active: true },
   ];
 
   const stmtUser = db.prepare(`
@@ -184,51 +236,16 @@ export function runSeed(force = false) {
 
   // 4. KPI Indicators
   const indicators: KPIIndicator[] = [
-    // Operasional
-    { id: 'kpi_ops_call', code: 'OPS-01', name: 'Arus Kunjungan Kapal', department_id: 'dept_ops', category: 'Trafik Kapal', unit: 'Call', direction: 'higher_is_better', formula_desc: 'Jumlah panggilan/kedatangan kapal di dermaga', default_target: 350, is_core_kpi: true, active: true },
-    { id: 'kpi_ops_gt', code: 'OPS-02', name: 'Volume Gross Tonnage Kapal', department_id: 'dept_ops', category: 'Trafik Kapal', unit: 'GT (Juta)', direction: 'higher_is_better', formula_desc: 'Akumulasi tonase kotor kapal yang bersandar', default_target: 12.5, is_core_kpi: false, active: true },
-    { id: 'kpi_ops_teus', code: 'OPS-03', name: 'Arus Petikemas', department_id: 'dept_ops', category: 'Kargo', unit: 'TEUs', direction: 'higher_is_better', formula_desc: 'Throughput boks petikemas ekspor/impor/domestik', default_target: 450000, is_core_kpi: true, active: true },
-    { id: 'kpi_ops_cargo', code: 'OPS-04', name: 'Arus Non-Petikemas (Curah/General)', department_id: 'dept_ops', category: 'Kargo', unit: 'Ton (Ribu)', direction: 'higher_is_better', formula_desc: 'Muatan curah kering, curah cair, dan general cargo', default_target: 850, is_core_kpi: false, active: true },
-    { id: 'kpi_ops_bor', code: 'OPS-05', name: 'Berth Occupancy Ratio (BOR)', department_id: 'dept_ops', category: 'Utilisasi', unit: '%', direction: 'higher_is_better', formula_desc: 'Rasio waktu pemakaian dermaga terhadap waktu tersedia (Ideal 60-70%)', default_target: 65.0, is_core_kpi: true, active: true },
-    { id: 'kpi_ops_trt', code: 'OPS-06', name: 'Turn Around Time (TRT)', department_id: 'dept_ops', category: 'Waktu Pelayanan', unit: 'Jam', direction: 'lower_is_better', formula_desc: 'Waktu total kapal sejak tiba di perairan hingga berangkat', default_target: 28.0, is_core_kpi: true, active: true },
-    { id: 'kpi_ops_wt', code: 'OPS-07', name: 'Waiting Time (WT)', department_id: 'dept_ops', category: 'Waktu Pelayanan', unit: 'Jam', direction: 'lower_is_better', formula_desc: 'Waktu tunggu kapal sebelum bersandar di dermaga', default_target: 1.5, is_core_kpi: false, active: true },
-    { id: 'kpi_ops_bsh', code: 'OPS-08', name: 'Produktivitas Bongkar Muat (BSH)', department_id: 'dept_ops', category: 'Produktivitas', unit: 'Box/Kapal/Jam', direction: 'higher_is_better', formula_desc: 'Rata-rata boks per kapal per jam operasi', default_target: 45.0, is_core_kpi: false, active: true },
-
-    // Keuangan
-    { id: 'kpi_keu_rev', code: 'KEU-01', name: 'Pendapatan Usaha', department_id: 'dept_keu', category: 'Pendapatan', unit: 'Miliar Rp', direction: 'higher_is_better', formula_desc: 'Total omset pendapatan jasa kepelabuhanan', default_target: 380.0, is_core_kpi: true, active: true },
-    { id: 'kpi_keu_cost', code: 'KEU-02', name: 'Beban Pokok & Operasional', department_id: 'dept_keu', category: 'Beban', unit: 'Miliar Rp', direction: 'lower_is_better', formula_desc: 'Biaya operasional langsung dan overhead', default_target: 240.0, is_core_kpi: false, active: true },
-    { id: 'kpi_keu_profit', code: 'KEU-03', name: 'Laba Bersih Sebelum Pajak', department_id: 'dept_keu', category: 'Profitabilitas', unit: 'Miliar Rp', direction: 'higher_is_better', formula_desc: 'Pendapatan dikurangi total beban', default_target: 140.0, is_core_kpi: true, active: true },
-    { id: 'kpi_keu_rkap', code: 'KEU-04', name: 'Realisasi Anggaran RKAP', department_id: 'dept_keu', category: 'Anggaran', unit: '%', direction: 'higher_is_better', formula_desc: 'Realisasi terhadap target RKAP tahunan', default_target: 95.0, is_core_kpi: true, active: true },
-
-    // Pelanggan
-    { id: 'kpi_pel_active', code: 'PEL-01', name: 'Jumlah Pelanggan Aktif', department_id: 'dept_pel', category: 'Pertumbuhan', unit: 'Entitas', direction: 'higher_is_better', formula_desc: 'Perusahaan pelayaran dan pemilik kargo bertransaksi aktif', default_target: 420, is_core_kpi: true, active: true },
-    { id: 'kpi_pel_csat', code: 'PEL-02', name: 'Customer Satisfaction Index (CSAT)', department_id: 'dept_pel', category: 'Kepuasan', unit: 'Skor (0-100)', direction: 'higher_is_better', formula_desc: 'Indeks hasil survei kepuasan pelanggan berkala', default_target: 88.0, is_core_kpi: true, active: true },
-    { id: 'kpi_pel_complaint', code: 'PEL-03', name: 'Keluhan Masuk', department_id: 'dept_pel', category: 'Pengaduan', unit: 'Kasus', direction: 'lower_is_better', formula_desc: 'Jumlah komplain atau tiket keluhan dari pelanggan', default_target: 15, is_core_kpi: false, active: true },
-    { id: 'kpi_pel_sla', code: 'PEL-04', name: 'Penyelesaian Keluhan Sesuai SLA', department_id: 'dept_pel', category: 'Pengaduan', unit: '%', direction: 'higher_is_better', formula_desc: 'Persentase keluhan yang tuntas sebelum tenggat SLA (3 hari)', default_target: 95.0, is_core_kpi: true, active: true },
-
-    // HSSE
-    { id: 'kpi_hsse_fatality', code: 'HSSE-01', name: 'Fatality (Kecelakaan Fatal)', department_id: 'dept_hsse', category: 'Insiden', unit: 'Kasus', direction: 'lower_is_better', formula_desc: 'Kecelakaan kerja berakibat kematian (Target: Nol)', default_target: 0, is_core_kpi: true, active: true },
-    { id: 'kpi_hsse_lti', code: 'HSSE-02', name: 'Lost Time Injury (LTI)', department_id: 'dept_hsse', category: 'Insiden', unit: 'Kasus', direction: 'lower_is_better', formula_desc: 'Kecelakaan yang menyebabkan hari kerja hilang', default_target: 0, is_core_kpi: true, active: true },
-    { id: 'kpi_hsse_nearmiss', code: 'HSSE-03', name: 'Pelaporan Near Miss (Hampir Celaka)', department_id: 'dept_hsse', category: 'Kultur K3', unit: 'Laporan', direction: 'higher_is_better', formula_desc: 'Proaktif melapor potensi bahaya di area pelabuhan', default_target: 45, is_core_kpi: false, active: true },
-    { id: 'kpi_hsse_inspection', code: 'HSSE-04', name: 'Realisasi Safety Inspection', department_id: 'dept_hsse', category: 'Kepatuhan', unit: '%', direction: 'higher_is_better', formula_desc: 'Inspeksi K3 lapangan terhadap jadwal wajib', default_target: 98.0, is_core_kpi: false, active: true },
-    { id: 'kpi_hsse_env', code: 'HSSE-05', name: 'Kepatuhan Baku Mutu Lingkungan', department_id: 'dept_hsse', category: 'Lingkungan', unit: '%', direction: 'higher_is_better', formula_desc: 'Pemantauan kualitas air laut, udara, dan limbah B3', default_target: 96.0, is_core_kpi: true, active: true },
-
-    // Komersial
-    { id: 'kpi_kom_dermaga', code: 'KOM-01', name: 'Pendapatan Jasa Dermaga & Tambat', department_id: 'dept_kom', category: 'Layanan', unit: 'Miliar Rp', direction: 'higher_is_better', formula_desc: 'Tarif tambat dan dermaga kapal masuk', default_target: 85.0, is_core_kpi: false, active: true },
-    { id: 'kpi_kom_tunda', code: 'KOM-02', name: 'Pendapatan Jasa Pemanduan & Penundaan', department_id: 'dept_kom', category: 'Layanan', unit: 'Miliar Rp', direction: 'higher_is_better', formula_desc: 'Pendapatan kapal tunda dan perwira pandu laut', default_target: 65.0, is_core_kpi: false, active: true },
-    { id: 'kpi_kom_kontrak', code: 'KOM-03', name: 'Kontrak Kerjasama Baru / Perpanjangan', department_id: 'dept_kom', category: 'Bisnis', unit: 'Kontrak', direction: 'higher_is_better', formula_desc: 'PKS kemitraan dengan B2B shipping lines & forwarder', default_target: 8, is_core_kpi: true, active: true },
-
-    // Teknik
-    { id: 'kpi_tek_rfu', code: 'TEK-01', name: 'Kesiapan Alat / Ready For Use (RFU)', department_id: 'dept_tek', category: 'Kesiapan', unit: '%', direction: 'higher_is_better', formula_desc: 'Ketersediaan CC, RTG, Reach Stacker beroperasi prima', default_target: 88.0, is_core_kpi: true, active: true },
-    { id: 'kpi_tek_preventive', code: 'TEK-02', name: 'Rasio Pemeliharaan Preventif', department_id: 'dept_tek', category: 'Maintenance', unit: '%', direction: 'higher_is_better', formula_desc: 'Porsi pemeliharaan terjadwal vs perbaikan mendadak', default_target: 80.0, is_core_kpi: false, active: true },
-    { id: 'kpi_tek_downtime', code: 'TEK-03', name: 'Total Waktu Kerusakan / Downtime', department_id: 'dept_tek', category: 'Kendala', unit: 'Jam', direction: 'lower_is_better', formula_desc: 'Waktu henti alat bongkar muat akibat kerusakan mekanik/elektrik', default_target: 25.0, is_core_kpi: true, active: true },
-    { id: 'kpi_tek_capex', code: 'TEK-04', name: 'Progres Proyek Investasi Fasilitas', department_id: 'dept_tek', category: 'Investasi', unit: '%', direction: 'higher_is_better', formula_desc: 'Progres fisik perpanjangan dermaga / pengerukan alur', default_target: 92.0, is_core_kpi: false, active: true },
-
-    // SDM
-    { id: 'kpi_sdm_total', code: 'SDM-01', name: 'Jumlah Pegawai Aktif', department_id: 'dept_sdm', category: 'Komposisi', unit: 'Orang', direction: 'higher_is_better', formula_desc: 'Total SDM organik dan penunjang operasional', default_target: 850, is_core_kpi: false, active: true },
-    { id: 'kpi_sdm_prod', code: 'SDM-02', name: 'Produktivitas SDM (Omset/Pegawai)', department_id: 'dept_sdm', category: 'Produktivitas', unit: 'Juta Rp/Org', direction: 'higher_is_better', formula_desc: 'Pendapatan usaha dibagi jumlah total personil', default_target: 450.0, is_core_kpi: true, active: true },
-    { id: 'kpi_sdm_training', code: 'SDM-03', name: 'Rata-rata Jam Pelatihan Pegawai', department_id: 'dept_sdm', category: 'Pengembangan', unit: 'Jam/Pegawai', direction: 'higher_is_better', formula_desc: 'Jam diklat kompetensi teknis & manajemen', default_target: 24.0, is_core_kpi: false, active: true },
-    { id: 'kpi_sdm_attend', code: 'SDM-04', name: 'Tingkat Kehadiran / Presensi', department_id: 'dept_sdm', category: 'Kedisiplinan', unit: '%', direction: 'higher_is_better', formula_desc: 'Persentase hari hadir kerja resmi', default_target: 96.5, is_core_kpi: true, active: true },
+    { id: 'kpi_teus', code: 'OPS-TEUS', name: 'Arus Petikemas', department_id: 'dept_ops', category: 'Kargo', unit: 'TEUs', direction: 'higher_is_better', default_target: 1026000, is_core_kpi: true, active: true },
+    { id: 'kpi_cargo', code: 'OPS-CARGO', name: 'Arus Barang', department_id: 'dept_ops', category: 'Kargo', unit: 'Ton', direction: 'higher_is_better', default_target: 8300000, is_core_kpi: true, active: true },
+    { id: 'kpi_call', code: 'OPS-CALL', name: 'Kunjungan Kapal', department_id: 'dept_ops', category: 'Trafik', unit: 'Call', direction: 'higher_is_better', default_target: 1800, is_core_kpi: true, active: true },
+    { id: 'kpi_rev', code: 'KEU-REV', name: 'Pendapatan Usaha', department_id: 'dept_keu', category: 'Keuangan', unit: 'Miliar Rp', direction: 'higher_is_better', default_target: 2010.0, is_core_kpi: true, active: true },
+    { id: 'kpi_profit', code: 'KEU-OP', name: 'Laba Usaha', department_id: 'dept_keu', category: 'Keuangan', unit: 'Miliar Rp', direction: 'higher_is_better', default_target: 585.0, is_core_kpi: true, active: true },
+    { id: 'kpi_rfu', code: 'TEK-RFU', name: 'Kesiapan Alat', department_id: 'dept_tek', category: 'Keandalan', unit: '%', direction: 'higher_is_better', default_target: 92.0, is_core_kpi: true, active: true },
+    { id: 'kpi_csat', code: 'PEL-CSAT', name: 'Indeks Kepuasan (CSAT)', department_id: 'dept_pel', category: 'Layanan', unit: 'Skor 1-5', direction: 'higher_is_better', default_target: 4.0, is_core_kpi: true, active: true },
+    { id: 'kpi_sla', code: 'PEL-SLA', name: 'SLA Keluhan', department_id: 'dept_pel', category: 'Layanan', unit: '%', direction: 'higher_is_better', default_target: 90.0, is_core_kpi: true, active: true },
+    { id: 'kpi_fatality', code: 'HSSE-FAT', name: 'Fatality', department_id: 'dept_hsse', category: 'K3', unit: 'Kasus', direction: 'lower_is_better', default_target: 0, is_core_kpi: true, active: true },
+    { id: 'kpi_lti', code: 'HSSE-LTI', name: 'Lost Time Injury', department_id: 'dept_hsse', category: 'K3', unit: 'Kasus', direction: 'lower_is_better', default_target: 0, is_core_kpi: true, active: true },
   ];
 
   const stmtInd = db.prepare(`
@@ -236,22 +253,21 @@ export function runSeed(force = false) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const k of indicators) {
-    stmtInd.run(k.id, k.code, k.name, k.department_id, k.category, k.unit, k.direction, k.formula_desc || '', k.default_target, k.is_core_kpi ? 1 : 0, k.active ? 1 : 0);
+    stmtInd.run(k.id, k.code, k.name, k.department_id, k.category, k.unit, k.direction, '', k.default_target, k.is_core_kpi ? 1 : 0, 1);
   }
 
-  // 5. Default Templates per Department
+  // 5. Default Templates
   const defaultColumns = [
-    { column_name: 'Kode Cabang', field_key: 'branch_code', data_type: 'string', required: true, sample_value: 'CBG-TGPRK' },
-    { column_name: 'Nama Cabang', field_key: 'branch_name', data_type: 'string', required: false, sample_value: 'Cabang Tanjung Priok' },
+    { column_name: 'Kode Terminal', field_key: 'branch_code', data_type: 'string', required: true, sample_value: 'TRM-NMK' },
+    { column_name: 'Nama Terminal', field_key: 'branch_name', data_type: 'string', required: false, sample_value: 'New Makassar' },
     { column_name: 'Departemen', field_key: 'department_code', data_type: 'string', required: true, sample_value: 'OPS' },
-    { column_name: 'Bulan', field_key: 'month', data_type: 'number', required: true, sample_value: 3 },
-    { column_name: 'Tahun', field_key: 'year', data_type: 'number', required: true, sample_value: 2025 },
-    { column_name: 'Kode Indikator', field_key: 'indicator_code', data_type: 'string', required: true, sample_value: 'OPS-01' },
-    { column_name: 'Nama Indikator', field_key: 'indicator_name', data_type: 'string', required: false, sample_value: 'Arus Kunjungan Kapal' },
-    { column_name: 'Target', field_key: 'target', data_type: 'number', required: true, sample_value: 350 },
-    { column_name: 'Realisasi', field_key: 'realization', data_type: 'number', required: true, sample_value: 368 },
-    { column_name: 'Satuan', field_key: 'unit', data_type: 'string', required: true, sample_value: 'Call' },
-    { column_name: 'Keterangan', field_key: 'notes', data_type: 'string', required: false, sample_value: 'Data simulasi terverifikasi' },
+    { column_name: 'Bulan', field_key: 'month', data_type: 'number', required: true, sample_value: 9 },
+    { column_name: 'Tahun', field_key: 'year', data_type: 'number', required: true, sample_value: 2026 },
+    { column_name: 'Kode Indikator', field_key: 'indicator_code', data_type: 'string', required: true, sample_value: 'OPS-TEUS' },
+    { column_name: 'Target', field_key: 'target', data_type: 'number', required: true, sample_value: 400000 },
+    { column_name: 'Realisasi', field_key: 'realization', data_type: 'number', required: true, sample_value: 412500 },
+    { column_name: 'Satuan', field_key: 'unit', data_type: 'string', required: true, sample_value: 'TEUs' },
+    { column_name: 'Keterangan', field_key: 'notes', data_type: 'string', required: false, sample_value: 'Pelaporan resmi R4 PortSight' },
   ];
 
   const stmtTpl = db.prepare(`
@@ -259,20 +275,18 @@ export function runSeed(force = false) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   for (const d of departments) {
-    const tpl: TemplateConfig = {
-      id: `tpl_${d.code.toLowerCase()}`,
-      department_id: d.id,
-      version: 'v1.2-Standard',
-      name: `Template Resmi Pelaporan Bulanan Departemen ${d.name}`,
-      description: `Format spreadsheet standar input data indikator ${d.name} seluruh cabang pelabuhan.`,
-      columns: defaultColumns as any,
-      updated_at: new Date().toISOString(),
-    };
-    stmtTpl.run(tpl.id, tpl.department_id, tpl.version, tpl.name, tpl.description, JSON.stringify(tpl.columns), tpl.updated_at);
+    stmtTpl.run(
+      `tpl_${d.code.toLowerCase()}`,
+      d.id,
+      'v2.0-PortSight',
+      `Template Resmi Pelaporan ${d.name} Pelindo Regional 4`,
+      `Format data spreadsheet bulanan resmi untuk 8 terminal Pelindo Regional 4`,
+      JSON.stringify(defaultColumns),
+      new Date().toISOString()
+    );
   }
 
-  // 6. Generate Realistic Simulated Monthly Records
-  // We will generate records for 2024 (12 months) and 2025 (12 months) and 2026 (Jan, Feb, Mar)
+  // 6. Seed Monthly Records matching the presentation
   const stmtRec = db.prepare(`
     INSERT INTO monthly_records (
       id, branch_id, department_id, indicator_id, month, year,
@@ -282,194 +296,94 @@ export function runSeed(force = false) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
 
-  // Scale factor per port size
-  const portScale: Record<string, number> = {
-    br_tgprk: 1.0,
-    br_tgperak: 0.78,
-    br_belawan: 0.52,
-    br_makassar: 0.42,
-    br_balikpapan: 0.36,
-  };
+  // Terminal baseline data
+  const terminalData = [
+    { branchId: 'term_new_makassar', teus: 412500, teusTarget: 400000, rkapPct: 103.1, yoy: 8.5, status: 'Baik' },
+    { branchId: 'term_makassar', teus: 268400, teusTarget: 275000, rkapPct: 97.6, yoy: -1.3, status: 'Waspada' },
+    { branchId: 'term_bitung', teus: 196300, teusTarget: 190000, rkapPct: 103.3, yoy: 8.0, status: 'Baik' },
+    { branchId: 'term_ambon', teus: 88700, teusTarget: 92000, rkapPct: 96.4, yoy: 4.2, status: 'Waspada' },
+    { branchId: 'term_sorong', teus: 74200, teusTarget: 70000, rkapPct: 106.0, yoy: 11.1, status: 'Baik' },
+    { branchId: 'term_balikpapan', teus: 0, ton: 4820000, tonTarget: 4700000, rkapPct: 102.6, yoy: 5.9, status: 'Baik' },
+    { branchId: 'term_pantoloan', teus: 0, ton: 2160000, tonTarget: 2300000, rkapPct: 93.9, yoy: -2.3, status: 'Waspada' },
+    { branchId: 'term_ternate', teus: 0, ton: 1340000, tonTarget: 1300000, rkapPct: 103.1, yoy: 9.8, status: 'Baik' },
+  ];
 
-  const years = [2024, 2025];
-  for (const yr of years) {
-    for (let m = 1; m <= 12; m++) {
-      for (const b of branches) {
-        const scale = portScale[b.id] || 0.5;
+  for (let m = 1; m <= 9; m++) {
+    for (const t of terminalData) {
+      const isGood = t.rkapPct >= 100;
+      const statusColor: StatusColor = isGood ? 'green' : 'yellow';
 
-        for (const ind of indicators) {
-          const recId = `rec_${yr}_${m}_${b.code}_${ind.code}`.toLowerCase();
+      // Insert TEUs
+      stmtRec.run(
+        `rec_2026_${m}_${t.branchId}_teus`,
+        t.branchId,
+        'dept_ops',
+        'kpi_teus',
+        m,
+        2026,
+        t.teusTarget ? Math.round(t.teusTarget / 9) : 0,
+        t.teus ? Math.round(t.teus / 9) : 0,
+        'TEUs',
+        t.rkapPct,
+        statusColor,
+        'Data ilustrasi R4 PortSight',
+        'upload_xlsx',
+        'batch_init_2026',
+        'verified',
+        null,
+        'admin.r4',
+        '2026-09-30T08:00:00Z',
+        'bod_regional',
+        '2026-10-01T10:00:00Z'
+      );
 
-          // Seasonal factor & random variation
-          const seasonalFactor = 1 + Math.sin((m / 12) * Math.PI * 2) * 0.08 + (yr === 2025 ? 0.05 : 0);
-          const noise = 0.92 + Math.random() * 0.16;
-
-          let targetVal = Number((ind.default_target * (ind.category.includes('Trafik') || ind.category.includes('Kargo') || ind.category.includes('Layanan') || ind.category.includes('Komposisi') ? scale : 1)).toFixed(2));
-          if (ind.code === 'HSSE-01' || ind.code === 'HSSE-02') {
-            targetVal = 0;
-          }
-
-          let realVal = Number((targetVal * seasonalFactor * noise).toFixed(2));
-
-          // Fine-tune specific indicators
-          if (ind.code === 'HSSE-01') {
-            // Fatality: mostly 0, rare 1 in branch 3 years ago
-            realVal = 0;
-          } else if (ind.code === 'HSSE-02') {
-            // LTI: mostly 0, occasionally 1
-            realVal = Math.random() < 0.12 ? 1 : 0;
-          } else if (ind.unit === '%') {
-            realVal = Math.min(100, Math.max(40, Number((targetVal * (0.95 + Math.random() * 0.08)).toFixed(1))));
-          }
-
-          // Calculate Achievement & Traffic Light Status
-          let achievementPct = 100;
-          let statusColor: StatusColor = 'green';
-
-          if (ind.direction === 'higher_is_better') {
-            if (targetVal > 0) {
-              achievementPct = Number(((realVal / targetVal) * 100).toFixed(1));
-            } else {
-              achievementPct = realVal > 0 ? 120 : 100;
-            }
-
-            if (achievementPct >= 100) statusColor = 'green';
-            else if (achievementPct >= 85) statusColor = 'yellow';
-            else statusColor = 'red';
-          } else {
-            // lower_is_better
-            if (targetVal === 0) {
-              achievementPct = realVal === 0 ? 100 : 0;
-              statusColor = realVal === 0 ? 'green' : 'red';
-            } else {
-              const diffRatio = (targetVal - realVal) / targetVal;
-              achievementPct = Number((100 + diffRatio * 100).toFixed(1));
-              if (realVal <= targetVal) statusColor = 'green';
-              else if (realVal <= targetVal * 1.2) statusColor = 'yellow';
-              else statusColor = 'red';
-            }
-          }
-
-          // Verification status: 2024 all verified. 2025 mostly verified, month 12 has some pending.
-          let verStatus = 'verified';
-          let revNotes: string | null = null;
-          let verBy: string | null = 'adminreg';
-          let verAt: string | null = `${yr}-${String(m).padStart(2, '0')}-28T09:00:00Z`;
-
-          if (yr === 2025 && m === 12) {
-            if (b.id === 'br_balikpapan') {
-              verStatus = 'pending_verification';
-              verBy = null;
-              verAt = null;
-            } else if (b.id === 'br_makassar' && ind.code === 'OPS-06') {
-              verStatus = 'revision_needed';
-              revNotes = 'Angka TRT melebihi rata-rata triwulan, mohon lampirkan rincian kendala pandu laut di dermaga curah.';
-              verBy = 'adminreg';
-            }
-          }
-
-          stmtRec.run(
-            recId,
-            b.id,
-            ind.department_id,
-            ind.id,
-            m,
-            yr,
-            targetVal,
-            realVal,
-            ind.unit,
-            achievementPct,
-            statusColor,
-            'DATA SIMULASI - Estimasi kinerja bulanan pelabuhan resmi',
-            'upload_xlsx',
-            `batch_init_${yr}_${m}`,
-            verStatus,
-            revNotes,
-            'pic_system',
-            `${yr}-${String(m).padStart(2, '0')}-05T10:00:00Z`,
-            verBy,
-            verAt
-          );
-        }
-      }
-    }
-  }
-
-  // Also seed Year 2026 Q1 data (Jan, Feb, Mar)
-  for (let m = 1; m <= 3; m++) {
-    for (const b of branches) {
-      const scale = portScale[b.id] || 0.5;
-      for (const ind of indicators) {
-        const recId = `rec_2026_${m}_${b.code}_${ind.code}`.toLowerCase();
-        let targetVal = Number((ind.default_target * (ind.category.includes('Trafik') || ind.category.includes('Kargo') || ind.category.includes('Layanan') || ind.category.includes('Komposisi') ? scale : 1)).toFixed(2));
-        if (ind.code === 'HSSE-01' || ind.code === 'HSSE-02') targetVal = 0;
-
-        let realVal = Number((targetVal * (0.94 + Math.random() * 0.14)).toFixed(2));
-        if (ind.code === 'HSSE-01') realVal = 0;
-        else if (ind.code === 'HSSE-02') realVal = Math.random() < 0.1 ? 1 : 0;
-        else if (ind.unit === '%') realVal = Math.min(100, Math.max(45, Number((targetVal * (0.96 + Math.random() * 0.06)).toFixed(1))));
-
-        let achievementPct = 100;
-        let statusColor: StatusColor = 'green';
-        if (ind.direction === 'higher_is_better') {
-          achievementPct = targetVal > 0 ? Number(((realVal / targetVal) * 100).toFixed(1)) : 100;
-          statusColor = achievementPct >= 100 ? 'green' : achievementPct >= 85 ? 'yellow' : 'red';
-        } else {
-          statusColor = realVal <= targetVal ? 'green' : realVal <= targetVal * 1.2 ? 'yellow' : 'red';
-          achievementPct = targetVal > 0 ? Number((100 + ((targetVal - realVal) / targetVal) * 100).toFixed(1)) : (realVal === 0 ? 100 : 0);
-        }
-
-        // Jan 2026: verified. Feb 2026: pending verification. Mar 2026: draft & revision needed
-        let verStatus = m === 1 ? 'verified' : m === 2 ? 'pending_verification' : (b.id === 'br_tgprk' ? 'verified' : b.id === 'br_tgperak' ? 'revision_needed' : 'draft');
-        let revNotes = verStatus === 'revision_needed' ? 'Perlu rekonsiliasi data volume peti kemas dengan billing system sebelum pengesahan.' : null;
-
-        stmtRec.run(
-          recId,
-          b.id,
-          ind.department_id,
-          ind.id,
-          m,
-          2026,
-          targetVal,
-          realVal,
-          ind.unit,
-          achievementPct,
-          statusColor,
-          'DATA SIMULASI - Pelaporan Kinerja Berjalan 2026',
-          'upload_xlsx',
-          `batch_2026_${m}`,
-          verStatus,
-          revNotes,
-          'pic_cabang',
-          `2026-0${m}-04T08:30:00Z`,
-          verStatus === 'verified' ? 'adminreg' : null,
-          verStatus === 'verified' ? `2026-0${m}-06T14:00:00Z` : null
-        );
-      }
+      // Insert Revenue
+      const branchRev = t.rkapPct * 2.5;
+      stmtRec.run(
+        `rec_2026_${m}_${t.branchId}_rev`,
+        t.branchId,
+        'dept_keu',
+        'kpi_rev',
+        m,
+        2026,
+        Number((branchRev * 0.98).toFixed(1)),
+        Number(branchRev.toFixed(1)),
+        'Miliar Rp',
+        t.rkapPct,
+        statusColor,
+        'Data ilustrasi R4 PortSight',
+        'upload_xlsx',
+        'batch_init_2026',
+        'verified',
+        null,
+        'admin.r4',
+        '2026-09-30T08:00:00Z',
+        'bod_regional',
+        '2026-10-01T10:00:00Z'
+      );
     }
   }
 
   // 7. Seed Initial Audit Logs
-  const auditEntries = [
-    { user_id: 'usr_super', user_name: 'Budi Santoso', user_role: 'super_admin', action: 'CONFIG_UPDATE' as const, entity: 'SYSTEM', entity_id: 'init', details: 'Inisialisasi sistem database master cabang dan departemen.' },
-    { user_id: 'usr_pic_priok', user_name: 'Ahmad Dahlan', user_role: 'pic_cabang', action: 'UPLOAD' as const, entity: 'MONTHLY_RECORD', entity_id: 'batch_2026_1', details: 'Upload spreadsheet kinerja Cabang Tanjung Priok periode Januari 2026.' },
-    { user_id: 'usr_adminreg', user_name: 'Hendra Wijaya', user_role: 'admin_regional', action: 'APPROVE' as const, entity: 'MONTHLY_RECORD', entity_id: 'batch_2026_1', details: 'Verifikasi dan pengesahan seluruh data kinerja Regional Januari 2026.' },
-    { user_id: 'usr_adminreg', user_name: 'Hendra Wijaya', user_role: 'admin_regional', action: 'REVISE' as const, entity: 'MONTHLY_RECORD', entity_id: 'rec_2026_3_cbg-tgbrk_ops-03', details: 'Meminta revisi volume arus petikemas Cabang Surabaya untuk bulan Maret 2026.' },
-  ];
-
-  const stmtAudit = db.prepare(`
+  db.prepare(`
     INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity, entity_id, details, timestamp, ip_address)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  let audIdx = 1;
-  for (const a of auditEntries) {
-    stmtAudit.run(`aud_${audIdx++}`, a.user_id, a.user_name, a.user_role, a.action, a.entity, a.entity_id, a.details, new Date().toISOString(), '127.0.0.1');
-  }
+  `).run(
+    'aud_init_r4',
+    'usr_adminreg',
+    'Hendra Wijaya',
+    'admin_regional',
+    'CONFIG_UPDATE',
+    'R4_PORTSIGHT',
+    'regional_4',
+    'Inisialisasi sistem R4 PortSight Pelindo Regional 4 (Makassar, 22/10/2026)',
+    new Date().toISOString(),
+    '127.0.0.1'
+  );
 
-  console.log('Seeding completed successfully!');
+  console.log('Seeding completed successfully for Pelindo Regional 4!');
 }
 
-// Auto-run if executed directly
 if (require.main === module) {
   runSeed(true);
 }

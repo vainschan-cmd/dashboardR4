@@ -1,79 +1,45 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
-import Header from '@/components/layout/Header';
-import SummaryView from '@/components/menus/SummaryView';
-import PelangganView from '@/components/menus/PelangganView';
-import HSSEView from '@/components/menus/HSSEView';
-import KeuanganView from '@/components/menus/KeuanganView';
-import KomersialView from '@/components/menus/KomersialView';
-import OperasionalView from '@/components/menus/OperasionalView';
-import TeknikView from '@/components/menus/TeknikView';
-import SDMView from '@/components/menus/SDMView';
-import ProfilCabangView from '@/components/menus/ProfilCabangView';
+import React, { useState, useEffect } from 'react';
+import PortSightHeader from '@/components/layout/PortSightHeader';
+import PortSightBeranda from '@/components/portsight/PortSightBeranda';
+import PortSightOperasional from '@/components/portsight/PortSightOperasional';
+import PortSightSDM from '@/components/portsight/PortSightSDM';
+import PortSightTeknik from '@/components/portsight/PortSightTeknik';
+import PortSightHSSE from '@/components/portsight/PortSightHSSE';
+import PortSightKeuangan from '@/components/portsight/PortSightKeuangan';
+import PortSightPelanggan from '@/components/portsight/PortSightPelanggan';
 import ImportCenter from '@/components/admin/ImportCenter';
 import VerificationQueue from '@/components/admin/VerificationQueue';
 import TemplateMapping from '@/components/admin/TemplateMapping';
 import MasterDataView from '@/components/admin/MasterDataView';
 import AuditTrailView from '@/components/admin/AuditTrailView';
-import DetailDrilldownModal from '@/components/ui/DetailDrilldownModal';
-import { Branch, Department, KPIIndicator, MonthlyRecord, TemplateConfig, UserRole } from '@/lib/types';
+import { Branch, Department, KPIIndicator, TemplateConfig, UserRole } from '@/lib/types';
+import { X, Target, CheckCircle2, TrendingUp } from 'lucide-react';
 
 export default function DashboardHome() {
-  // Navigation
-  const [activeMenu, setActiveMenu] = useState<string>('summary');
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+  // Navigation active tab
+  const [activeTab, setActiveTab] = useState<string>('beranda');
 
-  // User & RBAC Persona (demonstration & real control)
+  // Terminal & Period Filters
+  const [selectedTerminal, setSelectedTerminal] = useState<string>('ALL');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('YTD Sep 2026');
+
+  // Role persona
   const [userRole, setUserRole] = useState<UserRole>('admin_regional');
   const [username, setUsername] = useState<string>('hendra.regional');
 
-  // Master State
+  // Master data
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [indicators, setIndicators] = useState<KPIIndicator[]>([]);
   const [templates, setTemplates] = useState<TemplateConfig[]>([]);
-
-  // Filter State
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('ALL');
-  const [selectedMonth, setSelectedMonth] = useState<number>(1);
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [verifiedOnly, setVerifiedOnly] = useState<boolean>(true);
-
-  // Records
-  const [records, setRecords] = useState<MonthlyRecord[]>([]);
-  const [allYearRecords, setAllYearRecords] = useState<MonthlyRecord[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [pendingCount, setPendingCount] = useState<number>(0);
 
-  // Modal State
-  const [selectedRecord, setSelectedRecord] = useState<MonthlyRecord | null>(null);
+  // Drilldown Modal
+  const [drilldownItem, setDrilldownItem] = useState<any | null>(null);
 
-  // Update role persona info
-  useEffect(() => {
-    switch (userRole) {
-      case 'super_admin':
-        setUsername('budi.superadmin');
-        break;
-      case 'admin_regional':
-        setUsername('hendra.regional');
-        break;
-      case 'pic_dept_regional':
-        setUsername('rudi.ops_regional');
-        break;
-      case 'pic_cabang':
-        setUsername('ahmad.priok');
-        setSelectedBranchId('br_tgprk'); // locked to Priok
-        break;
-      case 'viewer':
-        setUsername('direksi.eksekutif');
-        setVerifiedOnly(true);
-        break;
-    }
-  }, [userRole]);
-
-  // 1. Fetch Master Data
+  // Fetch Master Data
   const loadMasterData = async () => {
     try {
       const res = await fetch('/api/master');
@@ -84,8 +50,8 @@ export default function DashboardHome() {
         setIndicators(data.indicators || []);
         setTemplates(data.templates || []);
       }
-    } catch (err) {
-      console.error('Failed to load master data:', err);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -93,274 +59,191 @@ export default function DashboardHome() {
     loadMasterData();
   }, []);
 
-  // 2. Fetch Records based on current filters
-  const loadRecords = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // Month-specific records
-      const params = new URLSearchParams({
-        branch_id: selectedBranchId,
-        month: selectedMonth.toString(),
-        year: selectedYear.toString(),
-        verified_only: verifiedOnly ? 'true' : 'false',
-      });
-
-      const res = await fetch(`/api/records?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        setRecords(data.records || []);
-      }
-
-      // Year-wide records for trends
-      const yearParams = new URLSearchParams({
-        branch_id: selectedBranchId,
-        year: selectedYear.toString(),
-        verified_only: verifiedOnly ? 'true' : 'false',
-      });
-      const resYear = await fetch(`/api/records?${yearParams.toString()}`);
-      const dataYear = await resYear.json();
-      if (dataYear.success) {
-        setAllYearRecords(dataYear.records || []);
-      }
-
-      // Check pending count for badge
-      const resVer = await fetch(`/api/verification?month=${selectedMonth}&year=${selectedYear}`);
-      const dataVer = await resVer.json();
-      if (dataVer.success) {
-        setPendingCount(dataVer.pendingCount || 0);
-      }
-    } catch (err) {
-      console.error('Failed to load records:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedBranchId, selectedMonth, selectedYear, verifiedOnly]);
-
-  useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
-
   // Export to Excel
   const handleExportExcel = () => {
     const params = new URLSearchParams({
       type: 'data',
-      branch_id: selectedBranchId,
-      month: selectedMonth.toString(),
-      year: selectedYear.toString(),
+      branch_id: selectedTerminal,
+      month: '9',
+      year: '2026',
       role: userRole,
     });
     window.location.href = `/api/reports/export?${params.toString()}`;
   };
 
-  // Print Dashboard
   const handlePrint = () => {
     window.print();
   };
 
-  // Drilldown from Regional to Branch
-  const handleDrilldownBranch = (branchId: string) => {
-    setSelectedBranchId(branchId);
-    setActiveMenu('profil_cabang');
-  };
-
-  // Page title mapping
-  const titles: Record<string, string> = {
-    summary: 'Executive Summary – Kinerja Pelabuhan',
-    pelanggan: 'Kinerja Pelanggan & Pelayanan',
-    hsse: 'Health, Safety, Security & Environment (HSSE)',
-    keuangan: 'Kinerja Keuangan & Realisasi RKAP',
-    komersial: 'Kinerja Bisnis & Pendapatan Komersial',
-    operasional: 'Kinerja Operasional & Arus Kapal / Kargo',
-    teknik: 'Keandalan Fasilitas & Pemeliharaan Teknik',
-    sdm: 'Produktivitas & Pengelolaan SDM',
-    profil_cabang: 'Profil & Sarana Fasilitas Cabang',
-    import_center: 'Pusat Impor Spreadsheet & Google Sheets',
-    verification: 'Verifikasi & Pengesahan Data Kinerja',
-    templates: 'Konfigurasi Template & Mapping Dinamis',
-    master_data: 'Manajemen Master Data Cabang & Indikator',
-    audit_trail: 'Audit Trail & Rekam Jejak Sistem',
-  };
-
   return (
-    <div className="app-container">
-      {/* Sidebar Navigation */}
-      <Sidebar
-        activeMenu={activeMenu}
-        setActiveMenu={setActiveMenu}
+    <div style={{ backgroundColor: 'var(--bg-app)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* R4 PortSight Top Navigation & Subheader */}
+      <PortSightHeader
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        selectedTerminal={selectedTerminal}
+        setSelectedTerminal={setSelectedTerminal}
+        selectedPeriod={selectedPeriod}
+        setSelectedPeriod={setSelectedPeriod}
         userRole={userRole}
+        setUserRole={setUserRole}
+        onExportExcel={handleExportExcel}
+        onPrint={handlePrint}
         pendingCount={pendingCount}
-        isOpenMobile={mobileSidebarOpen}
-        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
-      {/* Main App Layout */}
-      <div className="main-wrapper">
-        <Header
-          pageTitle={titles[activeMenu] || 'Executive Dashboard'}
-          branches={branches}
-          selectedBranchId={selectedBranchId}
-          setSelectedBranchId={setSelectedBranchId}
-          selectedMonth={selectedMonth}
-          setSelectedMonth={setSelectedMonth}
-          selectedYear={selectedYear}
-          setSelectedYear={setSelectedYear}
-          verifiedOnly={verifiedOnly}
-          setVerifiedOnly={setVerifiedOnly}
-          userRole={userRole}
-          setUserRole={setUserRole}
-          onRefresh={loadRecords}
-          onExportExcel={handleExportExcel}
-          onPrint={handlePrint}
-          onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-        />
+      {/* Main View Body */}
+      <main className="portsight-main">
+        {/* Slide 2: Beranda */}
+        {activeTab === 'beranda' && (
+          <PortSightBeranda
+            onSelectTerminal={(tId) => {
+              setSelectedTerminal(tId);
+              setActiveTab('operasional');
+            }}
+            onOpenDrilldown={(item) => setDrilldownItem(item)}
+          />
+        )}
 
-        <main className="content-body">
-          {/* Active View Renderer */}
-          {activeMenu === 'summary' && (
-            <SummaryView
-              records={records}
-              allYearRecords={allYearRecords}
-              branches={branches}
-              departments={departments}
-              selectedBranchId={selectedBranchId}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onDrilldown={handleDrilldownBranch}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {/* Slide 3: Operasional */}
+        {activeTab === 'operasional' && (
+          <PortSightOperasional />
+        )}
 
-          {activeMenu === 'pelanggan' && (
-            <PelangganView
-              records={records}
-              branches={branches}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {/* Slide 4: SDM */}
+        {activeTab === 'sdm' && (
+          <PortSightSDM />
+        )}
 
-          {activeMenu === 'hsse' && (
-            <HSSEView
-              records={records}
-              branches={branches}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {/* Slide 5: Teknik */}
+        {activeTab === 'teknik' && (
+          <PortSightTeknik />
+        )}
 
-          {activeMenu === 'keuangan' && (
-            <KeuanganView
-              records={records}
-              allYearRecords={allYearRecords}
-              branches={branches}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {/* Slide 6: HSSE */}
+        {activeTab === 'hsse' && (
+          <PortSightHSSE />
+        )}
 
-          {activeMenu === 'komersial' && (
-            <KomersialView
-              records={records}
-              branches={branches}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {/* Slide 7: Keuangan */}
+        {activeTab === 'keuangan' && (
+          <PortSightKeuangan />
+        )}
 
-          {activeMenu === 'operasional' && (
-            <OperasionalView
-              records={records}
-              branches={branches}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {/* Slide 8: Pelanggan */}
+        {activeTab === 'pelanggan' && (
+          <PortSightPelanggan />
+        )}
 
-          {activeMenu === 'teknik' && (
-            <TeknikView
-              records={records}
-              branches={branches}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {/* Data Governance & Admin Tools */}
+        {activeTab === 'import_center' && (
+          <ImportCenter
+            branches={branches}
+            departments={departments}
+            userRole={userRole}
+            username={username}
+            onImportSuccess={loadMasterData}
+          />
+        )}
 
-          {activeMenu === 'sdm' && (
-            <SDMView
-              records={records}
-              branches={branches}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {activeTab === 'verification' && (
+          <VerificationQueue
+            selectedMonth={9}
+            selectedYear={2026}
+            userRole={userRole}
+            username={username}
+            onVerificationDone={loadMasterData}
+          />
+        )}
 
-          {activeMenu === 'profil_cabang' && (
-            <ProfilCabangView
-              branches={branches}
-              records={records}
-              selectedBranchId={selectedBranchId}
-              onSelectBranch={setSelectedBranchId}
-              onSelectRecord={setSelectedRecord}
-            />
-          )}
+        {activeTab === 'templates' && (
+          <TemplateMapping
+            departments={departments}
+            templates={templates}
+            userRole={userRole}
+            username={username}
+            onTemplateUpdated={loadMasterData}
+          />
+        )}
 
-          {activeMenu === 'import_center' && (
-            <ImportCenter
-              branches={branches}
-              departments={departments}
-              userRole={userRole}
-              username={username}
-              onImportSuccess={loadRecords}
-            />
-          )}
+        {activeTab === 'master_data' && (
+          <MasterDataView
+            branches={branches}
+            departments={departments}
+            indicators={indicators}
+          />
+        )}
 
-          {activeMenu === 'verification' && (
-            <VerificationQueue
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              userRole={userRole}
-              username={username}
-              onVerificationDone={loadRecords}
-            />
-          )}
+        {activeTab === 'audit_trail' && (
+          <AuditTrailView />
+        )}
+      </main>
 
-          {activeMenu === 'templates' && (
-            <TemplateMapping
-              departments={departments}
-              templates={templates}
-              userRole={userRole}
-              username={username}
-              onTemplateUpdated={loadMasterData}
-            />
-          )}
+      {/* Drilldown Modal */}
+      {drilldownItem && (
+        <div className="modal-overlay" onClick={() => setDrilldownItem(null)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: '#132238', borderColor: '#223c63', color: '#ffffff', maxWidth: '580px' }}
+          >
+            <div className="modal-header" style={{ borderColor: '#1e3557' }}>
+              <div>
+                <span className="illustration-pill" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                  Detail Indikator
+                </span>
+                <h3 className="modal-title" style={{ color: '#ffffff', marginTop: '6px' }}>
+                  {drilldownItem.title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setDrilldownItem(null)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-          {activeMenu === 'master_data' && (
-            <MasterDataView
-              branches={branches}
-              departments={departments}
-              indicators={indicators}
-            />
-          )}
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', backgroundColor: '#0e1c30', padding: '16px', borderRadius: '8px', border: '1px solid #1e3557' }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Target RKAP YTD</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', marginTop: '4px' }}>
+                    {drilldownItem.rawTarget || drilldownItem.comp1}
+                  </div>
+                </div>
 
-          {activeMenu === 'audit_trail' && (
-            <AuditTrailView />
-          )}
-        </main>
-      </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Realisasi Aktual YTD</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#38bdf8', marginTop: '4px' }}>
+                    {drilldownItem.rawRealization || drilldownItem.value}
+                  </div>
+                </div>
+              </div>
 
-      {/* Detail & Drilldown Modal */}
-      <DetailDrilldownModal
-        record={selectedRecord}
-        onClose={() => setSelectedRecord(null)}
-        allRecords={allYearRecords}
-      />
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#0e1c30', borderRadius: '8px', fontSize: '12.5px' }}>
+                <span style={{ color: '#94a3b8' }}>Performa terhadap Target:</span>
+                <strong className={drilldownItem.comp1Good ? 'text-positive' : 'text-alert'}>
+                  {drilldownItem.comp1}
+                </strong>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#0e1c30', borderRadius: '8px', fontSize: '12.5px' }}>
+                <span style={{ color: '#94a3b8' }}>Pertumbuhan Tahunan (YoY):</span>
+                <strong className={drilldownItem.comp2Good ? 'text-positive' : 'text-alert'}>
+                  {drilldownItem.comp2}
+                </strong>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderColor: '#1e3557', backgroundColor: '#0e1c30' }}>
+              <button onClick={() => setDrilldownItem(null)} className="btn-dark" style={{ fontSize: '12px' }}>
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
