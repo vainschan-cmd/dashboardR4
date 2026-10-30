@@ -351,8 +351,8 @@ export default function ImportCenter({
                 onChange={(e) => setGsheetUrl(e.target.value)}
                 placeholder="https://docs.google.com/spreadsheets/d/1A2b3C.../edit"
               />
-              <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                Pastikan Google Spreadsheet telah dibagikan (share) dengan email service account pelabuhan.
+              <span style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
+                Pastikan Google Spreadsheet telah dibagikan (share) dengan akun: <strong style={{ color: '#38bdf8' }}>regdashr@gmail.com</strong> (Viewer / Editor).
               </span>
             </div>
 
@@ -368,13 +368,13 @@ export default function ImportCenter({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Service Account Email (Backend):</label>
+                <label className="form-label">Akun Resmi Database & Spreadsheet:</label>
                 <input
                   type="text"
                   className="form-input"
                   disabled
-                  value="ed-dashboard-sync@port-analytics.iam.gserviceaccount.com"
-                  style={{ backgroundColor: '#f1f5f9' }}
+                  value="regdashr@gmail.com"
+                  style={{ backgroundColor: '#101c2e', color: '#38bdf8', fontWeight: 700 }}
                 />
               </div>
             </div>

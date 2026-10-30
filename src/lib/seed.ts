@@ -514,6 +514,24 @@ export function runSeed(force = false) {
     '127.0.0.1'
   );
 
+  // 8. Integration Settings (Google Sheets & Database via regdashr@gmail.com)
+  const gsheetConfig = {
+    id: 'cfg_gsheet',
+    spreadsheet_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
+    sheet_name: 'Input_Kinerja_Bulanan',
+    range: 'A2:L200',
+    service_account_email: 'regdashr@gmail.com',
+    api_key_configured: false,
+    status: 'ready_for_credentials',
+    last_sync_at: new Date().toISOString(),
+    auto_sync_enabled: true
+  };
+
+  db.prepare(`
+    INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
+    VALUES (?, 'google_sheets', ?, ?)
+  `).run('cfg_gsheet', JSON.stringify(gsheetConfig), new Date().toISOString());
+
   console.log('Seeding completed successfully for Pelindo Regional 4!');
 }
 

@@ -456,7 +456,7 @@ export const dbQueries = {
         spreadsheet_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
         sheet_name: 'Input_Kinerja_Bulanan',
         range: 'A2:L200',
-        service_account_email: 'ed-dashboard-sync@port-analytics.iam.gserviceaccount.com',
+        service_account_email: 'regdashr@gmail.com',
         api_key_configured: false,
         status: 'ready_for_credentials',
         last_sync_at: null,
