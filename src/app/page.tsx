@@ -3,12 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import PortSightHeader from '@/components/layout/PortSightHeader';
 import PortSightBeranda from '@/components/portsight/PortSightBeranda';
-import PortSightOperasional from '@/components/portsight/PortSightOperasional';
-import PortSightSDM from '@/components/portsight/PortSightSDM';
-import PortSightTeknik from '@/components/portsight/PortSightTeknik';
-import PortSightHSSE from '@/components/portsight/PortSightHSSE';
 import PortSightKeuangan from '@/components/portsight/PortSightKeuangan';
-import PortSightPelanggan from '@/components/portsight/PortSightPelanggan';
+import PortSightOpkom from '@/components/portsight/PortSightOpkom';
+import PortSightKinerja from '@/components/portsight/PortSightKinerja';
+import PortSightUtilisasi from '@/components/portsight/PortSightUtilisasi';
+import PortSightPeralatan from '@/components/portsight/PortSightPeralatan';
+import PortSightFasilitas from '@/components/portsight/PortSightFasilitas';
 import ImportCenter from '@/components/admin/ImportCenter';
 import VerificationQueue from '@/components/admin/VerificationQueue';
 import TemplateMapping from '@/components/admin/TemplateMapping';
@@ -161,45 +161,45 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {/* Slide 2: Beranda */}
+        {/* Beranda */}
         {activeTab === 'beranda' && (
           <PortSightBeranda
             onSelectTerminal={(tId) => {
               setSelectedTerminal(tId);
-              setActiveTab('operasional');
+              setActiveTab('opkom');
             }}
             onOpenDrilldown={(item) => setDrilldownItem(item)}
           />
         )}
 
-        {/* Slide 3: Operasional */}
-        {activeTab === 'operasional' && (
-          <PortSightOperasional />
-        )}
-
-        {/* Slide 4: SDM */}
-        {activeTab === 'sdm' && (
-          <PortSightSDM />
-        )}
-
-        {/* Slide 5: Teknik */}
-        {activeTab === 'teknik' && (
-          <PortSightTeknik />
-        )}
-
-        {/* Slide 6: HSSE */}
-        {activeTab === 'hsse' && (
-          <PortSightHSSE />
-        )}
-
-        {/* Slide 7: Keuangan */}
+        {/* Finance (Keuangan) */}
         {activeTab === 'keuangan' && (
-          <PortSightKeuangan />
+          <PortSightKeuangan selectedTerminal={selectedTerminal} />
         )}
 
-        {/* Slide 8: Pelanggan */}
-        {activeTab === 'pelanggan' && (
-          <PortSightPelanggan />
+        {/* Opkom (Operasi dan Komersial) */}
+        {activeTab === 'opkom' && (
+          <PortSightOpkom selectedTerminal={selectedTerminal} />
+        )}
+
+        {/* Kinerja */}
+        {activeTab === 'kinerja' && (
+          <PortSightKinerja selectedTerminal={selectedTerminal} />
+        )}
+
+        {/* Utilisasi */}
+        {activeTab === 'utilisasi' && (
+          <PortSightUtilisasi selectedTerminal={selectedTerminal} />
+        )}
+
+        {/* Peralatan */}
+        {activeTab === 'peralatan' && (
+          <PortSightPeralatan selectedTerminal={selectedTerminal} />
+        )}
+
+        {/* Fasilitas */}
+        {activeTab === 'fasilitas' && (
+          <PortSightFasilitas selectedTerminal={selectedTerminal} />
         )}
 
         {/* Data Governance & Admin Tools */}

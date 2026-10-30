@@ -35,6 +35,7 @@ export interface Branch {
     pilotboat_units?: number;
   };
   overview?: string;
+  order_seq?: number;
 }
 
 export interface Department {

@@ -2,6 +2,7 @@ import { getDb } from './db';
 import * as xlsx from 'xlsx';
 import path from 'path';
 import fs from 'fs';
+import { OFFICIAL_BRANCHES } from './constants';
 
 export const BRANCH_CODE_TO_ID: Record<string, string> = {
   'R01': 'term_makassar',
@@ -188,60 +189,42 @@ export function ingestInputData(filePath?: string) {
     }
   }
 
-  // Extract branch list from master (Rows 1 to 28)
+  // Re-point any old demo terminal records and delete demo branch
+  try {
+    db.exec("UPDATE monthly_records SET branch_id = 'term_makassar' WHERE branch_id = 'term_new_makassar';");
+    db.exec("DELETE FROM branches WHERE id = 'term_new_makassar' OR code = 'TRM-NMK';");
+  } catch {}
+
+  // Extract branch list matching official specification (28 Branches)
   const stmtBranch = db.prepare(`
-    INSERT OR REPLACE INTO branches (id, code, name, region, address, phone, email, active, facilities, overview)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO branches (id, code, name, region, address, phone, email, active, facilities, overview, order_seq)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   let countBranches = 0;
-  for (let i = 1; i <= 28; i++) {
-    const row = masterRows[i];
-    if (row && row[1] && row[2]) {
-      const code = String(row[1]).trim().toUpperCase();
-      const name = String(row[2]).trim();
-      const branchId = getBranchId(code, name);
-      const fac = branchFacilities.get(code) || {
-        dermaga_length_m: 650,
-        kolam_depth_mlws: -11.0,
-        lapangan_sqm: 75000,
-        gudang_sqm: 12000
-      };
+  for (const b of OFFICIAL_BRANCHES) {
+    const fac = branchFacilities.get(b.code) || {
+      dermaga_length_m: 650,
+      kolam_depth_mlws: -11.0,
+      lapangan_sqm: 75000,
+      gudang_sqm: 12000
+    };
 
-      stmtBranch.run(
-        branchId,
-        code,
-        name,
-        code === 'R99' ? 'Kantor Regional 4 (Konsolidasi)' : 'Regional 4 (Indonesia Timur)',
-        `Pelabuhan ${name}, Pelindo Regional 4`,
-        '(0411) 362400',
-        `${branchId.replace('term_', '')}@pelindo.co.id`,
-        1,
-        JSON.stringify(fac),
-        `Cabang operasional ${name} di bawah koordinasi Pelindo Regional 4.`
-      );
-      countBranches++;
-    }
+    stmtBranch.run(
+      b.id,
+      b.code,
+      b.name,
+      b.code === 'R99' ? 'Kantor Regional 4 (Konsolidasi)' : 'Regional 4 (Indonesia Timur)',
+      `Pelabuhan ${b.name}, Pelindo Regional 4`,
+      '(0411) 362400',
+      `${b.id.replace('term_', '')}@pelindo.co.id`,
+      1,
+      JSON.stringify(fac),
+      `Cabang operasional ${b.name} di bawah koordinasi Pelindo Regional 4.`,
+      b.order
+    );
+    countBranches++;
   }
-
-  // Juga pastikan demo seed terminal tetap ada jika ada record lama
-  stmtBranch.run(
-    'term_new_makassar',
-    'TRM-NMK',
-    'New Makassar Terminal',
-    'Regional 4 (Indonesia Timur)',
-    'Jl. Nusantara No. 329, Makassar, Sulawesi Selatan',
-    '(0411) 362400',
-    'terminal.newmakassar@pelindo.co.id',
-    1,
-    JSON.stringify({
-      dermaga_length_m: 1310,
-      kolam_depth_mlws: -14.0,
-      lapangan_sqm: 162000,
-      gudang_sqm: 24000
-    }),
-    'Terminal Petikemas Utama Pelindo Regional 4.'
-  );
 
   // Statement for Monthly Records
   const stmtRec = db.prepare(`

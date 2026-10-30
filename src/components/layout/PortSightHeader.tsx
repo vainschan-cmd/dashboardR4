@@ -15,6 +15,7 @@ import {
   GitBranch
 } from 'lucide-react';
 import { UserRole } from '@/lib/types';
+import { OFFICIAL_BRANCHES, MAIN_NAVIGATION_TABS } from '@/lib/constants';
 
 interface PortSightHeaderProps {
   activeTab: string;
@@ -45,15 +46,7 @@ export default function PortSightHeader({
 }: PortSightHeaderProps) {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
-  const mainTabs = [
-    { id: 'beranda', label: 'Beranda' },
-    { id: 'operasional', label: 'Operasional' },
-    { id: 'sdm', label: 'SDM' },
-    { id: 'teknik', label: 'Teknik' },
-    { id: 'hsse', label: 'HSSE' },
-    { id: 'keuangan', label: 'Keuangan' },
-    { id: 'pelanggan', label: 'Pelanggan' },
-  ];
+  const mainTabs = MAIN_NAVIGATION_TABS;
 
   const adminTabs = [
     { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
@@ -65,25 +58,21 @@ export default function PortSightHeader({
   ];
 
   const terminals = [
-    { id: 'ALL', name: '8 terminal (Semua)' },
-    { id: 'term_new_makassar', name: 'New Makassar' },
-    { id: 'term_makassar', name: 'Makassar' },
-    { id: 'term_bitung', name: 'Bitung' },
-    { id: 'term_ambon', name: 'Ambon' },
-    { id: 'term_sorong', name: 'Sorong' },
-    { id: 'term_balikpapan', name: 'Balikpapan' },
-    { id: 'term_pantoloan', name: 'Pantoloan' },
-    { id: 'term_ternate', name: 'Ternate' },
+    { id: 'ALL', name: 'Semua Cabang (28 Cabang)' },
+    ...OFFICIAL_BRANCHES.map(b => ({
+      id: b.code,
+      name: `[${b.code}] ${b.name}`
+    }))
   ];
 
   const pageHeadings: Record<string, string> = {
     beranda: 'Ringkasan Eksekutif Regional 4',
-    operasional: 'Dashboard Operasional',
-    sdm: 'Dashboard SDM',
-    teknik: 'Dashboard Teknik',
-    hsse: 'Dashboard HSSE',
-    keuangan: 'Dashboard Keuangan',
-    pelanggan: 'Dashboard Bina Pelanggan',
+    keuangan: 'Dashboard Finance (Keuangan) Pelindo R4',
+    opkom: 'Dashboard Opkom (Operasi & Komersial) Pelindo R4',
+    kinerja: 'Dashboard Kinerja Pelayanan Operasional Pelindo R4',
+    utilisasi: 'Dashboard Utilisasi Dermaga & Lapangan (BOR/YOR/SOR)',
+    peralatan: 'Dashboard Monitoring Kesiapan & Utilisasi Peralatan',
+    fasilitas: 'Dashboard Fasilitas & Infrastruktur Pelabuhan Regional 4',
     data_records: 'Data Record Kinerja Pelabuhan Regional 4',
     master_data: 'Master Data Pelindo Regional 4',
     verification: 'Verifikasi & Pengesahan Data Kinerja',
@@ -203,7 +192,7 @@ export default function PortSightHeader({
               <option value="super_admin" style={{ background: '#122137' }}>Super Admin</option>
               <option value="admin_regional" style={{ background: '#122137' }}>Admin Regional 4</option>
               <option value="pic_dept_regional" style={{ background: '#122137' }}>PIC Dept Operasi</option>
-              <option value="pic_cabang" style={{ background: '#122137' }}>PIC New Makassar</option>
+              <option value="pic_cabang" style={{ background: '#122137' }}>PIC Cabang Makassar</option>
               <option value="viewer" style={{ background: '#122137' }}>BOD Regional 4 (Viewer)</option>
             </select>
           </div>

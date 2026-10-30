@@ -13,6 +13,7 @@ import {
   AuditLog,
   GoogleSheetsConfig,
 } from './types';
+import { OFFICIAL_BRANCHES } from './constants';
 
 // Ensure data folder exists
 const dataDir = path.join(process.cwd(), 'data');
@@ -43,7 +44,8 @@ function initSchema(db: DatabaseSync) {
       email TEXT,
       active INTEGER DEFAULT 1,
       facilities TEXT,
-      overview TEXT
+      overview TEXT,
+      order_seq INTEGER DEFAULT 99
     );
 
     CREATE TABLE IF NOT EXISTS departments (
@@ -165,6 +167,20 @@ function initSchema(db: DatabaseSync) {
       updated_at TEXT NOT NULL
     );
   `);
+
+  try {
+    db.exec("ALTER TABLE branches ADD COLUMN order_seq INTEGER DEFAULT 99;");
+  } catch {}
+  try {
+    db.exec("UPDATE monthly_records SET branch_id = 'term_makassar' WHERE branch_id = 'term_new_makassar';");
+    db.exec("DELETE FROM branches WHERE id = 'term_new_makassar' OR code = 'TRM-NMK';");
+  } catch {}
+  try {
+    const updateOrderStmt = db.prepare("UPDATE branches SET order_seq = ? WHERE code = ?");
+    for (const b of OFFICIAL_BRANCHES) {
+      updateOrderStmt.run(b.order, b.code);
+    }
+  } catch {}
 }
 
 // Helper to seed if empty
@@ -178,7 +194,7 @@ export function isDatabaseEmpty(): boolean {
 export const dbQueries = {
   // Branches
   getBranches: (): Branch[] => {
-    const rows = getDb().prepare('SELECT * FROM branches ORDER BY name ASC').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM branches ORDER BY order_seq ASC, code ASC').all() as any[];
     return rows.map(r => ({
       ...r,
       active: Boolean(r.active),
