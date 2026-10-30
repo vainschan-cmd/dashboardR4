@@ -131,7 +131,7 @@ export default function AuthModal({
           departemen: regDepartemen.trim(),
           password: regPassword,
           role: regRole,
-          branch_id: regRole === 'pic_cabang' ? regBranch : 'R99',
+          branch_id: regBranch || 'R99',
           email: `${regNipp.trim()}@pelindo.co.id`,
         }),
       });
@@ -577,14 +577,14 @@ export default function AuthModal({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Penugasan Cabang</label>
+                  <label className="form-label">Penugasan Cabang *</label>
                   <select
                     className="form-select"
                     value={regBranch}
                     onChange={(e) => setRegBranch(e.target.value)}
-                    disabled={regRole !== 'pic_cabang'}
+                    style={{ cursor: 'pointer' }}
                   >
-                    <option value="R99">R99 - Regional 4 (Pusat)</option>
+                    <option value="R99">R99 - Regional 4 (Pusat / Seluruh Wilayah)</option>
                     {OFFICIAL_BRANCHES.map((b) => (
                       <option key={b.code} value={b.code}>
                         [{b.code}] {b.name}
