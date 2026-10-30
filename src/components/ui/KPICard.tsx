@@ -33,8 +33,12 @@ export default function KPICard({
 }: KPICardProps) {
   const formatNumber = (num: number): string => {
     if (isNaN(num)) return '0';
-    if (num >= 1000000) return (num / 1000000).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' Jt';
-    if (num >= 1000) return num.toLocaleString('id-ID', { maximumFractionDigits: 1 });
+    if (unit.toLowerCase().includes('rp')) {
+      return Math.round(num).toLocaleString('id-ID');
+    }
+    if (Number.isInteger(num)) {
+      return num.toLocaleString('id-ID');
+    }
     return num.toLocaleString('id-ID', { maximumFractionDigits: 2 });
   };
 

@@ -16,6 +16,7 @@ import {
   Bar
 } from 'recharts';
 import { DollarSign, TrendingUp, Search, Building2, Layers } from 'lucide-react';
+import { formatRupiahFull } from '@/lib/formatters';
 
 interface FinItem {
   year: number;
@@ -85,10 +86,11 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
   const opRows = filteredData.filter(d => d.rekening.toLowerCase() === 'laba usaha');
   const netRows = filteredData.filter(d => d.rekening.toLowerCase().includes('bersih'));
 
+  const totalRevRp = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const totalCostRp = costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const totalOpRp = opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const totalNetRp = netRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
   const totalRevM = revRows.reduce((a, b) => a + b.konsolidasiM, 0);
-  const totalCostM = costRows.reduce((a, b) => a + b.konsolidasiM, 0);
-  const totalOpM = opRows.reduce((a, b) => a + b.konsolidasiM, 0);
-  const totalNetM = netRows.reduce((a, b) => a + b.konsolidasiM, 0);
 
   const avgRevRka = revRows.length > 0
     ? Number((revRows.reduce((a, b) => a + b.rka, 0) / revRows.length).toFixed(1))
@@ -111,10 +113,11 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
       name: r.branchName.length > 12 ? r.branchName.slice(0, 10) + '..' : r.branchName,
       fullName: `[${r.branchCode}] ${r.branchName}`,
       revenueM: r.konsolidasiM,
+      revenueRp: r.konsolidasiRp,
       rka: r.rka,
       yoy: r.yoy,
     }))
-    .sort((a, b) => b.revenueM - a.revenueM)
+    .sort((a, b) => b.revenueRp - a.revenueRp)
     .slice(0, 10);
 
   const monthlyTrend = [
@@ -138,8 +141,8 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
             <span className="kpi-header-label">Pendapatan Usaha Konsolidasi</span>
             <DollarSign size={20} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
-            Rp {totalRevM.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalRevRp)}
           </div>
           <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
             {avgRevRka}% dari RKA YTD ({avgRevYoy > 100 ? `+${(avgRevYoy - 100).toFixed(1)}% YoY` : `${avgRevYoy}% YoY`})
@@ -151,8 +154,8 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
             <span className="kpi-header-label">Beban Usaha Konsolidasi</span>
             <TrendingUp size={20} color="#ef4444" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
-            Rp {totalCostM.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalCostRp)}
           </div>
           <div style={{ fontSize: '12px', color: '#94a3b8' }}>
             Beban operasional & non-operasional cabang
@@ -164,8 +167,8 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
             <span className="kpi-header-label">Laba Usaha (Operating Profit)</span>
             <TrendingUp size={20} color="#10b981" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
-            Rp {totalOpM.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalOpRp)}
           </div>
           <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
             Margin Operasi Prima
@@ -177,8 +180,8 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
             <span className="kpi-header-label">Laba Bersih Konsolidasi</span>
             <Layers size={20} color="#a855f7" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
-            Rp {totalNetM.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalNetRp)}
           </div>
           <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
             Setelah pajak & pos konsolidasi
@@ -237,7 +240,7 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
-                  formatter={(val: any) => [`Rp ${Number(val).toFixed(2)} M`, 'Pendapatan']}
+                  formatter={(val: any, name: any, item: any) => [formatRupiahFull(item.payload.revenueRp), 'Pendapatan']}
                 />
                 <Bar dataKey="revenueM" fill="#38bdf8" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -278,8 +281,8 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
                 <th>Kode</th>
                 <th>Cabang Pelabuhan</th>
                 <th>Pos Rekening</th>
-                <th style={{ textAlign: 'right' }}>Nilai Cabang (M)</th>
-                <th style={{ textAlign: 'right' }}>Konsolidasi (M)</th>
+                <th style={{ textAlign: 'right' }}>Nilai Cabang (Rp)</th>
+                <th style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
                 <th style={{ textAlign: 'right' }}>PMT / PTP (Rp)</th>
                 <th style={{ textAlign: 'center' }}>% RKA</th>
                 <th style={{ textAlign: 'center' }}>% YoY</th>
@@ -294,13 +297,13 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
                     {r.rekening}
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 600, color: '#cbd5e1' }}>
-                    Rp {r.cabangM.toFixed(2)} M
+                    {formatRupiahFull(r.cabangRp)}
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 800, color: '#ffffff' }}>
-                    Rp {r.konsolidasiM.toFixed(2)} M
+                    {formatRupiahFull(r.konsolidasiRp)}
                   </td>
-                  <td style={{ textAlign: 'right', color: '#94a3b8', fontSize: '11.5px' }}>
-                    Rp {((r.pmtRp + r.ptpRp) / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} Jt
+                  <td style={{ textAlign: 'right', color: '#94a3b8', fontSize: '12px' }}>
+                    {formatRupiahFull(r.pmtRp + r.ptpRp)}
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     <span className={`badge ${r.rka >= 100 ? 'badge-green' : r.rka >= 90 ? 'badge-yellow' : 'badge-red'}`}>

@@ -14,6 +14,7 @@ import {
   Cell
 } from 'recharts';
 import { Anchor, Package, Ship, Users, Layers, TrendingUp, Search } from 'lucide-react';
+import { formatRupiahFull } from '@/lib/formatters';
 
 interface OpkomItem {
   year: number;
@@ -83,6 +84,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
   });
 
   // Calculate Aggregates
+  const totalRevenueRp = filteredData.reduce((acc, cur) => acc + (cur.jumlahRp || 0), 0);
   const totalRevenueM = filteredData.reduce((acc, cur) => acc + cur.jumlahM, 0);
   const avgRka = filteredData.length > 0
     ? Number((filteredData.reduce((acc, cur) => acc + cur.rka, 0) / filteredData.length).toFixed(1))
@@ -94,29 +96,30 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
   // Breakdown by Layanan
   const layananTotals: Record<string, number> = {};
   filteredData.forEach(d => {
-    layananTotals[d.layanan] = (layananTotals[d.layanan] || 0) + d.jumlahM;
+    layananTotals[d.layanan] = (layananTotals[d.layanan] || 0) + (d.jumlahRp || 0);
   });
   const pieData = Object.entries(layananTotals).map(([name, value]) => ({
     name,
-    value: Number(value.toFixed(2)),
+    value,
     color: COMMODITY_COLORS[name] || '#64748b'
   }));
 
   // Top 10 Cabang by Revenue
-  const branchTotals: Record<string, { code: string; name: string; totalM: number }> = {};
+  const branchTotals: Record<string, { code: string; name: string; totalRp: number }> = {};
   filteredData.forEach(d => {
     if (!branchTotals[d.branchCode]) {
-      branchTotals[d.branchCode] = { code: d.branchCode, name: d.branchName, totalM: 0 };
+      branchTotals[d.branchCode] = { code: d.branchCode, name: d.branchName, totalRp: 0 };
     }
-    branchTotals[d.branchCode].totalM += d.jumlahM;
+    branchTotals[d.branchCode].totalRp += (d.jumlahRp || 0);
   });
   const barData = Object.values(branchTotals)
-    .sort((a, b) => b.totalM - a.totalM)
+    .sort((a, b) => b.totalRp - a.totalRp)
     .slice(0, 10)
     .map(b => ({
       name: b.name.length > 12 ? b.name.slice(0, 10) + '..' : b.name,
       fullName: `[${b.code}] ${b.name}`,
-      revenueM: Number(b.totalM.toFixed(2)),
+      totalRp: b.totalRp,
+      revenueM: Number((b.totalRp / 1_000_000_000).toFixed(2)),
     }));
 
   return (
@@ -128,8 +131,8 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
             <span className="kpi-header-label">Total Pendapatan Opkom</span>
             <Anchor size={20} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
-            Rp {totalRevenueM.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalRevenueRp)}
           </div>
           <div style={{ fontSize: '12px', color: '#94a3b8' }}>
             Realisasi Komulatif YTD Sep 2026
@@ -182,7 +185,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
         <div className="dark-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div className="dark-card-title" style={{ margin: 0 }}>
-              Top 10 Cabang Pelabuhan - Pendapatan Opkom (Miliar Rp)
+              Top 10 Cabang Pelabuhan - Pendapatan Opkom
             </div>
             <span style={{ fontSize: '11px', color: '#94a3b8' }}>Data Resmi input_data.xlsx</span>
           </div>
@@ -194,7 +197,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
-                  formatter={(val: any) => [`Rp ${Number(val).toFixed(2)} M`, 'Pendapatan']}
+                  formatter={(val: any, name: any, item: any) => [formatRupiahFull(item.payload.totalRp), 'Pendapatan']}
                 />
                 <Bar dataKey="revenueM" fill="#38bdf8" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -220,17 +223,17 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
                   </Pie>
                   <Tooltip
                     contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
-                    formatter={(val: any) => [`Rp ${Number(val).toFixed(2)} M`, 'Pendapatan']}
+                    formatter={(val: any) => [formatRupiahFull(Number(val)), 'Pendapatan']}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ width: '150px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11.5px' }}>
+            <div style={{ width: '180px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11.5px' }}>
               {pieData.map(d => (
                 <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '2px', backgroundColor: d.color }} />
-                  <span style={{ color: '#cbd5e1', flex: 1 }}>{d.name}</span>
-                  <strong style={{ color: '#ffffff' }}>Rp {d.value}M</strong>
+                  <span style={{ width: 10, height: 10, borderRadius: '2px', backgroundColor: d.color, flexShrink: 0 }} />
+                  <span style={{ color: '#cbd5e1', flex: 1, whiteSpace: 'nowrap' }}>{d.name}</span>
+                  <strong style={{ color: '#ffffff', fontSize: '11px', textAlign: 'right' }}>{formatRupiahFull(d.value)}</strong>
                 </div>
               ))}
             </div>
@@ -285,8 +288,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
                 <th>Kode</th>
                 <th>Cabang Pelabuhan</th>
                 <th>Sektor Layanan</th>
-                <th style={{ textAlign: 'right' }}>Pendapatan (Miliar Rp)</th>
-                <th style={{ textAlign: 'right' }}>Nilai Riil (Rp)</th>
+                <th style={{ textAlign: 'right' }}>Nilai Pendapatan (Rp)</th>
                 <th style={{ textAlign: 'center' }}>Capaian RKA</th>
                 <th style={{ textAlign: 'center' }}>Pertumbuhan YoY</th>
               </tr>
@@ -310,10 +312,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 800, color: '#ffffff' }}>
-                    Rp {r.jumlahM.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} M
-                  </td>
-                  <td style={{ textAlign: 'right', color: '#cbd5e1', fontSize: '11.5px' }}>
-                    Rp {r.jumlahRp.toLocaleString('id-ID')}
+                    {formatRupiahFull(r.jumlahRp)}
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     <span className={`badge ${r.rka >= 100 ? 'badge-green' : r.rka >= 90 ? 'badge-yellow' : 'badge-red'}`}>

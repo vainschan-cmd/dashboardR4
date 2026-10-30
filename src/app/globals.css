@@ -463,12 +463,13 @@ select option {
 }
 
 .kpi-huge-number {
-  font-size: 22px;
+  font-size: clamp(15px, 1.3vw, 20px);
   font-weight: 800;
   color: var(--text-title);
   margin: 6px 0 8px 0;
-  line-height: 1.1;
+  line-height: 1.2;
   font-feature-settings: "tnum";
+  word-break: break-word;
 }
 
 .kpi-comparison-rows {

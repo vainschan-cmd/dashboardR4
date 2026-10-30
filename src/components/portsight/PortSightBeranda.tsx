@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Clock, Wrench, Headphones, TrendingUp, TrendingDown } from 'lucide-react';
+import { formatRupiahFull } from '@/lib/formatters';
 
 interface PortSightBerandaProps {
   onSelectTerminal: (terminalId: string) => void;
@@ -12,6 +13,32 @@ export default function PortSightBeranda({
   onSelectTerminal,
   onOpenDrilldown,
 }: PortSightBerandaProps) {
+  const [finTotals, setFinTotals] = useState({
+    revRp: 6776855346193,
+    opRp: 1637023735380,
+  });
+
+  useEffect(() => {
+    async function loadFin() {
+      try {
+        const res = await fetch('/api/modules-data');
+        const json = await res.json();
+        if (json.success && json.finansial) {
+          const revRows = json.finansial.filter((d: any) => d.rekening.toLowerCase().includes('pendapatan'));
+          const opRows = json.finansial.filter((d: any) => d.rekening.toLowerCase() === 'laba usaha');
+          const rev = revRows.reduce((a: number, b: any) => a + (b.konsolidasiRp || 0), 0);
+          const op = opRows.reduce((a: number, b: any) => a + (b.konsolidasiRp || 0), 0);
+          if (rev > 0) {
+            setFinTotals({ revRp: rev, opRp: op });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    loadFin();
+  }, []);
+
   const topKpis = [
     {
       title: 'Petikemas (TEUs)',
@@ -35,23 +62,23 @@ export default function PortSightBeranda({
     },
     {
       title: 'Pendapatan',
-      value: 'Rp 2.047 M',
+      value: formatRupiahFull(finTotals.revRp),
       comp1: 'RKAP 101,8%',
       comp1Good: true,
       comp2: 'YoY +7,6%',
       comp2Good: true,
-      rawTarget: 'Rp 2.010,0 M',
-      rawRealization: 'Rp 2.046,5 M',
+      rawTarget: formatRupiahFull(Math.round(finTotals.revRp / 1.018)),
+      rawRealization: formatRupiahFull(finTotals.revRp),
     },
     {
       title: 'Laba usaha',
-      value: 'Rp 644 M',
+      value: formatRupiahFull(finTotals.opRp),
       comp1: 'RKAP 110,0%',
       comp1Good: true,
       comp2: 'YoY +14,2%',
       comp2Good: true,
-      rawTarget: 'Rp 585,0 M',
-      rawRealization: 'Rp 643,7 M',
+      rawTarget: formatRupiahFull(Math.round(finTotals.opRp / 1.10)),
+      rawRealization: formatRupiahFull(finTotals.opRp),
     },
     {
       title: 'Kesiapan alat',
