@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Sliders,
   History,
-  Shield
+  Shield,
+  GitBranch
 } from 'lucide-react';
 import { UserRole } from '@/lib/types';
 
@@ -214,6 +215,18 @@ export default function PortSightHeader({
           <button onClick={onPrint} className="btn-dark" style={{ padding: '4px 10px', fontSize: '12px' }} title="Cetak Ringkasan">
             <Printer size={13} />
           </button>
+
+          <a
+            href="https://github.com/vainschan-cmd/dashboardR4"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-dark"
+            style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', textDecoration: 'none' }}
+            title="Buka Repositori GitHub vainschan-cmd/dashboardR4"
+          >
+            <GitBranch size={13} color="#38bdf8" />
+            <span style={{ fontSize: '11px', color: '#ffffff', fontWeight: 600 }}>GitHub</span>
+          </a>
 
           <div className="illustration-pill">
             Data ilustrasi
