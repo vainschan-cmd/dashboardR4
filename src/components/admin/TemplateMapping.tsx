@@ -105,7 +105,7 @@ export default function TemplateMapping({
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '18px' }}>
-              <Sliders size={20} color="var(--blue-primary)" />
+              <Sliders size={20} color="#38bdf8" />
               <span>Studio Template Mapping & Konfigurasi Kolom Dinamis</span>
             </h2>
             <p className="card-subtitle">
@@ -142,7 +142,7 @@ export default function TemplateMapping({
               onChange={(e) => handleDeptChange(e.target.value)}
             >
               {departments.map((d) => (
-                <option key={d.id} value={d.id}>
+                <option key={d.id} value={d.id} style={{ background: '#122137' }}>
                   {d.code} - {d.name}
                 </option>
               ))}
@@ -172,7 +172,7 @@ export default function TemplateMapping({
 
         {/* Columns Editor Table */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--navy-800)' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff' }}>
             Daftar Pemetaan Kolom Spreadsheet ({currentCols.length} Kolom):
           </h3>
           <button onClick={handleAddColumn} className="btn btn-secondary btn-sm">

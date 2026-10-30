@@ -51,7 +51,7 @@ export default function AuditTrailView() {
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '18px' }}>
-              <History size={20} color="var(--blue-primary)" />
+              <History size={20} color="#38bdf8" />
               <span>Audit Trail & Log Aktivitas Sistem</span>
             </h2>
             <p className="card-subtitle">
@@ -77,13 +77,13 @@ export default function AuditTrailView() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div style={{ fontSize: '12px', color: '#64748b' }}>
-            Total <strong>{filtered.length}</strong> rekam jejak audit tersimpan
+          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+            Total <strong style={{ color: '#ffffff' }}>{filtered.length}</strong> rekam jejak audit tersimpan
           </div>
         </div>
 
         {isLoading ? (
-          <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Memuat rekam audit...</div>
+          <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>Memuat rekam audit...</div>
         ) : (
           <div className="table-responsive">
             <table className="data-table">
@@ -101,10 +101,10 @@ export default function AuditTrailView() {
               <tbody>
                 {filtered.map((log) => (
                   <tr key={log.id}>
-                    <td style={{ fontSize: '12px', whiteSpace: 'nowrap', color: '#64748b' }}>
+                    <td style={{ fontSize: '12px', whiteSpace: 'nowrap', color: '#94a3b8' }}>
                       {new Date(log.timestamp).toLocaleString('id-ID')}
                     </td>
-                    <td style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{log.user_name}</td>
+                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{log.user_name}</td>
                     <td>
                       <span className="badge badge-neutral" style={{ fontSize: '10px' }}>
                         {log.user_role}
@@ -115,8 +115,8 @@ export default function AuditTrailView() {
                         {log.action}
                       </span>
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11.5px' }}>{log.entity}</td>
-                    <td style={{ fontSize: '12.5px', color: '#334155', maxWidth: '380px' }}>{log.details}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11.5px', color: '#38bdf8' }}>{log.entity}</td>
+                    <td style={{ fontSize: '12.5px', color: '#cbd5e1', maxWidth: '380px' }}>{log.details}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#94a3b8' }}>
                       {log.ip_address || '127.0.0.1'}
                     </td>

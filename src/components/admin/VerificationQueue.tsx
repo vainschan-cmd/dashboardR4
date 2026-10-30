@@ -147,7 +147,7 @@ export default function VerificationQueue({
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '18px' }}>
-              <FileCheck size={20} color="var(--blue-primary)" />
+              <FileCheck size={20} color="#38bdf8" />
               <span>Pusat Verifikasi & Tata Kelola Validasi Data</span>
             </h2>
             <p className="card-subtitle">
@@ -206,8 +206,8 @@ export default function VerificationQueue({
 
             {/* Action Bar */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ fontSize: '13px', color: '#475569' }}>
-                Terpilih: <strong>{selectedRecordIds.length}</strong> dari {pendingRecords.length} indikator
+              <div style={{ fontSize: '13px', color: '#cbd5e1' }}>
+                Terpilih: <strong style={{ color: '#38bdf8' }}>{selectedRecordIds.length}</strong> dari {pendingRecords.length} indikator
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
@@ -233,19 +233,19 @@ export default function VerificationQueue({
 
             {/* Pending List Table */}
             {isLoading ? (
-              <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Memuat data antrean...</div>
+              <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>Memuat data antrean...</div>
             ) : pendingRecords.length === 0 ? (
               <div style={{
                 padding: '40px 20px',
                 textAlign: 'center',
-                backgroundColor: '#f8fafc',
+                backgroundColor: '#101c2e',
                 borderRadius: 'var(--radius-md)',
-                border: '1px dashed #cbd5e1'
+                border: '1px dashed var(--border-subtle)'
               }}>
-                <CheckCircle2 size={40} color="#059669" style={{ margin: '0 auto 10px' }} />
-                <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--navy-800)' }}>Tidak Ada Antrean Verifikasi</h4>
-                <p style={{ fontSize: '12.5px', color: '#64748b', marginTop: '4px' }}>
-                  Seluruh data kinerja periode {selectedMonth}/{selectedYear} telah terverifikasi atau belum diunggah oleh cabang.
+                <CheckCircle2 size={40} color="#34d399" style={{ margin: '0 auto 10px' }} />
+                <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>Tidak Ada Antrean Verifikasi Baru</h4>
+                <p style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '4px' }}>
+                  Seluruh data kinerja periode {selectedMonth}/{selectedYear} telah terverifikasi resmi oleh BOD Regional 4.
                 </p>
               </div>
             ) : (
@@ -282,15 +282,15 @@ export default function VerificationQueue({
                             onChange={() => handleToggleRecord(r.id)}
                           />
                         </td>
-                        <td style={{ fontWeight: 600 }}>{r.branch_name || r.branch_code}</td>
-                        <td>{r.department_name || r.department_id}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{r.indicator_code}</td>
-                        <td style={{ fontWeight: 600 }}>{r.indicator_name}</td>
-                        <td style={{ textAlign: 'right' }}>{r.target.toLocaleString('id-ID')}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{r.realization.toLocaleString('id-ID')}</td>
-                        <td style={{ textAlign: 'center', fontSize: '12px' }}>{r.unit}</td>
+                        <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.branch_name || r.branch_code}</td>
+                        <td style={{ color: '#cbd5e1' }}>{r.department_name || r.department_id}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#38bdf8' }}>{r.indicator_code}</td>
+                        <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.indicator_name}</td>
+                        <td style={{ textAlign: 'right', color: '#cbd5e1' }}>{r.target.toLocaleString('id-ID')}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>{r.realization.toLocaleString('id-ID')}</td>
+                        <td style={{ textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>{r.unit}</td>
                         <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                          <span style={{ color: r.status_color === 'green' ? '#059669' : r.status_color === 'yellow' ? '#d97706' : '#dc2626' }}>
+                          <span style={{ color: r.status_color === 'green' ? '#34d399' : r.status_color === 'yellow' ? '#fbbf24' : '#f87171' }}>
                             {r.achievement_pct}%
                           </span>
                         </td>
@@ -298,7 +298,7 @@ export default function VerificationQueue({
                           <StatusBadge type="traffic_light" color={r.status_color} />
                         </td>
                         <td style={{ fontSize: '12px' }}>
-                          <div>{r.uploaded_by}</div>
+                          <div style={{ color: '#ffffff' }}>{r.uploaded_by}</div>
                           <div style={{ fontSize: '11px', color: '#94a3b8' }}>
                             {new Date(r.uploaded_at).toLocaleDateString('id-ID')}
                           </div>
@@ -338,8 +338,8 @@ export default function VerificationQueue({
                 <tbody>
                   {matrixData.map((row: any) => (
                     <tr key={row.branch_id}>
-                      <td style={{ fontWeight: 700, color: 'var(--navy-900)' }}>{row.branch_name}</td>
-                      <td style={{ fontSize: '12px', color: '#64748b' }}>{row.region}</td>
+                      <td style={{ fontWeight: 700, color: '#ffffff' }}>{row.branch_name}</td>
+                      <td style={{ fontSize: '12px', color: '#94a3b8' }}>{row.region}</td>
                       {row.departments.map((d: any) => (
                         <td key={d.department_id} style={{ textAlign: 'center' }}>
                           <StatusBadge type="verification" verificationStatus={d.status} />

@@ -14,8 +14,9 @@ import VerificationQueue from '@/components/admin/VerificationQueue';
 import TemplateMapping from '@/components/admin/TemplateMapping';
 import MasterDataView from '@/components/admin/MasterDataView';
 import AuditTrailView from '@/components/admin/AuditTrailView';
+import DataRecordsView from '@/components/admin/DataRecordsView';
 import { Branch, Department, KPIIndicator, TemplateConfig, UserRole } from '@/lib/types';
-import { X, Target, CheckCircle2, TrendingUp } from 'lucide-react';
+import { X, Target, CheckCircle2, TrendingUp, Database, Layers, FileSpreadsheet, Sliders, History } from 'lucide-react';
 
 export default function DashboardHome() {
   // Navigation active tab
@@ -39,16 +40,23 @@ export default function DashboardHome() {
   // Drilldown Modal
   const [drilldownItem, setDrilldownItem] = useState<any | null>(null);
 
-  // Fetch Master Data
+  // Fetch Master Data and Verification Pending Count
   const loadMasterData = async () => {
     try {
-      const res = await fetch('/api/master');
-      const data = await res.json();
-      if (data.success) {
-        setBranches(data.branches || []);
-        setDepartments(data.departments || []);
-        setIndicators(data.indicators || []);
-        setTemplates(data.templates || []);
+      const [resMaster, resVer] = await Promise.all([
+        fetch('/api/master'),
+        fetch('/api/verification?month=9&year=2026')
+      ]);
+      const dataMaster = await resMaster.json();
+      if (dataMaster.success) {
+        setBranches(dataMaster.branches || []);
+        setDepartments(dataMaster.departments || []);
+        setIndicators(dataMaster.indicators || []);
+        setTemplates(dataMaster.templates || []);
+      }
+      const dataVer = await resVer.json();
+      if (dataVer.success) {
+        setPendingCount(dataVer.pendingCount || 0);
       }
     } catch (e) {
       console.error(e);
@@ -75,6 +83,8 @@ export default function DashboardHome() {
     window.print();
   };
 
+  const isGovernanceView = ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
+
   return (
     <div style={{ backgroundColor: 'var(--bg-app)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* R4 PortSight Top Navigation & Subheader */}
@@ -94,6 +104,61 @@ export default function DashboardHome() {
 
       {/* Main View Body */}
       <main className="portsight-main">
+        {/* Sub-navigation bar for Data Governance */}
+        {isGovernanceView && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '4px' }}>
+            <div className="governance-subnav">
+              <button
+                onClick={() => setActiveTab('data_records')}
+                className={`governance-pill ${activeTab === 'data_records' ? 'active' : ''}`}
+              >
+                <Database size={13} />
+                <span>Data Record Kinerja</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('master_data')}
+                className={`governance-pill ${activeTab === 'master_data' ? 'active' : ''}`}
+              >
+                <Layers size={13} />
+                <span>Master Data & KPI</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('verification')}
+                className={`governance-pill ${activeTab === 'verification' ? 'active' : ''}`}
+              >
+                <CheckCircle2 size={13} />
+                <span>Verifikasi & Monitoring</span>
+                {pendingCount > 0 && (
+                  <span style={{ backgroundColor: '#fbbf24', color: '#0e1b2e', fontSize: '10px', fontWeight: 800, padding: '1px 5px', borderRadius: '10px' }}>
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('import_center')}
+                className={`governance-pill ${activeTab === 'import_center' ? 'active' : ''}`}
+              >
+                <FileSpreadsheet size={13} />
+                <span>Import Spreadsheet</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('templates')}
+                className={`governance-pill ${activeTab === 'templates' ? 'active' : ''}`}
+              >
+                <Sliders size={13} />
+                <span>Template Mapping</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('audit_trail')}
+                className={`governance-pill ${activeTab === 'audit_trail' ? 'active' : ''}`}
+              >
+                <History size={13} />
+                <span>Audit Trail & Log</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Slide 2: Beranda */}
         {activeTab === 'beranda' && (
           <PortSightBeranda
@@ -136,6 +201,14 @@ export default function DashboardHome() {
         )}
 
         {/* Data Governance & Admin Tools */}
+        {activeTab === 'data_records' && (
+          <DataRecordsView
+            branches={branches}
+            departments={departments}
+            onRefreshNeeded={loadMasterData}
+          />
+        )}
+
         {activeTab === 'import_center' && (
           <ImportCenter
             branches={branches}

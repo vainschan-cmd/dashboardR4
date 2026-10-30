@@ -55,11 +55,12 @@ export default function PortSightHeader({
   ];
 
   const adminTabs = [
-    { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
+    { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
+    { id: 'master_data', label: 'Master Data & KPI', icon: Layers },
     { id: 'verification', label: `Verifikasi & Monitoring ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
+    { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
     { id: 'templates', label: 'Template & Mapping', icon: Sliders },
-    { id: 'master_data', label: 'Master Data & KPI', icon: Database },
-    { id: 'audit_trail', label: 'Audit Trail', icon: History },
+    { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
   ];
 
   const terminals = [
@@ -82,10 +83,11 @@ export default function PortSightHeader({
     hsse: 'Dashboard HSSE',
     keuangan: 'Dashboard Keuangan',
     pelanggan: 'Dashboard Bina Pelanggan',
-    import_center: 'Pusat Impor Spreadsheet & Google Sheets',
-    verification: 'Verifikasi & Pengesahan Data Kinerja',
-    templates: 'Konfigurasi Template & Dynamic Mapping',
+    data_records: 'Data Record Kinerja Pelabuhan Regional 4',
     master_data: 'Master Data Pelindo Regional 4',
+    verification: 'Verifikasi & Pengesahan Data Kinerja',
+    import_center: 'Pusat Impor Spreadsheet & Google Sheets',
+    templates: 'Konfigurasi Template & Dynamic Mapping',
     audit_trail: 'Audit Trail & Rekam Jejak Sistem',
   };
 
@@ -118,12 +120,22 @@ export default function PortSightHeader({
             {/* Governance & Admin Dropdown */}
             <div style={{ position: 'relative' }}>
               <button
-                onClick={() => setAdminMenuOpen(!adminMenuOpen)}
-                className={`nav-tab-btn ${['import_center', 'verification', 'templates', 'master_data', 'audit_trail'].includes(activeTab) ? 'active' : ''}`}
+                onClick={() => {
+                  if (!['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab)) {
+                    setActiveTab('data_records');
+                  }
+                  setAdminMenuOpen(!adminMenuOpen);
+                }}
+                className={`nav-tab-btn ${['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab) ? 'active' : ''}`}
                 style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
               >
                 <Layers size={13} />
                 <span>Tata Kelola Data</span>
+                {pendingCount > 0 && (
+                  <span style={{ backgroundColor: '#fbbf24', color: '#0e1b2e', fontSize: '10px', fontWeight: 800, padding: '1px 5px', borderRadius: '10px', marginLeft: '2px' }}>
+                    {pendingCount}
+                  </span>
+                )}
                 <ChevronDown size={12} />
               </button>
 

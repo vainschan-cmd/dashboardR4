@@ -298,14 +298,14 @@ export function runSeed(force = false) {
 
   // Terminal baseline data
   const terminalData = [
-    { branchId: 'term_new_makassar', teus: 412500, teusTarget: 400000, rkapPct: 103.1, yoy: 8.5, status: 'Baik' },
-    { branchId: 'term_makassar', teus: 268400, teusTarget: 275000, rkapPct: 97.6, yoy: -1.3, status: 'Waspada' },
-    { branchId: 'term_bitung', teus: 196300, teusTarget: 190000, rkapPct: 103.3, yoy: 8.0, status: 'Baik' },
-    { branchId: 'term_ambon', teus: 88700, teusTarget: 92000, rkapPct: 96.4, yoy: 4.2, status: 'Waspada' },
-    { branchId: 'term_sorong', teus: 74200, teusTarget: 70000, rkapPct: 106.0, yoy: 11.1, status: 'Baik' },
-    { branchId: 'term_balikpapan', teus: 0, ton: 4820000, tonTarget: 4700000, rkapPct: 102.6, yoy: 5.9, status: 'Baik' },
-    { branchId: 'term_pantoloan', teus: 0, ton: 2160000, tonTarget: 2300000, rkapPct: 93.9, yoy: -2.3, status: 'Waspada' },
-    { branchId: 'term_ternate', teus: 0, ton: 1340000, tonTarget: 1300000, rkapPct: 103.1, yoy: 9.8, status: 'Baik' },
+    { branchId: 'term_new_makassar', name: 'New Makassar', teus: 412500, teusTarget: 400000, cargo: 2100000, cargoTarget: 2000000, rkapPct: 103.1, yoy: 8.5, status: 'Baik' },
+    { branchId: 'term_makassar', name: 'Makassar', teus: 268400, teusTarget: 275000, cargo: 1850000, cargoTarget: 1900000, rkapPct: 97.6, yoy: -1.3, status: 'Waspada' },
+    { branchId: 'term_bitung', name: 'Bitung', teus: 196300, teusTarget: 190000, cargo: 1450000, cargoTarget: 1400000, rkapPct: 103.3, yoy: 8.0, status: 'Baik' },
+    { branchId: 'term_ambon', name: 'Ambon', teus: 88700, teusTarget: 92000, cargo: 620000, cargoTarget: 650000, rkapPct: 96.4, yoy: 4.2, status: 'Waspada' },
+    { branchId: 'term_sorong', name: 'Sorong', teus: 74200, teusTarget: 70000, cargo: 480000, cargoTarget: 450000, rkapPct: 106.0, yoy: 11.1, status: 'Baik' },
+    { branchId: 'term_balikpapan', name: 'Balikpapan', teus: 0, teusTarget: 0, cargo: 4820000, cargoTarget: 4700000, rkapPct: 102.6, yoy: 5.9, status: 'Baik' },
+    { branchId: 'term_pantoloan', name: 'Pantoloan', teus: 0, teusTarget: 0, cargo: 2160000, cargoTarget: 2300000, rkapPct: 93.9, yoy: -2.3, status: 'Waspada' },
+    { branchId: 'term_ternate', name: 'Ternate', teus: 0, teusTarget: 0, cargo: 1340000, cargoTarget: 1300000, rkapPct: 103.1, yoy: 9.8, status: 'Baik' },
   ];
 
   for (let m = 1; m <= 9; m++) {
@@ -313,7 +313,7 @@ export function runSeed(force = false) {
       const isGood = t.rkapPct >= 100;
       const statusColor: StatusColor = isGood ? 'green' : 'yellow';
 
-      // Insert TEUs
+      // 1. Arus Petikemas (TEUs)
       stmtRec.run(
         `rec_2026_${m}_${t.branchId}_teus`,
         t.branchId,
@@ -326,7 +326,7 @@ export function runSeed(force = false) {
         'TEUs',
         t.rkapPct,
         statusColor,
-        'Data ilustrasi R4 PortDash',
+        `Realisasi arus petikemas periode bulan ${m}/2026`,
         'upload_xlsx',
         'batch_init_2026',
         'verified',
@@ -337,8 +337,8 @@ export function runSeed(force = false) {
         '2026-10-01T10:00:00Z'
       );
 
-      // Insert Revenue
-      const branchRev = t.rkapPct * 2.5;
+      // 2. Pendapatan Usaha (Revenue)
+      const branchRev = Number((t.rkapPct * 2.5).toFixed(1));
       stmtRec.run(
         `rec_2026_${m}_${t.branchId}_rev`,
         t.branchId,
@@ -347,11 +347,11 @@ export function runSeed(force = false) {
         m,
         2026,
         Number((branchRev * 0.98).toFixed(1)),
-        Number(branchRev.toFixed(1)),
+        branchRev,
         'Miliar Rp',
         t.rkapPct,
         statusColor,
-        'Data ilustrasi R4 PortDash',
+        `Pendapatan operasional pelabuhan bulan ${m}/2026`,
         'upload_xlsx',
         'batch_init_2026',
         'verified',
@@ -360,6 +360,139 @@ export function runSeed(force = false) {
         '2026-09-30T08:00:00Z',
         'bod_regional',
         '2026-10-01T10:00:00Z'
+      );
+
+      // 3. Arus Barang (Cargo Ton)
+      const cargoTarget = Math.round(t.cargoTarget / 9);
+      const cargoReal = Math.round(t.cargo / 9);
+      const cargoPct = cargoTarget > 0 ? Number(((cargoReal / cargoTarget) * 100).toFixed(1)) : 100;
+      const cargoColor: StatusColor = cargoPct >= 100 ? 'green' : 'yellow';
+      
+      // Special verification statuses in Month 9 for realistic simulation
+      let cargoStatus = 'verified';
+      let cargoRevision: string | null = null;
+      let cargoVerifier: string | null = 'bod_regional';
+      let cargoVerifiedAt: string | null = '2026-10-01T10:00:00Z';
+
+      if (m === 9 && t.branchId === 'term_balikpapan') {
+        cargoStatus = 'pending_verification';
+        cargoVerifier = null;
+        cargoVerifiedAt = null;
+      } else if (m === 9 && t.branchId === 'term_pantoloan') {
+        cargoStatus = 'pending_verification';
+        cargoVerifier = null;
+        cargoVerifiedAt = null;
+      }
+
+      stmtRec.run(
+        `rec_2026_${m}_${t.branchId}_cargo`,
+        t.branchId,
+        'dept_ops',
+        'kpi_cargo',
+        m,
+        2026,
+        cargoTarget,
+        cargoReal,
+        'Ton',
+        cargoPct,
+        cargoColor,
+        `Laporan arus barang non-petikemas bulan ${m}/2026`,
+        'upload_xlsx',
+        'batch_init_2026',
+        cargoStatus,
+        cargoRevision,
+        'pic.ops.' + t.branchId,
+        '2026-09-28T14:30:00Z',
+        cargoVerifier,
+        cargoVerifiedAt
+      );
+
+      // 4. Kesiapan Alat (RFU Teknik %)
+      const rfuTarget = 92.0;
+      const rfuReal = t.status === 'Baik' ? Number((93.5 + (m % 3) * 0.5).toFixed(1)) : Number((88.0 + (m % 2) * 1.2).toFixed(1));
+      const rfuPct = Number(((rfuReal / rfuTarget) * 100).toFixed(1));
+      const rfuColor: StatusColor = rfuReal >= 90 ? 'green' : rfuReal >= 85 ? 'yellow' : 'red';
+
+      let rfuStatus = 'verified';
+      let rfuRevision: string | null = null;
+      let rfuVerifier: string | null = 'bod_regional';
+      let rfuVerifiedAt: string | null = '2026-10-01T10:00:00Z';
+
+      if (m === 9 && t.branchId === 'term_ambon') {
+        rfuStatus = 'revision_needed';
+        rfuRevision = 'Mohon konfirmasi ulang jam breakdown RTG 02 & CC 01 dengan logbook mekanik lapangan.';
+        rfuVerifier = 'admin.r4';
+        rfuVerifiedAt = '2026-09-30T16:00:00Z';
+      } else if (m === 9 && t.branchId === 'term_ternate') {
+        rfuStatus = 'pending_verification';
+        rfuVerifier = null;
+        rfuVerifiedAt = null;
+      } else if (m === 9 && t.branchId === 'term_sorong') {
+        rfuStatus = 'pending_verification';
+        rfuVerifier = null;
+        rfuVerifiedAt = null;
+      }
+
+      stmtRec.run(
+        `rec_2026_${m}_${t.branchId}_rfu`,
+        t.branchId,
+        'dept_tek',
+        'kpi_rfu',
+        m,
+        2026,
+        rfuTarget,
+        rfuReal,
+        '%',
+        rfuPct,
+        rfuColor,
+        `Indeks kesiapan alat utama dermaga dan CY bulan ${m}/2026`,
+        'upload_xlsx',
+        'batch_init_2026',
+        rfuStatus,
+        rfuRevision,
+        'pic.tek.' + t.branchId,
+        '2026-09-29T09:15:00Z',
+        rfuVerifier,
+        rfuVerifiedAt
+      );
+
+      // 5. Kepuasan Pelanggan (CSAT)
+      const csatTarget = 4.0;
+      const csatReal = Number((4.1 + (t.rkapPct > 100 ? 0.2 : -0.2) + (m % 2) * 0.1).toFixed(2));
+      const csatPct = Number(((csatReal / csatTarget) * 100).toFixed(1));
+      const csatColor: StatusColor = csatReal >= 4.0 ? 'green' : 'yellow';
+
+      let csatStatus = 'verified';
+      let csatVerifier: string | null = 'bod_regional';
+      let csatVerifiedAt: string | null = '2026-10-01T10:00:00Z';
+
+      if (m === 9 && t.branchId === 'term_makassar') {
+        csatStatus = 'pending_verification';
+        csatVerifier = null;
+        csatVerifiedAt = null;
+      }
+
+      stmtRec.run(
+        `rec_2026_${m}_${t.branchId}_csat`,
+        t.branchId,
+        'dept_pel',
+        'kpi_csat',
+        m,
+        2026,
+        csatTarget,
+        csatReal,
+        'Skor 1-5',
+        csatPct,
+        csatColor,
+        `Survei kepuasan pelanggan bulanan ${m}/2026`,
+        'upload_xlsx',
+        'batch_init_2026',
+        csatStatus,
+        null,
+        'pic.pel.' + t.branchId,
+        '2026-09-29T11:00:00Z',
+        csatVerifier,
+        csatVerifiedAt
       );
     }
   }

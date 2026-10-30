@@ -202,7 +202,7 @@ export default function ImportCenter({
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '18px' }}>
-              <FileSpreadsheet size={20} color="var(--blue-primary)" />
+              <FileSpreadsheet size={20} color="#38bdf8" />
               <span>Pusat Impor Data Kinerja & Integrasi Google Sheets</span>
             </h2>
             <p className="card-subtitle">
@@ -280,7 +280,7 @@ export default function ImportCenter({
                   className="form-input"
                   disabled
                   value={`${username} (${userRole})`}
-                  style={{ backgroundColor: '#f1f5f9' }}
+                  style={{ backgroundColor: '#101c2e' }}
                 />
               </div>
             </div>
@@ -288,11 +288,11 @@ export default function ImportCenter({
             {/* Drag & Drop Zone */}
             <div
               style={{
-                border: '2px dashed var(--slate-300)',
+                border: '2px dashed var(--border-subtle)',
                 borderRadius: 'var(--radius-lg)',
                 padding: '36px 20px',
                 textAlign: 'center',
-                backgroundColor: '#f8fafc',
+                backgroundColor: '#101c2e',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
               }}
@@ -305,15 +305,15 @@ export default function ImportCenter({
                 style={{ display: 'none' }}
                 onChange={handleFileChange}
               />
-              <UploadCloud size={40} color="var(--blue-primary)" style={{ margin: '0 auto 12px' }} />
-              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--navy-800)' }}>
+              <UploadCloud size={40} color="#38bdf8" style={{ margin: '0 auto 12px' }} />
+              <div style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff' }}>
                 {file ? file.name : 'Klik untuk memilih file hasil ekspor spreadsheet'}
               </div>
-              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
                 Mendukung format Microsoft Excel (.xlsx, .xls) dan CSV (.csv) hingga 10MB
               </div>
               {file && (
-                <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--blue-primary)', fontWeight: 600 }}>
+                <div style={{ marginTop: '10px', fontSize: '12px', color: '#38bdf8', fontWeight: 600 }}>
                   Ukuran: {(file.size / 1024).toFixed(1)} KB • Klik untuk mengganti file
                 </div>
               )}
@@ -395,24 +395,24 @@ export default function ImportCenter({
         {/* TAB 3: DOWNLOAD TEMPLATE */}
         {activeTab === 'template' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.6 }}>
+            <p style={{ fontSize: '13.5px', color: '#cbd5e1', lineHeight: 1.6 }}>
               Unduh format template spreadsheet resmi (.xlsx) yang telah dilengkapi baris contoh data, nama kolom standar, serta daftar kode cabang dan indikator resmi pada tab lembar petunjuk referensi.
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               {departments.map((d) => (
-                <div key={d.id} style={{ border: '1px solid #e2e8f0', borderRadius: 'var(--radius-md)', padding: '16px', background: '#ffffff' }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--navy-800)' }}>
+                <div key={d.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', background: '#101c2e' }}>
+                  <div style={{ fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
                     Departemen {d.name} ({d.code})
                   </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', marginBottom: '14px' }}>
                     PIC: {d.pic_name} • Format Standar v1.2
                   </div>
                   <a
                     href={`/api/reports/export?type=template&department_id=${d.id}`}
                     download
                     className="btn btn-secondary btn-sm"
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', justifyContent: 'center' }}
                   >
                     <Download size={14} />
                     <span>Unduh Template .xlsx</span>
@@ -537,7 +537,7 @@ export default function ImportCenter({
 
           {/* Preview of Parsed Rows */}
           <div>
-            <h4 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy-800)', marginBottom: '8px' }}>
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
               Pratinjau Data Valid (15 Baris Pertama):
             </h4>
             <div className="table-responsive">

@@ -65,15 +65,18 @@ export default function MasterDataView({
         {activeTab === 'kpi' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600 }}>Filter Departemen:</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#cbd5e1' }}>Filter Departemen:</span>
               <select
                 className="filter-select"
                 value={selectedDeptFilter}
                 onChange={(e) => setSelectedDeptFilter(e.target.value)}
+                style={{ width: 'auto', minWidth: '220px' }}
               >
-                <option value="ALL">Semua Departemen</option>
+                <option value="ALL">Semua Departemen (Semua Indikator)</option>
                 {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.code} - {d.name}</option>
+                  <option key={d.id} value={d.id} style={{ background: '#122137' }}>
+                    {d.code} - {d.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -87,7 +90,7 @@ export default function MasterDataView({
                     <th>Departemen</th>
                     <th>Kategori</th>
                     <th style={{ textAlign: 'center' }}>Satuan</th>
-                    <th style={{ textAlign: 'center' }}>Arah KPI (Arah Target)</th>
+                    <th style={{ textAlign: 'center' }}>Arah Target</th>
                     <th style={{ textAlign: 'right' }}>Target Standar</th>
                     <th style={{ textAlign: 'center' }}>KPI Utama</th>
                   </tr>
@@ -95,10 +98,10 @@ export default function MasterDataView({
                 <tbody>
                   {filteredIndicators.map((ind) => (
                     <tr key={ind.id}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{ind.code}</td>
-                      <td style={{ fontWeight: 600, color: 'var(--navy-900)' }}>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#38bdf8' }}>{ind.code}</td>
+                      <td style={{ fontWeight: 600, color: '#ffffff' }}>
                         <div>{ind.name}</div>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>{ind.formula_desc}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{ind.formula_desc || 'Target operasional tahunan'}</div>
                       </td>
                       <td>
                         <span className="badge badge-neutral">
@@ -109,10 +112,10 @@ export default function MasterDataView({
                       <td style={{ textAlign: 'center' }}>{ind.unit}</td>
                       <td style={{ textAlign: 'center' }}>
                         <span className={`badge ${ind.direction === 'higher_is_better' ? 'badge-green' : 'badge-yellow'}`}>
-                          {ind.direction === 'higher_is_better' ? 'Semakin Besar Semakin Baik' : 'Semakin Kecil Semakin Baik'}
+                          {ind.direction === 'higher_is_better' ? 'Semakin Besar Lebih Baik' : 'Semakin Kecil Lebih Baik'}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{ind.default_target.toLocaleString('id-ID')}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>{ind.default_target.toLocaleString('id-ID')}</td>
                       <td style={{ textAlign: 'center' }}>
                         {ind.is_core_kpi ? (
                           <span className="badge badge-green">Core KPI</span>
@@ -147,13 +150,13 @@ export default function MasterDataView({
               <tbody>
                 {branches.map((b) => (
                   <tr key={b.id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{b.code}</td>
-                    <td style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{b.name}</td>
-                    <td>{b.region}</td>
-                    <td style={{ fontSize: '12px', color: '#64748b', maxWidth: '220px' }}>{b.address}</td>
-                    <td style={{ fontSize: '12px' }}>{b.phone}</td>
-                    <td style={{ fontWeight: 600 }}>{(b.facilities?.dermaga_length_m || 0).toLocaleString('id-ID')} m</td>
-                    <td style={{ fontWeight: 600 }}>{b.facilities?.kolam_depth_mlws || 0} mLWS</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{b.code}</td>
+                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{b.name}</td>
+                    <td style={{ color: '#cbd5e1' }}>{b.region}</td>
+                    <td style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '240px' }}>{b.address}</td>
+                    <td style={{ fontSize: '12px', color: '#cbd5e1' }}>{b.phone}</td>
+                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{(b.facilities?.dermaga_length_m || 0).toLocaleString('id-ID')} m</td>
+                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{b.facilities?.kolam_depth_mlws || 0} mLWS</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className="badge badge-green">Aktif</span>
                     </td>
@@ -181,11 +184,11 @@ export default function MasterDataView({
               <tbody>
                 {departments.map((d) => (
                   <tr key={d.id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{d.code}</td>
-                    <td style={{ fontWeight: 600, color: 'var(--navy-900)' }}>{d.name}</td>
-                    <td style={{ fontWeight: 600 }}>{d.pic_name}</td>
-                    <td style={{ fontSize: '12px', color: 'var(--blue-primary)' }}>{d.pic_email}</td>
-                    <td style={{ fontSize: '12px', color: '#64748b' }}>{d.description}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{d.code}</td>
+                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{d.name}</td>
+                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{d.pic_name}</td>
+                    <td style={{ fontSize: '12px', color: '#38bdf8' }}>{d.pic_email}</td>
+                    <td style={{ fontSize: '12px', color: '#94a3b8' }}>{d.description}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className="badge badge-green">Aktif</span>
                     </td>
