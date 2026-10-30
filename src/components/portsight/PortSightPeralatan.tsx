@@ -86,15 +86,15 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL' }: PortSig
   });
 
   // Calculate aggregates
-  const totalUnits = filteredData.reduce((acc, cur) => acc + cur.jumlah, 0);
-  const validAvail = filteredData.filter(d => d.availability > 0);
+  const totalUnits = filteredData.reduce((acc, cur) => acc + (cur.jumlah || 0), 0);
+  const validAvail = filteredData.filter(d => (d.availability || 0) > 0);
   const avgAvail = validAvail.length > 0
-    ? Number((validAvail.reduce((a, b) => a + b.availability, 0) / validAvail.length).toFixed(1))
+    ? Number((validAvail.reduce((a, b) => a + (b.availability || 0), 0) / validAvail.length).toFixed(1))
     : 92.4;
 
-  const validUtil = filteredData.filter(d => d.utilisasi > 0);
+  const validUtil = filteredData.filter(d => (d.utilisasi || 0) > 0);
   const avgUtil = validUtil.length > 0
-    ? Number((validUtil.reduce((a, b) => a + b.utilisasi, 0) / validUtil.length).toFixed(1))
+    ? Number((validUtil.reduce((a, b) => a + (b.utilisasi || 0), 0) / validUtil.length).toFixed(1))
     : 14.8;
 
   // Chart data: Equipment type population

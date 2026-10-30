@@ -68,31 +68,31 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL' }: PortSig
   });
 
   // Calculate Averages
-  const validBor = filteredData.filter(d => d.bor > 0);
+  const validBor = filteredData.filter(d => (d.bor || 0) > 0);
   const avgBor = validBor.length > 0
-    ? Number((validBor.reduce((a, b) => a + b.bor, 0) / validBor.length).toFixed(1))
+    ? Number((validBor.reduce((a, b) => a + (b.bor || 0), 0) / validBor.length).toFixed(1))
     : 54.2;
 
-  const validYor = filteredData.filter(d => d.yor > 0);
+  const validYor = filteredData.filter(d => (d.yor || 0) > 0);
   const avgYor = validYor.length > 0
-    ? Number((validYor.reduce((a, b) => a + b.yor, 0) / validYor.length).toFixed(1))
+    ? Number((validYor.reduce((a, b) => a + (b.yor || 0), 0) / validYor.length).toFixed(1))
     : 38.6;
 
-  const validSor = filteredData.filter(d => d.sor > 0);
+  const validSor = filteredData.filter(d => (d.sor || 0) > 0);
   const avgSor = validSor.length > 0
-    ? Number((validSor.reduce((a, b) => a + b.sor, 0) / validSor.length).toFixed(1))
+    ? Number((validSor.reduce((a, b) => a + (b.sor || 0), 0) / validSor.length).toFixed(1))
     : 42.1;
 
   // Chart data: Top 10 terminals BOR & YOR
   const chartData = filteredData
-    .filter(d => d.bor > 0 || d.yor > 0)
+    .filter(d => (d.bor || 0) > 0 || (d.yor || 0) > 0)
     .slice(0, 10)
     .map(d => ({
       name: d.branchName.length > 10 ? d.branchName.slice(0, 8) + '..' : d.branchName,
       fullName: `[${d.branchCode}] ${d.branchName}`,
-      BOR: Number(d.bor.toFixed(1)),
-      YOR: Number(d.yor.toFixed(1)),
-      SOR: Number(d.sor.toFixed(1)),
+      BOR: Number((d.bor || 0).toFixed(1)),
+      YOR: Number((d.yor || 0).toFixed(1)),
+      SOR: Number((d.sor || 0).toFixed(1)),
     }));
 
   return (
@@ -233,18 +233,18 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL' }: PortSig
                       {r.dermaga}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center', fontWeight: 800, color: r.bor > 70 ? '#f59e0b' : '#38bdf8' }}>
-                    {r.bor > 0 ? `${r.bor}%` : '-'}
+                  <td style={{ textAlign: 'center', fontWeight: 800, color: (r.bor || 0) > 70 ? '#f59e0b' : '#38bdf8' }}>
+                    {(r.bor || 0) > 0 ? `${(r.bor || 0).toFixed(1)}%` : '-'}
                   </td>
                   <td style={{ textAlign: 'center', fontWeight: 700, color: '#10b981' }}>
-                    {r.yor > 0 ? `${r.yor}%` : '-'}
+                    {(r.yor || 0) > 0 ? `${(r.yor || 0).toFixed(1)}%` : '-'}
                   </td>
                   <td style={{ textAlign: 'center', fontWeight: 700, color: '#cbd5e1' }}>
-                    {r.sor > 0 ? `${r.sor}%` : '-'}
+                    {(r.sor || 0) > 0 ? `${(r.sor || 0).toFixed(1)}%` : '-'}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <span className={`badge ${r.bor <= 65 ? 'badge-green' : r.bor <= 75 ? 'badge-yellow' : 'badge-red'}`}>
-                      {r.bor <= 65 ? 'Optimal' : r.bor <= 75 ? 'Padat' : 'Jenuh'}
+                    <span className={`badge ${(r.bor || 0) <= 65 ? 'badge-green' : (r.bor || 0) <= 75 ? 'badge-yellow' : 'badge-red'}`}>
+                      {(r.bor || 0) <= 65 ? 'Optimal' : (r.bor || 0) <= 75 ? 'Padat' : 'Jenuh'}
                     </span>
                   </td>
                 </tr>

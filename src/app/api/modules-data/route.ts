@@ -9,6 +9,15 @@ function cleanKey(k: string): string {
   return k.trim().toLowerCase();
 }
 
+function parseNumeric(val: any, fallback: number = 0): number {
+  if (val === undefined || val === null || val === '') return fallback;
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+  const str = String(val).trim().replace(/,/g, '');
+  if (str === '-' || str === 'null' || str === 'undefined' || str === '') return fallback;
+  const num = Number(str);
+  return isNaN(num) ? fallback : num;
+}
+
 function getVal(row: any, name: string): any {
   if (!row) return undefined;
   if (row[name] !== undefined) return row[name];
@@ -38,25 +47,27 @@ export async function GET(req: NextRequest) {
     const rawFin: any[] = wb.Sheets['finansial'] ? xlsx.utils.sheet_to_json(wb.Sheets['finansial']) : [];
     const finansial = rawFin.map(r => {
       const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
-      const konsolidasi = Number(getVal(r, 'KONSOLIDASI') || 0);
-      const cabang = Number(getVal(r, 'CABANG') || 0);
+      const konsolidasi = parseNumeric(getVal(r, 'KONSOLIDASI'), 0);
+      const cabang = parseNumeric(getVal(r, 'CABANG'), 0);
+      const yoy = parseNumeric(getVal(r, 'YOY'), 0);
+      const rka = parseNumeric(getVal(r, 'RKA'), 0);
       return {
-        year: Number(getVal(r, 'TAHUN') || 2026),
-        month: Number(getVal(r, 'BULAN') || 9),
+        year: parseNumeric(getVal(r, 'TAHUN'), 2026),
+        month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
         branchName: String(getVal(r, 'NM_CBG') || '').trim(),
         rekening: String(getVal(r, 'REKENING') || '').trim(),
         cabangRp: cabang,
         cabangM: Number((cabang / 1_000_000_000).toFixed(2)),
-        pmtRp: Number(getVal(r, 'PMT') || 0),
-        ptpRp: Number(getVal(r, 'PTP') || 0),
-        pslRp: Number(getVal(r, 'PSL') || 0),
-        pjmRp: Number(getVal(r, 'PJM') || 0),
-        eliminasiRp: Number(getVal(r, 'ELIMINASI') || 0),
+        pmtRp: parseNumeric(getVal(r, 'PMT'), 0),
+        ptpRp: parseNumeric(getVal(r, 'PTP'), 0),
+        pslRp: parseNumeric(getVal(r, 'PSL'), 0),
+        pjmRp: parseNumeric(getVal(r, 'PJM'), 0),
+        eliminasiRp: parseNumeric(getVal(r, 'ELIMINASI'), 0),
         konsolidasiRp: konsolidasi,
         konsolidasiM: Number((konsolidasi / 1_000_000_000).toFixed(2)),
-        yoy: Number(Number(getVal(r, 'YOY') || 0).toFixed(1)),
-        rka: Number(Number(getVal(r, 'RKA') || 0).toFixed(1)),
+        yoy: Number(yoy.toFixed(1)),
+        rka: Number(rka.toFixed(1)),
       };
     }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
 
@@ -64,18 +75,20 @@ export async function GET(req: NextRequest) {
     const rawOpkom: any[] = wb.Sheets['opkom'] ? xlsx.utils.sheet_to_json(wb.Sheets['opkom']) : [];
     const opkom = rawOpkom.map(r => {
       const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
-      const jumlahRp = Number(getVal(r, 'JUMLAH') || 0);
+      const jumlahRp = parseNumeric(getVal(r, 'JUMLAH'), 0);
+      const yoy = parseNumeric(getVal(r, 'YOY'), 0);
+      const rka = parseNumeric(getVal(r, 'RKA'), 0);
       return {
-        year: Number(getVal(r, 'TAHUN') || 2026),
-        month: Number(getVal(r, 'BULAN') || 9),
+        year: parseNumeric(getVal(r, 'TAHUN'), 2026),
+        month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
         branchName: String(getVal(r, 'NM_CBG') || '').trim(),
         layanan: String(getVal(r, 'LAYANAN') || '').trim().toUpperCase(),
         satuan: String(getVal(r, 'SATUAN') || 'Rp').trim(),
         jumlahRp,
         jumlahM: Number((jumlahRp / 1_000_000_000).toFixed(2)),
-        yoy: Number(Number(getVal(r, 'YOY') || 0).toFixed(1)),
-        rka: Number(Number(getVal(r, 'RKA') || 0).toFixed(1)),
+        yoy: Number(yoy.toFixed(1)),
+        rka: Number(rka.toFixed(1)),
       };
     }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
 
@@ -84,14 +97,14 @@ export async function GET(req: NextRequest) {
     const kinerja = rawKin.map(r => {
       const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
       return {
-        year: Number(getVal(r, 'TAHUN') || 2026),
-        month: Number(getVal(r, 'BULAN') || 9),
+        year: parseNumeric(getVal(r, 'TAHUN'), 2026),
+        month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
         branchName: String(getVal(r, 'NM_CBG') || '').trim(),
         kdKine: String(getVal(r, 'KD_KINE') || '').trim(),
         nmKine: String(getVal(r, 'NM_KINE') || '').trim().toUpperCase(),
         satuan: String(getVal(r, 'SATUAN') || '').trim(),
-        nilai: Number(getVal(r, 'NILAI') || 0),
+        nilai: parseNumeric(getVal(r, 'NILAI'), 0),
       };
     }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
 
@@ -100,14 +113,14 @@ export async function GET(req: NextRequest) {
     const utilisasi = rawUtil.map(r => {
       const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
       return {
-        year: Number(getVal(r, 'TAHUN') || 2026),
-        month: Number(getVal(r, 'BULAN') || 9),
+        year: parseNumeric(getVal(r, 'TAHUN'), 2026),
+        month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
         branchName: String(getVal(r, 'NM_CBG') || '').trim(),
         dermaga: String(getVal(r, 'DERMAGA') || 'MULTIPURPOSE').trim(),
-        bor: Number(getVal(r, 'BOR') || 0),
-        yor: Number(getVal(r, 'YOR') || 0),
-        sor: Number(getVal(r, 'SOR') || 0),
+        bor: parseNumeric(getVal(r, 'BOR'), 0),
+        yor: parseNumeric(getVal(r, 'YOR'), 0),
+        sor: parseNumeric(getVal(r, 'SOR'), 0),
       };
     }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
 
@@ -116,17 +129,17 @@ export async function GET(req: NextRequest) {
     const peralatan = rawAlat.map(r => {
       const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
       return {
-        year: Number(getVal(r, 'TAHUN') || 2026),
-        month: Number(getVal(r, 'BULAN') || 9),
+        year: parseNumeric(getVal(r, 'TAHUN'), 2026),
+        month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
         branchName: String(getVal(r, 'NM_CBG') || '').trim(),
         kdAlat: String(getVal(r, 'KD_ALAT') || '').trim(),
         nmAlat: String(getVal(r, 'NM_ALAT') || '').trim(),
         singkatan: String(getVal(r, 'SINGKATAN_ALAT') || '').trim(),
         jnsAlat: String(getVal(r, 'JNS_ALAT') || '').trim(),
-        jumlah: Number(getVal(r, 'JUMLAH') || 0),
-        availability: Number(getVal(r, 'AVAILABILITY') || 0),
-        utilisasi: Number(getVal(r, 'UTILISASI') || 0),
+        jumlah: parseNumeric(getVal(r, 'JUMLAH'), 0),
+        availability: parseNumeric(getVal(r, 'AVAILABILITY'), 0),
+        utilisasi: parseNumeric(getVal(r, 'UTILISASI'), 0),
       };
     }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
 
@@ -137,16 +150,16 @@ export async function GET(req: NextRequest) {
     const fasilitas = rawFas.map(r => {
       const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
       return {
-        year: Number(getVal(r, 'TAHUN') || 2026),
-        month: Number(getVal(r, 'BULAN') || 9),
+        year: parseNumeric(getVal(r, 'TAHUN'), 2026),
+        month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
         branchName: String(getVal(r, 'NM_CBG') || '').trim(),
         namaFasilitas: String(getVal(r, 'nm_pasfel') || getVal(r, 'nm_faspel') || 'Fasilitas').trim(),
         jenisFasilitas: String(getVal(r, 'jns_faspel') || '').trim(),
-        panjangM: Number(getVal(r, 'panjang') || 0),
-        lebarM: Number(getVal(r, 'lebar') || 0),
-        mLws: Number(getVal(r, 'mLws') || 0),
-        luasSqm: Number(getVal(r, 'luas') || 0),
+        panjangM: parseNumeric(getVal(r, 'panjang'), 0),
+        lebarM: parseNumeric(getVal(r, 'lebar'), 0),
+        mLws: parseNumeric(getVal(r, 'mLws'), 0),
+        luasSqm: parseNumeric(getVal(r, 'luas'), 0),
         kapasitas: getVal(r, 'kapasitas') ? String(getVal(r, 'kapasitas')).trim() : null,
         keterangan: getVal(r, 'ket') ? String(getVal(r, 'ket')).trim() : '',
       };

@@ -75,27 +75,28 @@ export default function PortSightKinerja({ selectedTerminal = 'ALL' }: PortSight
   });
 
   // Calculate Average Metrics
-  const wtpRows = data.filter(d => d.satuan === 'WTP');
+  const wtpRows = data.filter(d => d.satuan === 'WTP' && (d.nilai || 0) > 0);
   const avgWtp = wtpRows.length > 0
-    ? Number((wtpRows.reduce((a, b) => a + b.nilai, 0) / wtpRows.length).toFixed(2))
+    ? Number((wtpRows.reduce((a, b) => a + (b.nilai || 0), 0) / wtpRows.length).toFixed(2))
     : 0.18;
 
-  const bshRows = data.filter(d => d.satuan === 'BSH');
+  const bshRows = data.filter(d => d.satuan === 'BSH' && (d.nilai || 0) > 0);
   const avgBsh = bshRows.length > 0
-    ? Number((bshRows.reduce((a, b) => a + b.nilai, 0) / bshRows.length).toFixed(1))
+    ? Number((bshRows.reduce((a, b) => a + (b.nilai || 0), 0) / bshRows.length).toFixed(1))
     : 32.5;
 
-  const bchRows = data.filter(d => d.satuan === 'BCH');
+  const bchRows = data.filter(d => d.satuan === 'BCH' && (d.nilai || 0) > 0);
   const avgBch = bchRows.length > 0
-    ? Number((bchRows.reduce((a, b) => a + b.nilai, 0) / bchRows.length).toFixed(1))
+    ? Number((bchRows.reduce((a, b) => a + (b.nilai || 0), 0) / bchRows.length).toFixed(1))
     : 24.8;
 
   // Chart: BSH by Top Terminals
   const bshChartData = bshRows
+    .filter(d => (d.nilai || 0) > 0)
     .map(d => ({
       name: d.branchName.length > 10 ? d.branchName.slice(0, 10) + '..' : d.branchName,
       fullName: `[${d.branchCode}] ${d.branchName}`,
-      bsh: Number(d.nilai.toFixed(1)),
+      bsh: Number((d.nilai || 0).toFixed(1)),
     }))
     .sort((a, b) => b.bsh - a.bsh)
     .slice(0, 8);
@@ -253,11 +254,11 @@ export default function PortSightKinerja({ selectedTerminal = 'ALL' }: PortSight
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 800, color: '#ffffff', fontSize: '13.5px' }}>
-                    {r.nilai.toLocaleString('id-ID')} {r.satuan}
+                    {(r.nilai || 0) > 0 ? `${(r.nilai || 0).toLocaleString('id-ID')} ${r.satuan}` : '-'}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <span className="badge badge-green">
-                      Memenuhi Standar
+                    <span className={`badge ${(r.nilai || 0) > 0 ? 'badge-green' : 'badge-neutral'}`}>
+                      {(r.nilai || 0) > 0 ? 'Memenuhi Standar' : 'N/A'}
                     </span>
                   </td>
                 </tr>

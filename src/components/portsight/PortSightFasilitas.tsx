@@ -279,7 +279,7 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL' }: PortSig
                     {r.mLws !== 0 ? `${r.mLws} mLWS` : '-'}
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>
-                    {r.luasSqm > 0 ? `${r.luasSqm.toLocaleString('id-ID')} m²` : '-'}
+                    {(r.luasSqm || 0) > 0 ? `${(r.luasSqm || 0).toLocaleString('id-ID')} m²` : '-'}
                   </td>
                   <td style={{ fontSize: '11.5px', color: '#94a3b8' }}>
                     {r.keterangan || r.kapasitas || '-'}
