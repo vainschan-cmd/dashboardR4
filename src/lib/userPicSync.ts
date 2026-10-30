@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import * as xlsx from 'xlsx';
 import { User, UserRole } from './types';
 
@@ -222,6 +223,18 @@ export function exportUsersToSpreadsheet(users: User[]): string {
 
   const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
   fs.writeFileSync(filePath, buf);
+
+  // Otomatis salin ke folder Downloads pengguna agar langsung siap di-upload ke Google Drive
+  try {
+    const downloadsDir = path.join(os.homedir(), 'Downloads');
+    if (fs.existsSync(downloadsDir)) {
+      const downloadsFile = path.join(downloadsDir, MASTER_USER_FILE);
+      fs.writeFileSync(downloadsFile, buf);
+      console.log(`[UserSync] Spreadsheet master user juga disalin ke: ${downloadsFile}`);
+    }
+  } catch (err) {
+    console.error('[UserSync] Gagal menyalin ke folder Downloads:', err);
+  }
 
   console.log(`[UserSync] Spreadsheet master user tersimpan di: ${filePath} (${users.length} akun, akun drive: ${DRIVE_ACCOUNT})`);
   return filePath;

@@ -39,7 +39,7 @@ export default function MasterDataView({
       const res = await fetch('/api/users/sync-drive', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        setSyncMessage(`Spreadsheet master_user_pic.xlsx berhasil diperbarui & disinkronkan ke My Drive (regdashr@gmail.com)`);
+        setSyncMessage(`Spreadsheet master_user_pic.xlsx berhasil diperbarui (${data.totalUsers} PIC) dan disalin ke folder Downloads. Siap di-upload ke My Drive (regdashr@gmail.com).`);
         if (onRefreshUsers) onRefreshUsers();
       } else {
         setSyncMessage(`Gagal sinkron: ${data.error}`);
@@ -157,7 +157,7 @@ export default function MasterDataView({
                     Spreadsheet Master PIC (master_user_pic.xlsx)
                   </div>
                   <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                    Tersimpan di My Drive akun: <strong style={{ color: 'var(--accent-blue)' }}>regdashr@gmail.com</strong> (Sinkron dengan Sistem Login)
+                    Tersedia di folder <strong>Downloads/master_user_pic.xlsx</strong> & data aplikasi • Akun Google: <strong style={{ color: 'var(--accent-blue)' }}>regdashr@gmail.com</strong>
                   </div>
                 </div>
               </div>
