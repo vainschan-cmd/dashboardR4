@@ -16,8 +16,9 @@ import MasterDataView from '@/components/admin/MasterDataView';
 import AuditTrailView from '@/components/admin/AuditTrailView';
 import DataRecordsView from '@/components/admin/DataRecordsView';
 import AuthModal from '@/components/auth/AuthModal';
+import LoginScreen from '@/components/auth/LoginScreen';
 import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User } from '@/lib/types';
-import { X, Target, CheckCircle2, TrendingUp, Database, Layers, FileSpreadsheet, Sliders, History } from 'lucide-react';
+import { X, Target, CheckCircle2, TrendingUp, Database, Layers, FileSpreadsheet, Sliders, History, Anchor } from 'lucide-react';
 
 export default function DashboardHome() {
   // Navigation active tab
@@ -34,8 +35,9 @@ export default function DashboardHome() {
   const [userRole, setUserRole] = useState<UserRole>('admin_regional');
   const [username, setUsername] = useState<string>('10002');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
 
-  // Auth Modal (Login & Register)
+  // Auth Modal (Login & Register for internal actions)
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
@@ -63,12 +65,16 @@ export default function DashboardHome() {
       const savedUser = localStorage.getItem('portsight_auth_user');
       if (savedUser) {
         const u = JSON.parse(savedUser) as User;
-        setCurrentUser(u);
-        setUserRole(u.role);
-        setUsername(u.nipp || u.username);
+        if (u && (u.nipp || u.username)) {
+          setCurrentUser(u);
+          setUserRole(u.role);
+          setUsername(u.nipp || u.username);
+        }
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsAuthChecking(false);
     }
   }, []);
 
@@ -105,13 +111,6 @@ export default function DashboardHome() {
       const dataUsers = await resUsers.json();
       if (dataUsers.success) {
         setUsersList(dataUsers.users || []);
-        // If no user in session, set first matching or Hendra
-        if (!currentUser && dataUsers.users?.length > 0) {
-          const defaultUser = dataUsers.users.find((u: User) => u.nipp === '10002') || dataUsers.users[0];
-          setCurrentUser(defaultUser);
-          setUserRole(defaultUser.role);
-          setUsername(defaultUser.nipp || defaultUser.username);
-        }
       }
     } catch (e) {
       console.error(e);
@@ -139,8 +138,8 @@ export default function DashboardHome() {
     try {
       localStorage.removeItem('portsight_auth_user');
     } catch (e) {}
-    setAuthModalMode('login');
-    setAuthModalOpen(true);
+    setCurrentUser(null);
+    setAuthModalOpen(false);
   };
 
   // Export to Excel
@@ -160,6 +159,54 @@ export default function DashboardHome() {
   };
 
   const isGovernanceView = ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
+
+  // 1. Tampilkan loading sebentar saat memeriksa sesi lokal
+  if (isAuthChecking) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'var(--bg-app)',
+          color: 'var(--text-main)',
+          gap: '16px',
+        }}
+      >
+        <div
+          style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            boxShadow: '0 4px 16px rgba(2, 132, 199, 0.35)',
+          }}
+        >
+          <Anchor size={24} />
+        </div>
+        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+          Memeriksa Sesi Pengguna PortSight Regional 4...
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Jika belum login (currentUser === null), tampilkan LoginScreen di awal
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        onLoginSuccess={handleLoginSuccess}
+        theme={theme}
+        onThemeChange={handleThemeChange}
+      />
+    );
+  }
 
   return (
     <div style={{ backgroundColor: 'var(--bg-app)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>

@@ -218,8 +218,8 @@ export default function PortSightHeader({
             </button>
           </div>
 
-          {/* User PIC Auth Status & Login / Register Menu */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {/* User PIC Auth Status & Login / Register / Logout Menu */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <button
               type="button"
               onClick={() => onOpenAuth('login')}
@@ -234,14 +234,14 @@ export default function PortSightHeader({
                 backgroundColor: 'var(--bg-inner)',
                 border: '1px solid var(--border-subtle)',
               }}
-              title="Klik untuk Masuk atau Ganti Akun PIC"
+              title="Klik untuk Ganti Akun PIC"
             >
               <UserCheck size={13} color="var(--accent-blue)" />
               <span style={{ fontWeight: 700, color: 'var(--text-title)' }}>
-                {currentUser ? currentUser.name.split(',')[0] : 'Hendra Wijaya'}
+                {currentUser ? currentUser.name.split(',')[0] : 'Tamu'}
               </span>
               <span style={{ color: 'var(--accent-cyan)', fontSize: '10.5px', fontFamily: 'var(--font-mono)' }}>
-                [{currentUser?.nipp || '10002'}]
+                [{currentUser?.nipp || '-'}]
               </span>
             </button>
 
@@ -263,6 +263,35 @@ export default function PortSightHeader({
               <UserPlus size={12} />
               <span>Daftar</span>
             </button>
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Apakah Anda yakin ingin keluar dari akun?')) {
+                    onLogout();
+                  }
+                }}
+                className="btn-dark"
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  borderRadius: 'var(--radius-pill)',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#f87171',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+                title="Keluar dari akun (Logout ke Halaman Login Awal)"
+              >
+                <LogOut size={12} color="#f87171" />
+                <span>Keluar</span>
+              </button>
+            )}
           </div>
 
           {/* Role Persona Switcher (Sinkron dengan Hak Akses User) */}
