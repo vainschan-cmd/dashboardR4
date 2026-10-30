@@ -196,10 +196,12 @@ export default function LoginScreen({
       {/* Top Bar / Brand Header */}
       <header
         style={{
-          padding: '16px 28px',
+          padding: '14px 20px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
           borderBottom: '1px solid var(--border-subtle)',
           backgroundColor: 'var(--bg-surface)',
           backdropFilter: 'blur(12px)',
@@ -207,7 +209,7 @@ export default function LoginScreen({
           zIndex: 10,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div
             style={{
               width: '42px',
@@ -536,7 +538,7 @@ export default function LoginScreen({
                     <span>Pilihan Cepat Masuk (1-Klik Akun Demo PIC):</span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                  <div className="responsive-grid-2">
                     {quickAccounts.map((acc) => (
                       <button
                         key={acc.nipp}
@@ -582,7 +584,7 @@ export default function LoginScreen({
             ) : (
               /* TAB 2: REGISTER */
               <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-grid-2">
                   <div className="form-group">
                     <label className="form-label">NIPP (Nomor Induk Pegawai) *</label>
                     <input
@@ -608,7 +610,7 @@ export default function LoginScreen({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-grid-2">
                   <div className="form-group">
                     <label className="form-label">Divisi *</label>
                     <input
@@ -634,7 +636,7 @@ export default function LoginScreen({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-grid-2">
                   <div className="form-group">
                     <label className="form-label">Hak Akses (Role) *</label>
                     <select
@@ -668,7 +670,7 @@ export default function LoginScreen({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-grid-2">
                   <div className="form-group">
                     <label className="form-label">Kata Sandi (Min 6 Karakter) *</label>
                     <div style={{ position: 'relative' }}>
