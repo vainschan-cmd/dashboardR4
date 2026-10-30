@@ -12,7 +12,9 @@ import {
   Sliders,
   History,
   Shield,
-  GitBranch
+  GitBranch,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES, MAIN_NAVIGATION_TABS } from '@/lib/constants';
@@ -29,6 +31,8 @@ interface PortSightHeaderProps {
   onExportExcel: () => void;
   onPrint: () => void;
   pendingCount?: number;
+  theme: 'dark' | 'light';
+  onThemeChange: (theme: 'dark' | 'light') => void;
 }
 
 export default function PortSightHeader({
@@ -43,6 +47,8 @@ export default function PortSightHeader({
   onExportExcel,
   onPrint,
   pendingCount = 0,
+  theme,
+  onThemeChange,
 }: PortSightHeaderProps) {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
@@ -136,12 +142,12 @@ export default function PortSightHeader({
                     top: '100%',
                     left: 0,
                     marginTop: '6px',
-                    backgroundColor: '#122137',
+                    backgroundColor: 'var(--bg-card)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: 'var(--radius-md)',
                     padding: '6px',
                     minWidth: '220px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
                     zIndex: 60,
                   }}
                   onClick={() => setAdminMenuOpen(false)}
@@ -158,7 +164,7 @@ export default function PortSightHeader({
                           background: activeTab === adm.id ? 'var(--accent-blue)' : 'none',
                           border: 'none',
                           padding: '8px 12px',
-                          color: '#ffffff',
+                          color: activeTab === adm.id ? '#ffffff' : 'var(--text-main)',
                           fontSize: '12.5px',
                           borderRadius: 'var(--radius-sm)',
                           display: 'flex',
@@ -167,7 +173,7 @@ export default function PortSightHeader({
                           cursor: 'pointer',
                         }}
                       >
-                        <Icon size={14} color="#38bdf8" />
+                        <Icon size={14} color={activeTab === adm.id ? '#ffffff' : 'var(--accent-cyan)'} />
                         <span>{adm.label}</span>
                       </button>
                     );
@@ -180,20 +186,42 @@ export default function PortSightHeader({
 
         {/* Right Section */}
         <div className="header-right-tools">
+          {/* Pilihan Mode Tampilan: Mode Terang (Light Mode) & Mode Gelap (Dark Mode) */}
+          <div className="theme-toggle-group" role="group" aria-label="Pilihan Mode Tampilan">
+            <button
+              type="button"
+              onClick={() => onThemeChange('light')}
+              className={`theme-toggle-btn ${theme === 'light' ? 'active' : ''}`}
+              title="Mode Terang (Light Mode)"
+            >
+              <Sun size={13} />
+              <span>Terang</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onThemeChange('dark')}
+              className={`theme-toggle-btn ${theme === 'dark' ? 'active' : ''}`}
+              title="Mode Gelap (Dark Mode)"
+            >
+              <Moon size={13} />
+              <span>Gelap</span>
+            </button>
+          </div>
+
           {/* Role Persona Switcher */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#101c2e', border: '1px solid var(--border-subtle)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: '11.5px' }}>
-            <Shield size={12} color="#38bdf8" />
-            <span style={{ color: '#94a3b8' }}>Role:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--bg-inner)', border: '1px solid var(--border-subtle)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: '11.5px' }}>
+            <Shield size={12} color="var(--accent-blue)" />
+            <span style={{ color: 'var(--text-muted)' }}>Role:</span>
             <select
-              style={{ background: 'transparent', border: 'none', color: '#ffffff', fontWeight: 700, outline: 'none', cursor: 'pointer', fontSize: '11.5px' }}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontWeight: 700, outline: 'none', cursor: 'pointer', fontSize: '11.5px' }}
               value={userRole}
               onChange={(e) => setUserRole(e.target.value as UserRole)}
             >
-              <option value="super_admin" style={{ background: '#122137' }}>Super Admin</option>
-              <option value="admin_regional" style={{ background: '#122137' }}>Admin Regional 4</option>
-              <option value="pic_dept_regional" style={{ background: '#122137' }}>PIC Dept Operasi</option>
-              <option value="pic_cabang" style={{ background: '#122137' }}>PIC Cabang Makassar</option>
-              <option value="viewer" style={{ background: '#122137' }}>BOD Regional 4 (Viewer)</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="admin_regional">Admin Regional 4</option>
+              <option value="pic_dept_regional">PIC Dept Operasi</option>
+              <option value="pic_cabang">PIC Cabang Makassar</option>
+              <option value="viewer">BOD Regional 4 (Viewer)</option>
             </select>
           </div>
 
@@ -213,8 +241,8 @@ export default function PortSightHeader({
             style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', textDecoration: 'none' }}
             title="Buka Repositori GitHub vainschan-cmd/dashboardR4"
           >
-            <GitBranch size={13} color="#38bdf8" />
-            <span style={{ fontSize: '11px', color: '#ffffff', fontWeight: 600 }}>GitHub</span>
+            <GitBranch size={13} color="var(--accent-blue)" />
+            <span style={{ fontSize: '11px', color: 'var(--text-main)', fontWeight: 600 }}>GitHub</span>
           </a>
 
           <div className="illustration-pill">
@@ -238,10 +266,10 @@ export default function PortSightHeader({
               onChange={(e) => setSelectedPeriod(e.target.value)}
               style={{ background: 'transparent', border: 'none', color: 'inherit', fontWeight: 600, outline: 'none', cursor: 'pointer', fontSize: '12px' }}
             >
-              <option value="YTD Sep 2026" style={{ background: '#122137', color: '#fff' }}>YTD Sep 2026</option>
-              <option value="YTD Jun 2026" style={{ background: '#122137', color: '#fff' }}>YTD Jun 2026</option>
-              <option value="YTD Mar 2026" style={{ background: '#122137', color: '#fff' }}>YTD Mar 2026</option>
-              <option value="FY 2025" style={{ background: '#122137', color: '#fff' }}>FY 2025</option>
+              <option value="YTD Sep 2026">YTD Sep 2026</option>
+              <option value="YTD Jun 2026">YTD Jun 2026</option>
+              <option value="YTD Mar 2026">YTD Mar 2026</option>
+              <option value="FY 2025">FY 2025</option>
             </select>
           </div>
 
@@ -254,7 +282,7 @@ export default function PortSightHeader({
               style={{ background: 'transparent', border: 'none', color: 'inherit', fontWeight: 600, outline: 'none', cursor: 'pointer', fontSize: '12px' }}
             >
               {terminals.map((t) => (
-                <option key={t.id} value={t.id} style={{ background: '#122137', color: '#fff' }}>
+                <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}

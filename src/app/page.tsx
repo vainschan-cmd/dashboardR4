@@ -22,6 +22,9 @@ export default function DashboardHome() {
   // Navigation active tab
   const [activeTab, setActiveTab] = useState<string>('beranda');
 
+  // Theme: 'dark' (Mode Gelap) | 'light' (Mode Terang)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
   // Terminal & Period Filters
   const [selectedTerminal, setSelectedTerminal] = useState<string>('ALL');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('YTD Sep 2026');
@@ -40,6 +43,29 @@ export default function DashboardHome() {
 
   // Drilldown Modal
   const [drilldownItem, setDrilldownItem] = useState<any | null>(null);
+
+  // Load saved theme from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('portsight_theme') as 'dark' | 'light' | null;
+      if (saved === 'light' || saved === 'dark') {
+        setTheme(saved);
+        document.documentElement.setAttribute('data-theme', saved);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const handleThemeChange = (newTheme: 'dark' | 'light') => {
+    setTheme(newTheme);
+    try {
+      localStorage.setItem('portsight_theme', newTheme);
+    } catch (e) {
+      console.error(e);
+    }
+    document.documentElement.setAttribute('data-theme', newTheme);
+  };
 
   // Fetch Master Data and Verification Pending Count
   const loadMasterData = async () => {
@@ -102,6 +128,8 @@ export default function DashboardHome() {
         onExportExcel={handleExportExcel}
         onPrint={handlePrint}
         pendingCount={pendingCount}
+        theme={theme}
+        onThemeChange={handleThemeChange}
       />
 
       {/* Main View Body */}
