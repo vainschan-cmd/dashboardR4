@@ -97,7 +97,7 @@ export default function PortSightHeader({
           {/* Brand */}
           <div className="brand-wrapper" onClick={() => setActiveTab('beranda')} style={{ cursor: 'pointer' }}>
             <span className="brand-title">PELINDO R4</span>
-            <span className="brand-accent">PortSight</span>
+            <span className="brand-accent">PortDash</span>
           </div>
 
           {/* Navigation Tabs */}

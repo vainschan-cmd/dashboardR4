@@ -4,7 +4,7 @@ import { Branch, Department, User, KPIIndicator, TemplateConfig, KPIDirection, S
 export function runSeed(force = false) {
   const db = getDb();
 
-  console.log('Seeding official Pelindo Regional 4 (R4 PortSight) Master & Simulation Data...');
+  console.log('Seeding official Pelindo Regional 4 (R4 PortDash) Master & Simulation Data...');
 
   // Clear existing if force
   db.exec(`
@@ -267,7 +267,7 @@ export function runSeed(force = false) {
     { column_name: 'Target', field_key: 'target', data_type: 'number', required: true, sample_value: 400000 },
     { column_name: 'Realisasi', field_key: 'realization', data_type: 'number', required: true, sample_value: 412500 },
     { column_name: 'Satuan', field_key: 'unit', data_type: 'string', required: true, sample_value: 'TEUs' },
-    { column_name: 'Keterangan', field_key: 'notes', data_type: 'string', required: false, sample_value: 'Pelaporan resmi R4 PortSight' },
+    { column_name: 'Keterangan', field_key: 'notes', data_type: 'string', required: false, sample_value: 'Pelaporan resmi R4 PortDash' },
   ];
 
   const stmtTpl = db.prepare(`
@@ -278,7 +278,7 @@ export function runSeed(force = false) {
     stmtTpl.run(
       `tpl_${d.code.toLowerCase()}`,
       d.id,
-      'v2.0-PortSight',
+      'v2.0-PortDash',
       `Template Resmi Pelaporan ${d.name} Pelindo Regional 4`,
       `Format data spreadsheet bulanan resmi untuk 8 terminal Pelindo Regional 4`,
       JSON.stringify(defaultColumns),
@@ -326,7 +326,7 @@ export function runSeed(force = false) {
         'TEUs',
         t.rkapPct,
         statusColor,
-        'Data ilustrasi R4 PortSight',
+        'Data ilustrasi R4 PortDash',
         'upload_xlsx',
         'batch_init_2026',
         'verified',
@@ -351,7 +351,7 @@ export function runSeed(force = false) {
         'Miliar Rp',
         t.rkapPct,
         statusColor,
-        'Data ilustrasi R4 PortSight',
+        'Data ilustrasi R4 PortDash',
         'upload_xlsx',
         'batch_init_2026',
         'verified',
@@ -376,7 +376,7 @@ export function runSeed(force = false) {
     'CONFIG_UPDATE',
     'R4_PORTSIGHT',
     'regional_4',
-    'Inisialisasi sistem R4 PortSight Pelindo Regional 4 (Makassar, 22/10/2026)',
+    'Inisialisasi sistem R4 PortDash Pelindo Regional 4 (Makassar, 22/10/2026)',
     new Date().toISOString(),
     '127.0.0.1'
   );
