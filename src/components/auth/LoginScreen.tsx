@@ -239,7 +239,7 @@ export default function LoginScreen({
                   border: '1px solid rgba(2, 132, 199, 0.3)',
                 }}
               >
-                PortSight R4
+                PortDash R4
               </span>
             </div>
             <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
@@ -505,7 +505,7 @@ export default function LoginScreen({
                     <span>Memverifikasi Akun...</span>
                   ) : (
                     <>
-                      <span>Masuk ke Dashboard PortSight</span>
+                      <span>Masuk ke Dashboard PortDash</span>
                       <ArrowRight size={15} />
                     </>
                   )}
@@ -763,7 +763,7 @@ export default function LoginScreen({
           zIndex: 10,
         }}
       >
-        PT Pelabuhan Indonesia (Persero) Regional 4 • 28 Cabang Pelabuhan Terintegrasi • PortSight Enterprise Dashboard
+        PT Pelabuhan Indonesia (Persero) Regional 4 • 28 Cabang Pelabuhan Terintegrasi • PortDash Enterprise Dashboard
       </footer>
     </div>
   );

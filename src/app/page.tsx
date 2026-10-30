@@ -191,7 +191,7 @@ export default function DashboardHome() {
           <Anchor size={24} />
         </div>
         <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          Memeriksa Sesi Pengguna PortSight Regional 4...
+          Memeriksa Sesi Pengguna PortDash Regional 4...
         </div>
       </div>
     );
