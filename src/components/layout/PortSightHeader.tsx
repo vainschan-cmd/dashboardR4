@@ -14,9 +14,13 @@ import {
   Shield,
   GitBranch,
   Sun,
-  Moon
+  Moon,
+  UserCheck,
+  UserPlus,
+  LogOut,
+  User as UserIcon,
 } from 'lucide-react';
-import { UserRole } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES, MAIN_NAVIGATION_TABS } from '@/lib/constants';
 
 interface PortSightHeaderProps {
@@ -28,6 +32,9 @@ interface PortSightHeaderProps {
   setSelectedPeriod: (p: string) => void;
   userRole: UserRole;
   setUserRole: (r: UserRole) => void;
+  currentUser: User | null;
+  onOpenAuth: (mode?: 'login' | 'register') => void;
+  onLogout?: () => void;
   onExportExcel: () => void;
   onPrint: () => void;
   pendingCount?: number;
@@ -44,6 +51,9 @@ export default function PortSightHeader({
   setSelectedPeriod,
   userRole,
   setUserRole,
+  currentUser,
+  onOpenAuth,
+  onLogout,
   onExportExcel,
   onPrint,
   pendingCount = 0,
@@ -208,7 +218,54 @@ export default function PortSightHeader({
             </button>
           </div>
 
-          {/* Role Persona Switcher */}
+          {/* User PIC Auth Status & Login / Register Menu */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button
+              type="button"
+              onClick={() => onOpenAuth('login')}
+              className="btn-dark"
+              style={{
+                padding: '4px 10px',
+                fontSize: '11.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: 'var(--radius-pill)',
+                backgroundColor: 'var(--bg-inner)',
+                border: '1px solid var(--border-subtle)',
+              }}
+              title="Klik untuk Masuk atau Ganti Akun PIC"
+            >
+              <UserCheck size={13} color="var(--accent-blue)" />
+              <span style={{ fontWeight: 700, color: 'var(--text-title)' }}>
+                {currentUser ? currentUser.name.split(',')[0] : 'Hendra Wijaya'}
+              </span>
+              <span style={{ color: 'var(--accent-cyan)', fontSize: '10.5px', fontFamily: 'var(--font-mono)' }}>
+                [{currentUser?.nipp || '10002'}]
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenAuth('register')}
+              className="btn-primary"
+              style={{
+                padding: '4px 9px',
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: 'var(--radius-pill)',
+                fontWeight: 700,
+              }}
+              title="Daftar Akun Baru PIC / Pengguna"
+            >
+              <UserPlus size={12} />
+              <span>Daftar</span>
+            </button>
+          </div>
+
+          {/* Role Persona Switcher (Sinkron dengan Hak Akses User) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--bg-inner)', border: '1px solid var(--border-subtle)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: '11.5px' }}>
             <Shield size={12} color="var(--accent-blue)" />
             <span style={{ color: 'var(--text-muted)' }}>Role:</span>

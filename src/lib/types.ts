@@ -59,13 +59,18 @@ export interface EquipmentItem {
 
 export interface User {
   id: string;
-  username: string;
+  username: string; // NIPP Pegawai
+  nipp: string;
   name: string;
-  email: string;
+  email?: string;
+  divisi: string;
+  departemen: string;
+  password?: string;
   role: UserRole;
   branch_id?: string | null;
   department_id?: string | null;
   active: boolean;
+  created_at?: string;
 }
 
 export interface KPIIndicator {

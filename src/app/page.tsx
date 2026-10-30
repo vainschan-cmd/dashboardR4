@@ -15,7 +15,8 @@ import TemplateMapping from '@/components/admin/TemplateMapping';
 import MasterDataView from '@/components/admin/MasterDataView';
 import AuditTrailView from '@/components/admin/AuditTrailView';
 import DataRecordsView from '@/components/admin/DataRecordsView';
-import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem } from '@/lib/types';
+import AuthModal from '@/components/auth/AuthModal';
+import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User } from '@/lib/types';
 import { X, Target, CheckCircle2, TrendingUp, Database, Layers, FileSpreadsheet, Sliders, History } from 'lucide-react';
 
 export default function DashboardHome() {
@@ -29,9 +30,14 @@ export default function DashboardHome() {
   const [selectedTerminal, setSelectedTerminal] = useState<string>('ALL');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('YTD Sep 2026');
 
-  // Role persona
+  // Role persona & current authenticated user
   const [userRole, setUserRole] = useState<UserRole>('admin_regional');
-  const [username, setUsername] = useState<string>('hendra.regional');
+  const [username, setUsername] = useState<string>('10002');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Auth Modal (Login & Register)
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
   // Master data
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -39,18 +45,27 @@ export default function DashboardHome() {
   const [indicators, setIndicators] = useState<KPIIndicator[]>([]);
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
   const [templates, setTemplates] = useState<TemplateConfig[]>([]);
+  const [usersList, setUsersList] = useState<User[]>([]);
   const [pendingCount, setPendingCount] = useState<number>(0);
 
   // Drilldown Modal
   const [drilldownItem, setDrilldownItem] = useState<any | null>(null);
 
-  // Load saved theme from localStorage on mount
+  // Load saved theme & user auth from localStorage on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('portsight_theme') as 'dark' | 'light' | null;
-      if (saved === 'light' || saved === 'dark') {
-        setTheme(saved);
-        document.documentElement.setAttribute('data-theme', saved);
+      const savedTheme = localStorage.getItem('portsight_theme') as 'dark' | 'light' | null;
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        setTheme(savedTheme);
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+
+      const savedUser = localStorage.getItem('portsight_auth_user');
+      if (savedUser) {
+        const u = JSON.parse(savedUser) as User;
+        setCurrentUser(u);
+        setUserRole(u.role);
+        setUsername(u.nipp || u.username);
       }
     } catch (e) {
       console.error(e);
@@ -67,12 +82,13 @@ export default function DashboardHome() {
     document.documentElement.setAttribute('data-theme', newTheme);
   };
 
-  // Fetch Master Data and Verification Pending Count
+  // Fetch Master Data, Users, and Verification Pending Count
   const loadMasterData = async () => {
     try {
-      const [resMaster, resVer] = await Promise.all([
+      const [resMaster, resVer, resUsers] = await Promise.all([
         fetch('/api/master'),
-        fetch('/api/verification?month=9&year=2026')
+        fetch('/api/verification?month=9&year=2026'),
+        fetch('/api/users')
       ]);
       const dataMaster = await resMaster.json();
       if (dataMaster.success) {
@@ -86,6 +102,17 @@ export default function DashboardHome() {
       if (dataVer.success) {
         setPendingCount(dataVer.pendingCount || 0);
       }
+      const dataUsers = await resUsers.json();
+      if (dataUsers.success) {
+        setUsersList(dataUsers.users || []);
+        // If no user in session, set first matching or Hendra
+        if (!currentUser && dataUsers.users?.length > 0) {
+          const defaultUser = dataUsers.users.find((u: User) => u.nipp === '10002') || dataUsers.users[0];
+          setCurrentUser(defaultUser);
+          setUserRole(defaultUser.role);
+          setUsername(defaultUser.nipp || defaultUser.username);
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -94,6 +121,27 @@ export default function DashboardHome() {
   useEffect(() => {
     loadMasterData();
   }, []);
+
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    setUserRole(user.role);
+    setUsername(user.nipp || user.username);
+    if (user.branch_id && user.branch_id !== 'R99' && user.role === 'pic_cabang') {
+      setSelectedTerminal(user.branch_id);
+    }
+    try {
+      localStorage.setItem('portsight_auth_user', JSON.stringify(user));
+    } catch (e) {}
+    loadMasterData();
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('portsight_auth_user');
+    } catch (e) {}
+    setAuthModalMode('login');
+    setAuthModalOpen(true);
+  };
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -125,6 +173,12 @@ export default function DashboardHome() {
         setSelectedPeriod={setSelectedPeriod}
         userRole={userRole}
         setUserRole={setUserRole}
+        currentUser={currentUser}
+        onOpenAuth={(m) => {
+          setAuthModalMode(m || 'login');
+          setAuthModalOpen(true);
+        }}
+        onLogout={handleLogout}
         onExportExcel={handleExportExcel}
         onPrint={handlePrint}
         pendingCount={pendingCount}
@@ -275,6 +329,8 @@ export default function DashboardHome() {
             departments={departments}
             indicators={indicators}
             equipment={equipment}
+            users={usersList}
+            onRefreshUsers={loadMasterData}
           />
         )}
 
@@ -348,6 +404,15 @@ export default function DashboardHome() {
           </div>
         </div>
       )}
+
+      {/* Auth Modal (Login / Register PIC) */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        currentUser={currentUser}
+        initialMode={authModalMode}
+        onLoginSuccess={handleLoginSuccess}
+      />
     </div>
   );
 }

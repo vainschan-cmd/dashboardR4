@@ -48,6 +48,8 @@ export default function ImportCenter({
   const [isSyncingGsheets, setIsSyncingGsheets] = useState(false);
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
   const [driveSyncStatus, setDriveSyncStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const [isSyncingUserPic, setIsSyncingUserPic] = useState(false);
+  const [userPicSyncStatus, setUserPicSyncStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   // History state
   const [historyBatches, setHistoryBatches] = useState<ImportBatch[]>([]);
@@ -210,6 +212,34 @@ export default function ImportCenter({
       });
     } finally {
       setIsSyncingDrive(false);
+    }
+  };
+
+  const handleUserPicDriveSync = async () => {
+    setIsSyncingUserPic(true);
+    setUserPicSyncStatus(null);
+    try {
+      const res = await fetch('/api/users/sync-drive', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setUserPicSyncStatus({
+          success: true,
+          message: data.message || `Master Data PIC berhasil diekspor dan disinkronkan ke My Drive (${data.totalUsers} pengguna terdaftar).`
+        });
+        if (onImportSuccess) onImportSuccess();
+      } else {
+        setUserPicSyncStatus({
+          success: false,
+          message: data.error || 'Gagal menyinkronkan master_user_pic.xlsx.'
+        });
+      }
+    } catch (e: any) {
+      setUserPicSyncStatus({
+        success: false,
+        message: e.message || 'Terjadi kesalahan jaringan saat sinkronisasi PIC.'
+      });
+    } finally {
+      setIsSyncingUserPic(false);
     }
   };
 
@@ -422,6 +452,78 @@ export default function ImportCenter({
                   <CheckCircle2 size={16} />
                   <div style={{ fontSize: '12.5px' }}>
                     {driveSyncStatus.message}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Google Drive Card 2: Master PIC / User */}
+            <div
+              style={{
+                backgroundColor: '#101c2e',
+                border: '1px solid #1e3557',
+                borderRadius: 'var(--radius-md)',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '10px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#10b981',
+                    }}
+                  >
+                    <FileSpreadsheet size={24} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
+                      Spreadsheet Master PIC (master_user_pic.xlsx)
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '2px' }}>
+                      Akun Google Drive: <strong style={{ color: '#10b981' }}>regdashr@gmail.com</strong> • Master User PIC, NIPP, Divisi & Hak Akses Login
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={handleUserPicDriveSync}
+                    disabled={isSyncingUserPic}
+                    className="btn btn-primary"
+                    style={{ backgroundColor: '#059669', borderColor: '#10b981', minWidth: '220px', justifyContent: 'center' }}
+                  >
+                    <RefreshCw size={15} className={isSyncingUserPic ? 'spin' : ''} />
+                    <span>{isSyncingUserPic ? 'Memproses PIC...' : 'Sinkronkan Master PIC ke My Drive'}</span>
+                  </button>
+
+                  <a
+                    href="/api/users/export"
+                    download="master_user_pic.xlsx"
+                    className="btn btn-dark"
+                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    title="Unduh file Excel master_user_pic.xlsx"
+                  >
+                    <Download size={14} />
+                    <span>Download .xlsx</span>
+                  </a>
+                </div>
+              </div>
+
+              {userPicSyncStatus && (
+                <div className={`alert-box ${userPicSyncStatus.success ? 'alert-success' : 'alert-error'}`} style={{ margin: 0 }}>
+                  <CheckCircle2 size={16} />
+                  <div style={{ fontSize: '12.5px' }}>
+                    {userPicSyncStatus.message}
                   </div>
                 </div>
               )}

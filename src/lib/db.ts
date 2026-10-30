@@ -6,6 +6,7 @@ import {
   Department,
   EquipmentItem,
   User,
+  UserRole,
   KPIIndicator,
   TemplateConfig,
   MonthlyRecord,
@@ -70,12 +71,17 @@ function initSchema(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
+      nipp TEXT,
       name TEXT NOT NULL,
-      email TEXT NOT NULL,
+      email TEXT,
+      divisi TEXT,
+      departemen TEXT,
+      password TEXT,
       role TEXT NOT NULL,
       branch_id TEXT,
       department_id TEXT,
-      active INTEGER DEFAULT 1
+      active INTEGER DEFAULT 1,
+      created_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS kpi_indicators (
@@ -181,6 +187,50 @@ function initSchema(db: DatabaseSync) {
       updateOrderStmt.run(b.order, b.code);
     }
   } catch {}
+
+  // User table migrations
+  try { db.exec("ALTER TABLE users ADD COLUMN nipp TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN divisi TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN departemen TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN password TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT;"); } catch {}
+  try {
+    db.exec("DELETE FROM users WHERE id IN ('usr_pic_nmk', 'usr_viewer', 'usr_super', 'usr_pic_ops', 'usr_adminreg') OR username IN ('pic_nmk', 'bod_regional', 'superadmin', 'pic_ops', 'adminreg');");
+  } catch {}
+
+  // Ensure default official PICs exist with NIPP
+  try {
+    const existing = db.prepare("SELECT COUNT(*) as count FROM users WHERE nipp IS NOT NULL AND nipp != ''").get() as { count: number };
+    if (!existing || existing.count === 0) {
+      const { INITIAL_OFFICIAL_PICS, exportUsersToSpreadsheet } = require('./userPicSync');
+      const insertStmt = db.prepare(`
+        INSERT OR REPLACE INTO users (id, username, nipp, name, email, divisi, departemen, password, role, branch_id, department_id, active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (let i = 0; i < INITIAL_OFFICIAL_PICS.length; i++) {
+        const u = INITIAL_OFFICIAL_PICS[i];
+        insertStmt.run(
+          `usr_${u.nipp}_${i + 1}`,
+          u.nipp,
+          u.nipp,
+          u.name,
+          u.email || `${u.nipp}@pelindo.co.id`,
+          u.divisi,
+          u.departemen,
+          u.password || 'password123',
+          u.role,
+          u.branch_id || null,
+          u.department_id || null,
+          u.active ? 1 : 0,
+          u.created_at || new Date().toISOString()
+        );
+      }
+      const allUsers = db.prepare("SELECT * FROM users ORDER BY nipp ASC").all() as any[];
+      exportUsersToSpreadsheet(allUsers);
+    }
+  } catch (e) {
+    console.error('Auto-seed users error:', e);
+  }
 }
 
 // Helper to seed if empty
@@ -229,18 +279,130 @@ export const dbQueries = {
     }));
   },
 
-  // Users
+  // Users / PIC
   getUsers: (): User[] => {
-    const rows = getDb().prepare('SELECT * FROM users ORDER BY name ASC').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM users ORDER BY nipp ASC, name ASC').all() as any[];
     return rows.map(r => ({
       ...r,
+      nipp: r.nipp || r.username,
       active: Boolean(r.active)
     }));
   },
-  getUserByUsername: (username: string): User | null => {
-    const r = getDb().prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
+  getUserByNipp: (nipp: string): User | null => {
+    const r = getDb().prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(nipp, nipp) as any;
     if (!r) return null;
-    return { ...r, active: Boolean(r.active) };
+    return { ...r, nipp: r.nipp || r.username, active: Boolean(r.active) };
+  },
+  getUserByUsername: (username: string): User | null => {
+    const r = getDb().prepare('SELECT * FROM users WHERE username = ? OR nipp = ?').get(username, username) as any;
+    if (!r) return null;
+    return { ...r, nipp: r.nipp || r.username, active: Boolean(r.active) };
+  },
+  createUser: (data: {
+    nipp: string;
+    name: string;
+    divisi: string;
+    departemen: string;
+    password?: string;
+    role?: UserRole;
+    email?: string;
+    branch_id?: string | null;
+    department_id?: string | null;
+  }): User => {
+    const db = getDb();
+    const cleanNipp = String(data.nipp).trim();
+    const id = `usr_${cleanNipp}_${Date.now()}`;
+    const role: UserRole = data.role || 'pic_cabang';
+    const email = data.email || `${cleanNipp}@pelindo.co.id`;
+    const password = data.password || 'password123';
+    const createdAt = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO users (id, username, nipp, name, email, divisi, departemen, password, role, branch_id, department_id, active, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `);
+    stmt.run(
+      id,
+      cleanNipp,
+      cleanNipp,
+      data.name.trim(),
+      email,
+      data.divisi.trim(),
+      data.departemen.trim(),
+      password,
+      role,
+      data.branch_id || null,
+      data.department_id || null,
+      createdAt
+    );
+
+    const newUser: User = {
+      id,
+      username: cleanNipp,
+      nipp: cleanNipp,
+      name: data.name.trim(),
+      email,
+      divisi: data.divisi.trim(),
+      departemen: data.departemen.trim(),
+      role,
+      branch_id: data.branch_id || null,
+      department_id: data.department_id || null,
+      active: true,
+      created_at: createdAt,
+    };
+
+    // Automatically sync master spreadsheet in My Drive
+    try {
+      const { exportUsersToSpreadsheet } = require('./userPicSync');
+      exportUsersToSpreadsheet(dbQueries.getUsers());
+    } catch (e) {
+      console.error('Failed to sync to spreadsheet on createUser:', e);
+    }
+
+    return newUser;
+  },
+  updateUser: (id: string, data: Partial<User>): User | null => {
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    if (!existing) return null;
+
+    const name = data.name !== undefined ? data.name : existing.name;
+    const divisi = data.divisi !== undefined ? data.divisi : existing.divisi;
+    const departemen = data.departemen !== undefined ? data.departemen : existing.departemen;
+    const role = data.role !== undefined ? data.role : existing.role;
+    const branch_id = data.branch_id !== undefined ? data.branch_id : existing.branch_id;
+    const active = data.active !== undefined ? (data.active ? 1 : 0) : existing.active;
+
+    db.prepare(`
+      UPDATE users SET name = ?, divisi = ?, departemen = ?, role = ?, branch_id = ?, active = ?
+      WHERE id = ?
+    `).run(name, divisi, departemen, role, branch_id, active, id);
+
+    try {
+      const { exportUsersToSpreadsheet } = require('./userPicSync');
+      exportUsersToSpreadsheet(dbQueries.getUsers());
+    } catch (e) {}
+
+    return dbQueries.getUserByUsername(existing.username);
+  },
+  deleteUser: (id: string): boolean => {
+    const db = getDb();
+    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    try {
+      const { exportUsersToSpreadsheet } = require('./userPicSync');
+      exportUsersToSpreadsheet(dbQueries.getUsers());
+    } catch (e) {}
+    return true;
+  },
+  authenticateUser: (nipp: string, password: string): User | null => {
+    const cleanNipp = String(nipp).trim();
+    const user = dbQueries.getUserByNipp(cleanNipp);
+    if (!user) return null;
+    // Check password if set
+    if (user.password && user.password !== password) {
+      return null;
+    }
+    return user;
   },
 
   // Indicators
