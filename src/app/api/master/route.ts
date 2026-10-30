@@ -8,6 +8,7 @@ export async function GET() {
     const indicators = dbQueries.getIndicators();
     const users = dbQueries.getUsers();
     const templates = dbQueries.getTemplates();
+    const equipment = dbQueries.getEquipmentCatalog();
     const gsheetsConfig = dbQueries.getGoogleSheetsConfig();
 
     return NextResponse.json({
@@ -15,6 +16,7 @@ export async function GET() {
       branches,
       departments,
       indicators,
+      equipment,
       users,
       templates,
       gsheetsConfig

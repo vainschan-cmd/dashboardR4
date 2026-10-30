@@ -42,10 +42,12 @@ export default function ImportCenter({
   const [batchId, setBatchId] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  // Google Sheets state
+  // Google Sheets & Drive state
   const [gsheetUrl, setGsheetUrl] = useState('https://docs.google.com/spreadsheets/d/1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data/edit#gid=0');
   const [gsheetSheetName, setGsheetSheetName] = useState('Input_Kinerja_Bulanan');
   const [isSyncingGsheets, setIsSyncingGsheets] = useState(false);
+  const [isSyncingDrive, setIsSyncingDrive] = useState(false);
+  const [driveSyncStatus, setDriveSyncStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   // History state
   const [historyBatches, setHistoryBatches] = useState<ImportBatch[]>([]);
@@ -180,6 +182,37 @@ export default function ImportCenter({
     }
   };
 
+  const handleDriveSync = async () => {
+    setIsSyncingDrive(true);
+    setDriveSyncStatus(null);
+    try {
+      const res = await fetch('/api/import/drive-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDriveSyncStatus({
+          success: true,
+          message: `Berhasil sinkronisasi file input_data.xlsx akun regdashr@gmail.com: ${data.stats.branches} Cabang Master, ${data.stats.equipment} Katalog Alat, dan total ${data.stats.totalRecords} rekaman data kinerja & finansial.`
+        });
+        if (onImportSuccess) onImportSuccess();
+      } else {
+        setDriveSyncStatus({
+          success: false,
+          message: data.error || 'Gagal sinkronisasi data dari drive.'
+        });
+      }
+    } catch (e: any) {
+      setDriveSyncStatus({
+        success: false,
+        message: e.message || 'Terjadi kesalahan jaringan saat sinkronisasi.'
+      });
+    } finally {
+      setIsSyncingDrive(false);
+    }
+  };
+
   // Load history
   const handleLoadHistory = async () => {
     setIsLoadingHistory(true);
@@ -225,7 +258,7 @@ export default function ImportCenter({
             className={`tab-btn ${activeTab === 'gsheets' ? 'active' : ''}`}
           >
             <LinkIcon size={16} />
-            <span>Google Sheets API</span>
+            <span>Google Drive & Sheets API</span>
           </button>
           <button
             onClick={() => setActiveTab('template')}
@@ -332,13 +365,72 @@ export default function ImportCenter({
           </div>
         )}
 
-        {/* TAB 2: GOOGLE SHEETS API */}
+        {/* TAB 2: GOOGLE SHEETS & DRIVE API */}
         {activeTab === 'gsheets' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* GOOGLE DRIVE SYNC CARD - regdashr@gmail.com */}
+            <div
+              style={{
+                border: '1px solid #1e3a5f',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px',
+                backgroundColor: '#0a192f',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '10px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#38bdf8',
+                    }}
+                  >
+                    <FileSpreadsheet size={24} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
+                      Sinkronisasi My Drive (input_data.xlsx)
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '2px' }}>
+                      Akun Google Drive: <strong style={{ color: '#38bdf8' }}>regdashr@gmail.com</strong> • Master & Kinerja Multi-Sheet (10 Sheet)
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleDriveSync}
+                  disabled={isSyncingDrive}
+                  className="btn btn-primary"
+                  style={{ backgroundColor: '#0284c7', borderColor: '#38bdf8', minWidth: '220px', justifyContent: 'center' }}
+                >
+                  <RefreshCw size={15} className={isSyncingDrive ? 'spin' : ''} />
+                  <span>{isSyncingDrive ? 'Memproses Data Drive...' : 'Sinkronkan My Drive Sekarang'}</span>
+                </button>
+              </div>
+
+              {driveSyncStatus && (
+                <div className={`alert-box ${driveSyncStatus.success ? 'alert-success' : 'alert-error'}`} style={{ margin: 0 }}>
+                  <CheckCircle2 size={16} />
+                  <div style={{ fontSize: '12.5px' }}>
+                    {driveSyncStatus.message}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="alert-box alert-info">
               <LinkIcon size={18} />
               <div>
-                <strong>Metode Integrasi Google Sheets API:</strong> Menghubungkan langsung spreadsheet pelaporan bulanan tanpa perlu mengekspor file secara manual. Token dan kredensial aman dienkripsi di server backend.
+                <strong>Sinkronisasi Live Google Sheets API:</strong> Anda juga dapat menghubungkan Google Spreadsheet online secara real-time via URL dokumen di bawah ini.
               </div>
             </div>
 

@@ -47,6 +47,15 @@ export interface Department {
   description?: string;
 }
 
+export interface EquipmentItem {
+  id: string;
+  code: string;
+  name: string;
+  acronym: string;
+  category: string;
+  active: boolean;
+}
+
 export interface User {
   id: string;
   username: string;

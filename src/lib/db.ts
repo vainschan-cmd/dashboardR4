@@ -4,6 +4,7 @@ import fs from 'fs';
 import {
   Branch,
   Department,
+  EquipmentItem,
   User,
   KPIIndicator,
   TemplateConfig,
@@ -53,6 +54,15 @@ function initSchema(db: DatabaseSync) {
       pic_email TEXT NOT NULL,
       active INTEGER DEFAULT 1,
       description TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS equipment_catalog (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      acronym TEXT NOT NULL,
+      category TEXT NOT NULL,
+      active INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -188,6 +198,15 @@ export const dbQueries = {
   // Departments
   getDepartments: (): Department[] => {
     const rows = getDb().prepare('SELECT * FROM departments ORDER BY code ASC').all() as any[];
+    return rows.map(r => ({
+      ...r,
+      active: Boolean(r.active)
+    }));
+  },
+
+  // Equipment Catalog
+  getEquipmentCatalog: (): EquipmentItem[] => {
+    const rows = getDb().prepare('SELECT * FROM equipment_catalog ORDER BY code ASC').all() as any[];
     return rows.map(r => ({
       ...r,
       active: Boolean(r.active)

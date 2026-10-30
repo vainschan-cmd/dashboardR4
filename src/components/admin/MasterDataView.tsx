@@ -1,21 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Database, Building2, Layers, Target, Compass, CheckCircle2 } from 'lucide-react';
-import { Branch, Department, KPIIndicator } from '@/lib/types';
+import { Database, Building2, Layers, Target, Wrench, CheckCircle2 } from 'lucide-react';
+import { Branch, Department, KPIIndicator, EquipmentItem } from '@/lib/types';
 
 interface MasterDataViewProps {
   branches: Branch[];
   departments: Department[];
   indicators: KPIIndicator[];
+  equipment?: EquipmentItem[];
 }
 
 export default function MasterDataView({
   branches,
   departments,
   indicators,
+  equipment = [],
 }: MasterDataViewProps) {
-  const [activeTab, setActiveTab] = useState<'kpi' | 'branches' | 'departments'>('kpi');
+  const [activeTab, setActiveTab] = useState<'kpi' | 'branches' | 'departments' | 'equipment'>('kpi');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('ALL');
 
   const filteredIndicators = indicators.filter(i =>
@@ -58,6 +60,13 @@ export default function MasterDataView({
           >
             <Layers size={16} />
             <span>Master Departemen ({departments.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('equipment')}
+            className={`tab-btn ${activeTab === 'equipment' ? 'active' : ''}`}
+          >
+            <Wrench size={16} />
+            <span>Master Katalog Peralatan ({equipment.length})</span>
           </button>
         </div>
 
@@ -189,6 +198,40 @@ export default function MasterDataView({
                     <td style={{ fontWeight: 600, color: '#ffffff' }}>{d.pic_name}</td>
                     <td style={{ fontSize: '12px', color: '#38bdf8' }}>{d.pic_email}</td>
                     <td style={{ fontSize: '12px', color: '#94a3b8' }}>{d.description}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="badge badge-green">Aktif</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* TAB 4: MASTER EQUIPMENT */}
+        {activeTab === 'equipment' && (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Kode Alat</th>
+                  <th>Nama Peralatan</th>
+                  <th style={{ textAlign: 'center' }}>Singkatan</th>
+                  <th>Kategori Operasional</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipment.map((eq) => (
+                  <tr key={eq.id}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{eq.code}</td>
+                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{eq.name}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
+                        {eq.acronym}
+                      </span>
+                    </td>
+                    <td style={{ color: '#cbd5e1' }}>{eq.category}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className="badge badge-green">Aktif</span>
                     </td>

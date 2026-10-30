@@ -15,7 +15,7 @@ import TemplateMapping from '@/components/admin/TemplateMapping';
 import MasterDataView from '@/components/admin/MasterDataView';
 import AuditTrailView from '@/components/admin/AuditTrailView';
 import DataRecordsView from '@/components/admin/DataRecordsView';
-import { Branch, Department, KPIIndicator, TemplateConfig, UserRole } from '@/lib/types';
+import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem } from '@/lib/types';
 import { X, Target, CheckCircle2, TrendingUp, Database, Layers, FileSpreadsheet, Sliders, History } from 'lucide-react';
 
 export default function DashboardHome() {
@@ -34,6 +34,7 @@ export default function DashboardHome() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [indicators, setIndicators] = useState<KPIIndicator[]>([]);
+  const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
   const [templates, setTemplates] = useState<TemplateConfig[]>([]);
   const [pendingCount, setPendingCount] = useState<number>(0);
 
@@ -52,6 +53,7 @@ export default function DashboardHome() {
         setBranches(dataMaster.branches || []);
         setDepartments(dataMaster.departments || []);
         setIndicators(dataMaster.indicators || []);
+        setEquipment(dataMaster.equipment || []);
         setTemplates(dataMaster.templates || []);
       }
       const dataVer = await resVer.json();
@@ -244,6 +246,7 @@ export default function DashboardHome() {
             branches={branches}
             departments={departments}
             indicators={indicators}
+            equipment={equipment}
           />
         )}
 
