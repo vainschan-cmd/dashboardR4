@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
 
     // 1. Finansial
     const rawFin: any[] = wb.Sheets['finansial'] ? xlsx.utils.sheet_to_json(wb.Sheets['finansial']) : [];
-    const finansial = rawFin.map(r => {
+    const allFinMapped = rawFin.map(r => {
       const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
       const konsolidasi = parseNumeric(getVal(r, 'KONSOLIDASI'), 0);
       const cabang = parseNumeric(getVal(r, 'CABANG'), 0);
@@ -142,9 +142,31 @@ export async function GET(req: NextRequest) {
         yoy: Number(yoy.toFixed(1)),
         rka: Number(rka.toFixed(1)),
       };
-    }).filter(r => {
-      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
-      return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+    });
+
+    // Group by branch code to ensure all branches have financial data even if sheet only has 2025 baseline
+    const finByBranch = new Map<string, typeof allFinMapped>();
+    allFinMapped.forEach(r => {
+      if (!finByBranch.has(r.branchCode)) finByBranch.set(r.branchCode, []);
+      finByBranch.get(r.branchCode)!.push(r);
+    });
+
+    const finansial: typeof allFinMapped = [];
+    finByBranch.forEach((rows, code) => {
+      if (branchCode && branchCode !== 'ALL' && code !== branchCode) return;
+      const matchingRows = rows.filter(r => matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth));
+      if (matchingRows.length > 0 && matchingRows.some(r => r.konsolidasiRp > 0)) {
+        finansial.push(...matchingRows);
+      } else {
+        const baseline = rows.filter(r => r.year === 2025);
+        if (baseline.length > 0) {
+          finansial.push(...baseline);
+        } else if (matchingRows.length > 0) {
+          finansial.push(...matchingRows);
+        } else {
+          finansial.push(...rows);
+        }
+      }
     });
 
     // 2. Opkom (Operasi & Komersial)
