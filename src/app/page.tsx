@@ -176,6 +176,7 @@ export default function DashboardHome() {
     window.print();
   };
 
+  const canManageUsers = userRole === 'super_admin' || userRole === 'admin_regional';
   const isGovernanceView = ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
 
   // 1. Tampilkan loading sebentar saat memeriksa sesi lokal
@@ -265,13 +266,15 @@ export default function DashboardHome() {
                 <Database size={13} />
                 <span>Data Record Kinerja</span>
               </button>
-              <button
-                onClick={() => setActiveTab('master_data')}
-                className={`governance-pill ${activeTab === 'master_data' ? 'active' : ''}`}
-              >
-                <Layers size={13} />
-                <span>Master Data & KPI</span>
-              </button>
+              {canManageUsers && (
+                <button
+                  onClick={() => setActiveTab('master_data')}
+                  className={`governance-pill ${activeTab === 'master_data' ? 'active' : ''}`}
+                >
+                  <Layers size={13} />
+                  <span>Master Data & KPI</span>
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab('verification')}
                 className={`governance-pill ${activeTab === 'verification' ? 'active' : ''}`}
@@ -433,14 +436,29 @@ export default function DashboardHome() {
         )}
 
         {activeTab === 'master_data' && (
-          <MasterDataView
-            branches={branches}
-            departments={departments}
-            indicators={indicators}
-            equipment={equipment}
-            users={usersList}
-            onRefreshUsers={loadMasterData}
-          />
+          canManageUsers ? (
+            <MasterDataView
+              branches={branches}
+              departments={departments}
+              indicators={indicators}
+              equipment={equipment}
+              users={usersList}
+              onRefreshUsers={loadMasterData}
+            />
+          ) : (
+            <div
+              style={{
+                padding: '40px 20px',
+                textAlign: 'center',
+                backgroundColor: 'var(--bg-card)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              Menu Master Data Pengguna & PIC hanya dapat diakses oleh Super Admin dan Administrator Regional.
+            </div>
+          )
         )}
 
         {activeTab === 'audit_trail' && (

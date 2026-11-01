@@ -76,6 +76,7 @@ export default function PortSightHeader({
   const mainTabs = MAIN_NAVIGATION_TABS;
 
   const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
+  const canManageUsers = userRole === 'super_admin' || userRole === 'admin_regional';
   const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
   const currentBranchName = OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal)?.name;
   const isAll = selectedTerminal === 'ALL';
@@ -100,12 +101,19 @@ export default function PortSightHeader({
         { id: 'import_center', label: 'Import Data Cabang (.xlsx)', icon: FileSpreadsheet },
         { id: 'verification', label: `Monitoring Status Pengesahan ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
       ]
-    : [
+    : canManageUsers
+    ? [
         { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
         { id: 'master_data', label: 'Master Data & KPI', icon: Layers },
         { id: 'verification', label: `Verifikasi & Monitoring ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
         { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
         { id: 'templates', label: 'Template & Mapping', icon: Sliders },
+        { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
+      ]
+    : [
+        { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
+        { id: 'verification', label: `Verifikasi & Monitoring ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
+        { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
         { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
       ];
 
@@ -317,24 +325,27 @@ export default function PortSightHeader({
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => onOpenAuth('register')}
-              className="btn-primary"
-              style={{
-                padding: '4px 9px',
-                fontSize: '11px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                borderRadius: 'var(--radius-pill)',
-                fontWeight: 700,
-              }}
-              title="Daftar Akun Baru PIC / Pengguna"
-            >
-              <UserPlus size={11} />
-              <span>Daftar</span>
-            </button>
+            {/* Tombol Daftar Akun Baru: Hanya muncul untuk role Super Admin & Administrator */}
+            {canManageUsers && (
+              <button
+                type="button"
+                onClick={() => onOpenAuth('register')}
+                className="btn-primary"
+                style={{
+                  padding: '4px 9px',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  borderRadius: 'var(--radius-pill)',
+                  fontWeight: 700,
+                }}
+                title="Daftar Akun Baru PIC / Pengguna (Super Admin & Administrator)"
+              >
+                <UserPlus size={11} />
+                <span>Daftar</span>
+              </button>
+            )}
 
             {/* Informasi Role Aktif Pengguna (Sesuai Konfigurasi User) */}
             <div
@@ -557,18 +568,20 @@ export default function PortSightHeader({
               </div>
 
               <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenAuth('register');
-                  }}
-                  className="btn-primary"
-                  style={{ flex: 1, padding: '7px 10px', fontSize: '11.5px', justifyContent: 'center' }}
-                >
-                  <UserPlus size={12} />
-                  <span>Daftar Akun PIC</span>
-                </button>
+                {canManageUsers && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenAuth('register');
+                    }}
+                    className="btn-primary"
+                    style={{ flex: 1, padding: '7px 10px', fontSize: '11.5px', justifyContent: 'center' }}
+                  >
+                    <UserPlus size={12} />
+                    <span>Daftar Akun PIC</span>
+                  </button>
+                )}
                 {onLogout && (
                   <button
                     type="button"

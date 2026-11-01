@@ -34,7 +34,8 @@ export default function AuthModal({
   onLoginSuccess,
   initialMode = 'login',
 }: AuthModalProps) {
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
+  const canRegisterUser = !currentUser || currentUser.role === 'super_admin' || currentUser.role === 'admin_regional';
+  const [mode, setMode] = useState<'login' | 'register'>(canRegisterUser ? initialMode : 'login');
 
   // Login form state
   const [loginNipp, setLoginNipp] = useState('');
@@ -231,33 +232,35 @@ export default function AuthModal({
             <Lock size={14} />
             <span>Masuk (Login)</span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode('register');
-              setErrorMsg(null);
-              setSuccessMsg(null);
-            }}
-            style={{
-              flex: 1,
-              padding: '11px 16px',
-              border: 'none',
-              background: mode === 'register' ? 'var(--bg-card)' : 'transparent',
-              color: mode === 'register' ? 'var(--accent-blue)' : 'var(--text-muted)',
-              fontWeight: mode === 'register' ? 700 : 500,
-              fontSize: '13px',
-              borderBottom: mode === 'register' ? '2px solid var(--accent-blue)' : '2px solid transparent',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <UserPlus size={14} />
-            <span>Daftar Akun Baru</span>
-          </button>
+          {canRegisterUser && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('register');
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              style={{
+                flex: 1,
+                padding: '11px 16px',
+                border: 'none',
+                background: mode === 'register' ? 'var(--bg-card)' : 'transparent',
+                color: mode === 'register' ? 'var(--accent-blue)' : 'var(--text-muted)',
+                fontWeight: mode === 'register' ? 700 : 500,
+                fontSize: '13px',
+                borderBottom: mode === 'register' ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <UserPlus size={14} />
+              <span>Daftar Akun Baru</span>
+            </button>
+          )}
         </div>
 
         {/* Body Modal */}
@@ -381,28 +384,30 @@ export default function AuthModal({
                 <span>{loading ? 'Memverifikasi...' : 'Masuk ke Dashboard'}</span>
               </button>
 
-              <div style={{ textAlign: 'center', marginTop: '6px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Belum memiliki akun PIC? </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('register');
-                    setErrorMsg(null);
-                    setSuccessMsg(null);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--accent-blue)',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  Daftar Akun Baru
-                </button>
-              </div>
+              {canRegisterUser && (
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Belum memiliki akun PIC? </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('register');
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--accent-blue)',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Daftar Akun Baru
+                  </button>
+                </div>
+              )}
 
               {/* Quick Role & Branch Selector for Easy Switching */}
               <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
