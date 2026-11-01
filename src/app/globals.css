@@ -1219,3 +1219,17 @@ select option {
 [data-theme="light"] [style*="border-color: #1e3557"] {
   border-color: #e2e8f0 !important;
 }
+
+/* Sembunyikan Next.js Development Indicator / Logo "N" Badge */
+nextjs-portal,
+#nextjs-dev-tools,
+[data-nextjs-dev-tools],
+[data-next-badge],
+div[data-nextjs-toast],
+div[data-nextjs-dialog-overlay] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
