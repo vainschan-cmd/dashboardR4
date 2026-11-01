@@ -191,18 +191,23 @@ export default function LoginScreen({
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div
             style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%)',
+              width: '44px',
+              height: '44px',
+              borderRadius: '12px',
+              backgroundColor: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
-              color: '#ffffff',
+              padding: '4px',
+              boxShadow: '0 4px 16px rgba(2, 132, 199, 0.25)',
+              flexShrink: 0,
             }}
           >
-            <Anchor size={22} />
+            <img
+              src="/pelindo-logo.png"
+              alt="Logo Pelindo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -201,18 +201,22 @@ export default function DashboardHome() {
       >
         <div
           style={{
-            width: '46px',
-            height: '46px',
+            width: '48px',
+            height: '48px',
             borderRadius: '12px',
-            background: 'linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%)',
+            backgroundColor: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#ffffff',
-            boxShadow: '0 4px 16px rgba(2, 132, 199, 0.35)',
+            padding: '5px',
+            boxShadow: '0 4px 16px rgba(2, 132, 199, 0.25)',
           }}
         >
-          <Anchor size={24} />
+          <img
+            src="/pelindo-logo.png"
+            alt="Logo Pelindo"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
         </div>
         <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
           Memeriksa Sesi Pengguna PortDash Regional 4...

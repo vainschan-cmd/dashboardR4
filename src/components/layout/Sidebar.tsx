@@ -72,8 +72,25 @@ export default function Sidebar({
       )}
       <aside className={`sidebar ${isOpenMobile ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <div className="brand-icon">
-            <Anchor size={22} />
+          <div
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
+              backgroundColor: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '3px',
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
+              flexShrink: 0,
+            }}
+          >
+            <img
+              src="/pelindo-logo.png"
+              alt="Logo Pelindo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="brand-title">PORT EXECUTIVE</div>

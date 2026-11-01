@@ -6,6 +6,14 @@ export const metadata: Metadata = {
   description: "Aplikasi monitoring, konsolidasi, analisis, dan penyajian kinerja Regional 4 serta seluruh cabang pelabuhan.",
   keywords: ["Pelabuhan", "Dashboard Eksekutif", "Monitoring Kinerja", "Regional", "Pelindo", "Port Analytics"],
   authors: [{ name: "Regional Port Authority" }],
+  icons: {
+    icon: [
+      { url: '/pelindo-logo.png', type: 'image/png' },
+      { url: '/favicon.ico' },
+    ],
+    shortcut: '/pelindo-logo.png',
+    apple: '/pelindo-logo.png',
+  },
 };
 
 export const viewport: Viewport = {
@@ -22,6 +30,8 @@ export default function RootLayout({
   return (
     <html lang="id" data-theme="dark" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/pelindo-logo.png" type="image/png" sizes="any" />
+        <link rel="apple-touch-icon" href="/pelindo-logo.png" />
         <script
           dangerouslySetInnerHTML={{
             __html: `

@@ -205,16 +205,20 @@ export default function PortSightHeader({
               width: '32px',
               height: '32px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%)',
+              backgroundColor: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+              padding: '3px',
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
               flexShrink: 0,
             }}
           >
-            <Anchor size={17} />
+            <img
+              src="/pelindo-logo.png"
+              alt="Logo Pelindo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', lineHeight: 1 }}>
             <span className="brand-title">PELINDO R4</span>
