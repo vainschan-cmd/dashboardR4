@@ -17,6 +17,7 @@ import MasterDataView from '@/components/admin/MasterDataView';
 import AuditTrailView from '@/components/admin/AuditTrailView';
 import DataRecordsView from '@/components/admin/DataRecordsView';
 import ManualDataInputModal, { ModuleType } from '@/components/admin/ManualDataInputModal';
+import ComparisonModal from '@/components/modals/ComparisonModal';
 import AuthModal from '@/components/auth/AuthModal';
 import LoginScreen from '@/components/auth/LoginScreen';
 import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User } from '@/lib/types';
@@ -58,6 +59,10 @@ export default function DashboardHome() {
   // Manual Data Input Modal
   const [manualInputModalOpen, setManualInputModalOpen] = useState<boolean>(false);
   const [manualInputDefaultModule, setManualInputDefaultModule] = useState<ModuleType>('finansial');
+
+  // Executive Comparison Modal & Mode (vs RKAP & 2025)
+  const [comparisonMode, setComparisonMode] = useState<string>('all');
+  const [isComparisonModalOpen, setIsComparisonModalOpen] = useState<boolean>(false);
 
   const handleOpenManualInput = (moduleName?: string) => {
     if (moduleName && ['finansial', 'opkom', 'kinerja', 'utilisasi', 'peralatan', 'fasilitas'].includes(moduleName)) {
@@ -251,6 +256,9 @@ export default function DashboardHome() {
         pendingCount={pendingCount}
         theme={theme}
         onThemeChange={handleThemeChange}
+        comparisonMode={comparisonMode}
+        setComparisonMode={setComparisonMode}
+        onOpenComparisonModal={() => setIsComparisonModalOpen(true)}
       />
 
       {/* Main View Body */}
@@ -335,6 +343,8 @@ export default function DashboardHome() {
             onOpenDrilldown={(item) => setDrilldownItem(item)}
             currentUser={currentUser}
             userRole={userRole}
+            comparisonMode={comparisonMode}
+            onOpenComparisonModal={() => setIsComparisonModalOpen(true)}
           />
         )}
 
@@ -552,6 +562,14 @@ export default function DashboardHome() {
         onSuccess={() => {
           loadMasterData();
         }}
+      />
+
+      {/* Executive Comparison Matrix Modal (vs RKAP & 2025) */}
+      <ComparisonModal
+        isOpen={isComparisonModalOpen}
+        onClose={() => setIsComparisonModalOpen(false)}
+        selectedPeriod={selectedPeriod}
+        selectedTerminal={selectedTerminal}
       />
     </div>
   );

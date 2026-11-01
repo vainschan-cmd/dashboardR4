@@ -49,6 +49,9 @@ interface PortSightHeaderProps {
   pendingCount?: number;
   theme: 'dark' | 'light';
   onThemeChange: (theme: 'dark' | 'light') => void;
+  comparisonMode?: string;
+  setComparisonMode?: (mode: string) => void;
+  onOpenComparisonModal?: () => void;
 }
 
 export default function PortSightHeader({
@@ -69,9 +72,23 @@ export default function PortSightHeader({
   pendingCount = 0,
   theme,
   onThemeChange,
+  comparisonMode = 'all',
+  setComparisonMode,
+  onOpenComparisonModal,
 }: PortSightHeaderProps) {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [internalCompMode, setInternalCompMode] = useState<string>('all');
+
+  const currentCompMode = comparisonMode || internalCompMode;
+  const handleCompChange = (val: string) => {
+    if (val === 'modal') {
+      if (onOpenComparisonModal) onOpenComparisonModal();
+      return;
+    }
+    if (setComparisonMode) setComparisonMode(val);
+    else setInternalCompMode(val);
+  };
 
   const mainTabs = MAIN_NAVIGATION_TABS;
 
@@ -832,10 +849,54 @@ export default function PortSightHeader({
             )}
           </div>
 
-          {/* Comparison Chip */}
-          <div className="filter-chip hidden-on-mobile">
-            <BarChart3 size={13} />
-            <span>vs RKAP & 2025</span>
+          {/* Comparison Chip (Active Menu) */}
+          <div
+            className="filter-chip hidden-on-mobile"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <BarChart3 size={13} style={{ flexShrink: 0, color: 'var(--accent-cyan)' }} />
+            <select
+              value={currentCompMode}
+              onChange={(e) => handleCompChange(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'inherit',
+                fontWeight: 600,
+                outline: 'none',
+                cursor: 'pointer',
+                fontSize: '11.5px',
+              }}
+              title="Pilih mode pembanding atau buka matriks komparasi lengkap"
+            >
+              <option value="all">vs RKAP & 2025</option>
+              <option value="rkap">vs Target RKAP 2026</option>
+              <option value="yoy">vs Realisasi 2025 (YoY)</option>
+              <option value="modal">📊 Buka Matriks Komparasi...</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => onOpenComparisonModal && onOpenComparisonModal()}
+              style={{
+                background: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                borderRadius: '4px',
+                color: 'var(--accent-cyan)',
+                padding: '1.5px 6px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                fontWeight: 700,
+                lineHeight: 1.2,
+                marginLeft: '2px',
+              }}
+              title="Buka Matriks Detail Komparasi vs RKAP & 2025"
+            >
+              Detail
+            </button>
           </div>
         </div>
       </div>

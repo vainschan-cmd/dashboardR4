@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   Search,
   X,
+  BarChart3,
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
@@ -32,6 +33,8 @@ interface PortSightBerandaProps {
   onOpenDrilldown?: (item: any) => void;
   currentUser?: User | null;
   userRole?: UserRole;
+  comparisonMode?: string;
+  onOpenComparisonModal?: () => void;
 }
 
 export default function PortSightBeranda({
@@ -42,6 +45,8 @@ export default function PortSightBeranda({
   onOpenDrilldown,
   currentUser,
   userRole,
+  comparisonMode = 'all',
+  onOpenComparisonModal,
 }: PortSightBerandaProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [finansial, setFinansial] = useState<any[]>([]);
@@ -605,29 +610,55 @@ export default function PortSightBeranda({
               <span>🔒 Terkunci Sesuai Akun PIC Cabang</span>
             </div>
           ) : (
-            onSelectTerminal && (
-              <button
-                type="button"
-                onClick={() => onSelectTerminal('ALL')}
-                className="btn-dark"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '11.5px',
-                  padding: '5px 12px',
-                  borderRadius: 'var(--radius-pill)',
-                  borderColor: 'var(--accent-blue)',
-                  color: 'var(--accent-cyan)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-                title="Reset ke akumulasi seluruh 28 cabang"
-              >
-                <RotateCcw size={12} />
-                <span>Tampilkan Akumulasi Semua Cabang (ALL)</span>
-              </button>
-            )
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {onOpenComparisonModal && (
+                <button
+                  type="button"
+                  onClick={onOpenComparisonModal}
+                  className="btn-dark"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '11px',
+                    padding: '5px 12px',
+                    borderRadius: 'var(--radius-pill)',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                    color: 'var(--accent-cyan)',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                  }}
+                  title="Buka Matriks Detail Komparasi Realisasi vs RKAP vs Realisasi 2025"
+                >
+                  <BarChart3 size={12} />
+                  <span>Matriks vs RKAP & 2025</span>
+                </button>
+              )}
+              {onSelectTerminal && (
+                <button
+                  type="button"
+                  onClick={() => onSelectTerminal('ALL')}
+                  className="btn-dark"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '11.5px',
+                    padding: '5px 12px',
+                    borderRadius: 'var(--radius-pill)',
+                    borderColor: 'var(--accent-blue)',
+                    color: 'var(--accent-cyan)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                  title="Reset ke akumulasi seluruh 28 cabang"
+                >
+                  <RotateCcw size={12} />
+                  <span>Tampilkan Akumulasi Semua Cabang (ALL)</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -644,12 +675,16 @@ export default function PortSightBeranda({
             <div className="kpi-header-label">{kpi.title}</div>
             <div className="kpi-huge-number">{kpi.value}</div>
             <div className="kpi-comparison-rows">
-              <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
-                <strong>{kpi.comp1}</strong>
-              </div>
-              <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
-                <strong>{kpi.comp2}</strong>
-              </div>
+              {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
+                <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
+                  <strong>{kpi.comp1}</strong>
+                </div>
+              )}
+              {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
+                <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
+                  <strong>{kpi.comp2}</strong>
+                </div>
+              )}
             </div>
           </div>
         ))}
