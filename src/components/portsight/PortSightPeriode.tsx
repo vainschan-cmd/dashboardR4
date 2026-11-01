@@ -4,12 +4,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar,
   RefreshCw,
-  Download,
-  PlusCircle,
   Search,
   DollarSign,
   Boxes,
   TrendingUp,
+  TrendingDown,
   Activity,
   Wrench,
   Layers,
@@ -221,9 +220,32 @@ export default function PortSightPeriode({
     // Total records across loaded modules
     const totalRecords = finansial.length + opkom.length + kinerja.length + utilisasi.length + peralatan.length + fasilitas.length;
     
-    // Total Revenue from Finansial
-    const revRows = finansial.filter(f => f.rekening && (f.rekening.includes('Pendapatan') || f.rekening.includes('REVENUE')));
+    // Revenue, Cost, Laba from Finansial
+    const revRows = finansial.filter(f => {
+      const r = (f.rekening || '').toLowerCase();
+      return r.includes('pendapatan') || r.includes('revenue');
+    });
+    const costRows = finansial.filter(f => {
+      const r = (f.rekening || '').toLowerCase();
+      return r.includes('beban') || r.includes('biaya') || r.includes('expense');
+    });
+    const labaUsahaRows = finansial.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
+    const labaBersihRows = finansial.filter(f => (f.rekening || '').toLowerCase().includes('bersih'));
+    const allLabaRows = finansial.filter(f => (f.rekening || '').toLowerCase().includes('laba'));
+
     const totalRevRp = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+    const totalBebanRp = Math.abs(costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0));
+
+    let totalLabaRp = 0;
+    if (labaUsahaRows.length > 0) {
+      totalLabaRp = labaUsahaRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+    } else if (labaBersihRows.length > 0) {
+      totalLabaRp = labaBersihRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+    } else if (allLabaRows.length > 0) {
+      totalLabaRp = allLabaRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+    } else if (totalRevRp > 0 || totalBebanRp > 0) {
+      totalLabaRp = totalRevRp - totalBebanRp;
+    }
 
     // Total Opkom Volume
     const totalVolume = opkom.reduce((a, b) => a + (b.jumlah || 0), 0);
@@ -244,11 +266,16 @@ export default function PortSightPeriode({
     return {
       totalRecords,
       totalRevRp,
+      totalBebanRp,
+      totalLabaRp,
       totalVolume,
       avgBor,
       avgAlat,
       totalAsetFasilitas,
       countFin: finansial.length,
+      countRev: revRows.length,
+      countBeban: costRows.length,
+      countLaba: allLabaRows.length,
       countOpkom: opkom.length,
       countKinerja: kinerja.length,
       countUtilisasi: utilisasi.length,
@@ -293,120 +320,6 @@ export default function PortSightPeriode({
       .map(m => monthMap[m]);
   }, [finansial, opkom, startMonth, endMonth]);
 
-  // Export current filtered view to CSV/Excel table
-  const handleExportData = () => {
-    let rows: any[] = [];
-    let filename = `Data_Periode_${branchFilter}_${Date.now()}.csv`;
-
-    if (activeModule === 'finansial' || activeModule === 'all') {
-      rows = finansial.map(f => ({
-        Modul: 'Finance',
-        Tahun: f.year,
-        Bulan: f.month,
-        Kode_Cabang: f.branchCode,
-        Nama_Cabang: f.branchName,
-        Rekening: f.rekening,
-        Cabang_Rp: f.cabangRp,
-        PMT_Rp: f.pmtRp,
-        PTP_Rp: f.ptpRp,
-        PSL_Rp: f.pslRp,
-        PJM_Rp: f.pjmRp,
-        Eliminasi_Rp: f.eliminasiRp,
-        Konsolidasi_Rp: f.konsolidasiRp,
-        YoY: f.yoy,
-        RKA: f.rka,
-      }));
-    } else if (activeModule === 'opkom') {
-      rows = opkom.map(o => ({
-        Modul: 'Opkom',
-        Tahun: o.year,
-        Bulan: o.month,
-        Kode_Cabang: o.branchCode,
-        Nama_Cabang: o.branchName,
-        Layanan: o.layanan,
-        Satuan: o.satuan,
-        Jumlah: o.jumlah,
-        YoY: o.yoy,
-        RKA: o.rka,
-      }));
-    } else if (activeModule === 'kinerja') {
-      rows = kinerja.map(k => ({
-        Modul: 'Kinerja',
-        Tahun: k.year,
-        Bulan: k.month,
-        Kode_Cabang: k.branchCode,
-        Nama_Cabang: k.branchName,
-        Kode_Kinerja: k.kdKine,
-        Nama_Kinerja: k.nmKine,
-        Satuan: k.satuan,
-        Nilai: k.nilai,
-      }));
-    } else if (activeModule === 'utilisasi') {
-      rows = utilisasi.map(u => ({
-        Modul: 'Utilisasi',
-        Tahun: u.year,
-        Bulan: u.month,
-        Kode_Cabang: u.branchCode,
-        Nama_Cabang: u.branchName,
-        Kode_Dermaga: u.kdJenderm,
-        Nama_Dermaga: u.dermaga,
-        BOR: u.bor,
-        YOR: u.yor,
-        SOR: u.sor,
-      }));
-    } else if (activeModule === 'peralatan') {
-      rows = peralatan.map(p => ({
-        Modul: 'Peralatan',
-        Tahun: p.year,
-        Bulan: p.month,
-        Kode_Cabang: p.branchCode,
-        Nama_Cabang: p.branchName,
-        Kode_Alat: p.kdAlat,
-        Nama_Alat: p.nmAlat,
-        Singkatan: p.singkatan,
-        Jenis_Alat: p.jnsAlat,
-        Jumlah: p.jumlah,
-        Utilisasi: p.utilisasi,
-      }));
-    } else if (activeModule === 'fasilitas') {
-      rows = fasilitas.map(fs => ({
-        Modul: 'Fasilitas',
-        Tahun: fs.year,
-        Bulan: fs.month,
-        Kode_Cabang: fs.branchCode,
-        Nama_Cabang: fs.branchName,
-        Nama_Fasilitas: fs.nmPasfel,
-        Jenis_Fasilitas: fs.jnsFaspel,
-        Satuan: fs.satuan,
-        Panjang: fs.panjang,
-        Lebar: fs.lebar,
-        Luas: fs.mLws,
-        Nilai_Rp: fs.nilai,
-        Keterangan: fs.ket,
-      }));
-    }
-
-    if (rows.length === 0) {
-      alert('Tidak ada data dalam range filter untuk diekspor.');
-      return;
-    }
-
-    const headers = Object.keys(rows[0]);
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(r => headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(';'))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   // Human-readable current period label
   const activePeriodLabel = useMemo(() => {
     if (filterMode === 'preset') return presetPeriod;
@@ -434,51 +347,6 @@ export default function PortSightPeriode({
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {onOpenManualInput && (
-              <button
-                type="button"
-                onClick={() => onOpenManualInput(activeModule === 'all' ? 'finansial' : activeModule)}
-                className="btn-primary"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: 'var(--accent-orange, #f97316)',
-                  borderColor: 'var(--accent-orange, #f97316)',
-                  color: '#ffffff',
-                  fontSize: '12px',
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 6px rgba(249, 115, 22, 0.35)',
-                }}
-                title="Input data manual untuk modul yang aktif"
-              >
-                <PlusCircle size={14} />
-                <span>+ Input Data Manual</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleExportData}
-              className="btn-dark"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '12px',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-              }}
-              title="Unduh data terfilter ke format spreadsheet"
-            >
-              <Download size={14} />
-              <span>Ekspor CSV/Excel</span>
-            </button>
-
             <button
               type="button"
               onClick={fetchData}
@@ -793,7 +661,8 @@ export default function PortSightPeriode({
       </div>
 
       {/* 2. SUMMARY KPI CARDS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+        {/* 1. Pendapatan */}
         <div className="dark-card" style={{ borderLeft: '4px solid #38bdf8', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Pendapatan Usaha</span>
@@ -803,10 +672,39 @@ export default function PortSightPeriode({
             {formatRupiahFull(summary.totalRevRp)}
           </div>
           <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-            {summary.countFin} pos rekening finansial
+            {summary.countRev} pos rekening finansial
           </div>
         </div>
 
+        {/* 2. Beban */}
+        <div className="dark-card" style={{ borderLeft: '4px solid #f43f5e', padding: '14px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="kpi-header-label">Beban Usaha</span>
+            <TrendingDown size={18} color="#f43f5e" />
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+            {formatRupiahFull(summary.totalBebanRp)}
+          </div>
+          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+            {summary.countBeban} pos rekening beban
+          </div>
+        </div>
+
+        {/* 3. Laba */}
+        <div className="dark-card" style={{ borderLeft: '4px solid #10b981', padding: '14px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="kpi-header-label">Laba Usaha / Bersih</span>
+            <TrendingUp size={18} color="#10b981" />
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+            {formatRupiahFull(summary.totalLabaRp)}
+          </div>
+          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+            {summary.countLaba > 0 ? `${summary.countLaba} pos rekening laba` : 'Laba operasional'}
+          </div>
+        </div>
+
+        {/* 4. Total Volume Opkom */}
         <div className="dark-card" style={{ borderLeft: '4px solid #f59e0b', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Volume Opkom</span>
@@ -820,10 +718,11 @@ export default function PortSightPeriode({
           </div>
         </div>
 
-        <div className="dark-card" style={{ borderLeft: '4px solid #10b981', padding: '14px 16px' }}>
+        {/* 5. Rata-rata BOR Dermaga */}
+        <div className="dark-card" style={{ borderLeft: '4px solid #06b6d4', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Rata-rata BOR Dermaga</span>
-            <Activity size={18} color="#10b981" />
+            <Activity size={18} color="#06b6d4" />
           </div>
           <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
             {summary.avgBor}%
@@ -833,6 +732,7 @@ export default function PortSightPeriode({
           </div>
         </div>
 
+        {/* 6. Utilisasi Peralatan */}
         <div className="dark-card" style={{ borderLeft: '4px solid #a855f7', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Utilisasi Peralatan</span>
@@ -846,6 +746,7 @@ export default function PortSightPeriode({
           </div>
         </div>
 
+        {/* 7. Total Aset Fasilitas */}
         <div className="dark-card" style={{ borderLeft: '4px solid #ec4899', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Aset Fasilitas</span>

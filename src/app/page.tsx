@@ -320,7 +320,6 @@ export default function DashboardHome() {
           <PortSightPeriode
             selectedTerminal={selectedTerminal}
             selectedPeriod={selectedPeriod}
-            onOpenManualInput={(mod) => handleOpenManualInput(mod)}
           />
         )}
 
