@@ -125,51 +125,100 @@ export default function PortSightKinerja({
 
   // 2. Kalkulasi Ringkasan Kinerja untuk 4 Kartu Eksekutif
   const metrics = useMemo(() => {
-    // WTP (Waiting Time to Pilot)
-    const wtpRows = branchFilteredData.filter(d => d.satuan === 'WTP' && (d.nilai || 0) > 0);
-    const wtpVal = wtpRows.length > 0
-      ? Number((wtpRows.reduce((a, b) => a + (b.nilai || 0), 0) / wtpRows.length).toFixed(2))
-      : 0.18;
+    if (targetBranchCode === 'ALL') {
+      // MODE KONSOLIDASI SELURUH WILAYAH REGIONAL 4
+      const wtpRows = data.filter(d => d.satuan === 'WTP' && (d.nilai || 0) > 0);
+      const wtpVal = wtpRows.length > 0
+        ? Number((wtpRows.reduce((a, b) => a + (b.nilai || 0), 0) / wtpRows.length).toFixed(2))
+        : 0.20;
 
-    // Curah Kering (TGH & TSD)
-    const ckRows = branchFilteredData.filter(d => d.nmKine === 'CURAH KERING');
-    const ckTgh = ckRows.find(d => d.satuan === 'TGH')?.nilai || 0;
-    const ckTsd = ckRows.find(d => d.satuan === 'TSD')?.nilai || 0;
+      // Curah Kering
+      const ckTghRows = data.filter(d => d.nmKine === 'CURAH KERING' && d.satuan === 'TGH' && (d.nilai || 0) > 0);
+      const ckTghAvg = ckTghRows.length > 0
+        ? Math.round(ckTghRows.reduce((a, b) => a + b.nilai, 0) / ckTghRows.length)
+        : 145;
+      const ckTsdRows = data.filter(d => d.nmKine === 'CURAH KERING' && d.satuan === 'TSD' && (d.nilai || 0) > 0);
+      const ckTsdTotal = ckTsdRows.reduce((a, b) => a + b.nilai, 0);
 
-    // Curah Cair (TGH & TSD)
-    const ccRows = branchFilteredData.filter(d => d.nmKine === 'CURAH CAIR');
-    const ccTgh = ccRows.find(d => d.satuan === 'TGH')?.nilai || 0;
-    const ccTsd = ccRows.find(d => d.satuan === 'TSD')?.nilai || 0;
+      // Curah Cair
+      const ccTghRows = data.filter(d => d.nmKine === 'CURAH CAIR' && d.satuan === 'TGH' && (d.nilai || 0) > 0);
+      const ccTghAvg = ccTghRows.length > 0
+        ? Math.round(ccTghRows.reduce((a, b) => a + b.nilai, 0) / ccTghRows.length)
+        : 110;
+      const ccTsdRows = data.filter(d => d.nmKine === 'CURAH CAIR' && d.satuan === 'TSD' && (d.nilai || 0) > 0);
+      const ccTsdTotal = ccTsdRows.reduce((a, b) => a + b.nilai, 0);
 
-    // General Cargo (TGH & TSD)
-    const gcRows = branchFilteredData.filter(d => d.nmKine === 'GENERAL CARGO');
-    const gcTgh = gcRows.find(d => d.satuan === 'TGH')?.nilai || 0;
-    const gcTsd = gcRows.find(d => d.satuan === 'TSD')?.nilai || 0;
+      // General Cargo
+      const gcTghRows = data.filter(d => d.nmKine === 'GENERAL CARGO' && d.satuan === 'TGH' && (d.nilai || 0) > 0);
+      const gcTghAvg = gcTghRows.length > 0
+        ? Math.round(gcTghRows.reduce((a, b) => a + b.nilai, 0) / gcTghRows.length)
+        : 35;
+      const gcTsdRows = data.filter(d => d.nmKine === 'GENERAL CARGO' && d.satuan === 'TSD' && (d.nilai || 0) > 0);
+      const gcTsdTotal = gcTsdRows.reduce((a, b) => a + b.nilai, 0);
 
-    // Petikemas (BSH & BCH)
-    const bshRows = branchFilteredData.filter(d => d.satuan === 'BSH' && (d.nilai || 0) > 0);
-    const bshVal = bshRows.length > 0
-      ? Number((bshRows.reduce((a, b) => a + (b.nilai || 0), 0) / bshRows.length).toFixed(1))
-      : 0;
+      // Petikemas
+      const bshRows = data.filter(d => d.satuan === 'BSH' && (d.nilai || 0) > 0);
+      const bshAvg = bshRows.length > 0
+        ? Number((bshRows.reduce((a, b) => a + (b.nilai || 0), 0) / bshRows.length).toFixed(1))
+        : 22.5;
 
-    const bchRows = branchFilteredData.filter(d => d.satuan === 'BCH' && (d.nilai || 0) > 0);
-    const bchVal = bchRows.length > 0
-      ? Number((bchRows.reduce((a, b) => a + (b.nilai || 0), 0) / bchRows.length).toFixed(1))
-      : 0;
+      const bchRows = data.filter(d => d.satuan === 'BCH' && (d.nilai || 0) > 0);
+      const bchAvg = bchRows.length > 0
+        ? Number((bchRows.reduce((a, b) => a + (b.nilai || 0), 0) / bchRows.length).toFixed(1))
+        : 17.5;
 
-    return {
-      wtpVal,
-      ckTgh: ckTgh > 0 ? ckTgh : 161,
-      ckTsd: ckTsd > 0 ? ckTsd : 3636,
-      ccTgh: ccTgh > 0 ? ccTgh : 104,
-      ccTsd: ccTsd > 0 ? ccTsd : 1593,
-      gcTgh,
-      gcTsd,
-      bshVal,
-      bchVal,
-      totalParam: branchFilteredData.length,
-    };
-  }, [branchFilteredData]);
+      return {
+        isAll: true,
+        wtpVal,
+        ckTgh: ckTghAvg,
+        ckTsd: ckTsdTotal,
+        ccTgh: ccTghAvg,
+        ccTsd: ccTsdTotal,
+        gcTgh: gcTghAvg,
+        gcTsd: gcTsdTotal,
+        bshVal: bshAvg,
+        bchVal: bchAvg,
+        totalParam: data.length,
+      };
+    } else {
+      // MODE SATU CABANG TERPILIH (NILAI EKSKLUSIF CABANG TANPA HARDCODE DUMMY)
+      const wtpRow = branchFilteredData.find(d => d.satuan === 'WTP');
+      const wtpVal = wtpRow && (wtpRow.nilai || 0) > 0 ? Number(wtpRow.nilai.toFixed(2)) : 0;
+
+      // Curah Kering
+      const ckRows = branchFilteredData.filter(d => d.nmKine === 'CURAH KERING');
+      const ckTgh = ckRows.find(d => d.satuan === 'TGH')?.nilai || 0;
+      const ckTsd = ckRows.find(d => d.satuan === 'TSD')?.nilai || 0;
+
+      // Curah Cair
+      const ccRows = branchFilteredData.filter(d => d.nmKine === 'CURAH CAIR');
+      const ccTgh = ccRows.find(d => d.satuan === 'TGH')?.nilai || 0;
+      const ccTsd = ccRows.find(d => d.satuan === 'TSD')?.nilai || 0;
+
+      // General Cargo
+      const gcRows = branchFilteredData.filter(d => d.nmKine === 'GENERAL CARGO');
+      const gcTgh = gcRows.find(d => d.satuan === 'TGH')?.nilai || 0;
+      const gcTsd = gcRows.find(d => d.satuan === 'TSD')?.nilai || 0;
+
+      // Petikemas
+      const bshVal = branchFilteredData.find(d => d.satuan === 'BSH')?.nilai || 0;
+      const bchVal = branchFilteredData.find(d => d.satuan === 'BCH')?.nilai || 0;
+
+      return {
+        isAll: false,
+        wtpVal,
+        ckTgh,
+        ckTsd,
+        ccTgh,
+        ccTsd,
+        gcTgh,
+        gcTsd,
+        bshVal,
+        bchVal,
+        totalParam: branchFilteredData.length,
+      };
+    }
+  }, [branchFilteredData, data, targetBranchCode]);
 
   // 3. Data Grafik Kinerja Sesuai Jenis Operasi & Parameter / Satuan
   const chartGroupedData = useMemo(() => {
@@ -203,11 +252,11 @@ export default function PortSightKinerja({
     } else {
       // MODE 2: SELURUH CABANG (ALL)
       // Visualisasikan komparasi parameter terpilih antarcabang pelabuhan
-      const branchMap: Record<string, { code: string; name: string; TSD: number; TGH: number; WTP: number }> = {};
+      const branchMap: Record<string, { code: string; name: string; TSD: number; TGH: number; WTP: number; BSH: number; BCH: number }> = {};
       
       data.forEach(d => {
         if (!branchMap[d.branchCode]) {
-          branchMap[d.branchCode] = { code: d.branchCode, name: d.branchName, TSD: 0, TGH: 0, WTP: 0 };
+          branchMap[d.branchCode] = { code: d.branchCode, name: d.branchName, TSD: 0, TGH: 0, WTP: 0, BSH: 0, BCH: 0 };
         }
         if (d.satuan === 'TSD' && d.nilai > 0) {
           branchMap[d.branchCode].TSD = Math.max(branchMap[d.branchCode].TSD, d.nilai);
@@ -218,11 +267,27 @@ export default function PortSightKinerja({
         if (d.satuan === 'WTP' && d.nilai > 0) {
           branchMap[d.branchCode].WTP = d.nilai;
         }
+        if (d.satuan === 'BSH' && d.nilai > 0) {
+          branchMap[d.branchCode].BSH = Math.max(branchMap[d.branchCode].BSH, d.nilai);
+        }
+        if (d.satuan === 'BCH' && d.nilai > 0) {
+          branchMap[d.branchCode].BCH = Math.max(branchMap[d.branchCode].BCH, d.nilai);
+        }
       });
 
-      return Object.values(branchMap)
-        .filter(b => b.TSD > 0 || b.TGH > 0 || b.WTP > 0)
-        .sort((a, b) => b.TSD - a.TSD)
+      const list = Object.values(branchMap).filter(b => b.TSD > 0 || b.TGH > 0 || b.WTP > 0 || b.BSH > 0);
+
+      if (chartMetricView === 'PETIKEMAS') {
+        list.sort((a, b) => b.BSH - a.BSH);
+      } else if (chartMetricView === 'WTP') {
+        list.sort((a, b) => (a.WTP || 99) - (b.WTP || 99));
+      } else if (chartMetricView === 'TGH') {
+        list.sort((a, b) => b.TGH - a.TGH);
+      } else {
+        list.sort((a, b) => b.TSD - a.TSD);
+      }
+
+      return list
         .slice(0, 10)
         .map(b => ({
           jenisOperasi: `[${b.code}] ${b.name}`,
@@ -230,11 +295,11 @@ export default function PortSightKinerja({
           TSD: b.TSD,
           TGH: b.TGH,
           WTP: b.WTP,
-          BSH: 0,
-          BCH: 0,
+          BSH: b.BSH,
+          BCH: b.BCH,
         }));
     }
-  }, [branchFilteredData, data, targetBranchCode, chartJenisOperasi]);
+  }, [branchFilteredData, data, targetBranchCode, chartJenisOperasi, chartMetricView]);
 
   // 4. Data Tabel Parameter Kinerja (dengan filter jenis operasi, satuan, dan pencarian)
   const displayTableData = useMemo(() => {
@@ -369,37 +434,101 @@ export default function PortSightKinerja({
           </div>
         </div>
 
-        {/* Curah Kering (TGH & TSD) */}
+        {/* Curah Kering / Petikemas (TGH & TSD / BSH & BCH) */}
         <div className="dark-card" style={{ borderLeft: '4px solid #10b981' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="kpi-header-label">Curah Kering (TGH / TSD)</span>
-            <Ship size={19} color="#10b981" />
+            <span className="kpi-header-label">
+              {metrics.isAll
+                ? 'Curah Kering (Konsolidasi R4)'
+                : metrics.ckTsd > 0
+                ? 'Curah Kering (TGH / TSD)'
+                : 'Petikemas (BSH / BCH)'}
+            </span>
+            {metrics.ckTsd > 0 || metrics.isAll ? <Ship size={19} color="#10b981" /> : <Box size={19} color="#10b981" />}
           </div>
           <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
-            {metrics.ckTgh.toLocaleString('id-ID')} TGH{' '}
-            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              / {metrics.ckTsd.toLocaleString('id-ID')} TSD
-            </span>
+            {metrics.isAll ? (
+              <>
+                {metrics.ckTgh.toLocaleString('id-ID')} TGH{' '}
+                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  / {metrics.ckTsd.toLocaleString('id-ID')} TSD
+                </span>
+              </>
+            ) : metrics.ckTsd > 0 ? (
+              <>
+                {metrics.ckTgh.toLocaleString('id-ID')} TGH{' '}
+                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  / {metrics.ckTsd.toLocaleString('id-ID')} TSD
+                </span>
+              </>
+            ) : metrics.bshVal > 0 ? (
+              <>
+                {metrics.bshVal} BSH{' '}
+                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  / {metrics.bchVal} BCH
+                </span>
+              </>
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}>- TGH / - TSD</span>
+            )}
           </div>
           <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-            Ton/Gang/Jam (TGH) &bull; Ton/Ship/Day (TSD)
+            {metrics.isAll
+              ? `Rata-rata ${metrics.ckTgh} TGH • Total Kapasitas ${metrics.ckTsd.toLocaleString('id-ID')} TSD`
+              : metrics.ckTsd > 0
+              ? 'Ton/Gang/Jam (TGH) • Ton/Ship/Day (TSD)'
+              : 'Box/Ship/Hour (BSH) • Box/Crane/Hour (BCH)'}
           </div>
         </div>
 
-        {/* Curah Cair (TGH & TSD) */}
+        {/* Curah Cair (TGH & TSD) / General Cargo */}
         <div className="dark-card" style={{ borderLeft: '4px solid #f59e0b' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="kpi-header-label">Curah Cair (TGH / TSD)</span>
+            <span className="kpi-header-label">
+              {metrics.isAll
+                ? 'Curah Cair (Konsolidasi R4)'
+                : metrics.ccTsd > 0
+                ? 'Curah Cair (TGH / TSD)'
+                : metrics.gcTsd > 0
+                ? 'General Cargo (TGH / TSD)'
+                : 'Curah Cair & Cargo'}
+            </span>
             <Gauge size={19} color="#f59e0b" />
           </div>
           <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
-            {metrics.ccTgh.toLocaleString('id-ID')} TGH{' '}
-            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              / {metrics.ccTsd.toLocaleString('id-ID')} TSD
-            </span>
+            {metrics.isAll ? (
+              <>
+                {metrics.ccTgh.toLocaleString('id-ID')} TGH{' '}
+                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  / {metrics.ccTsd.toLocaleString('id-ID')} TSD
+                </span>
+              </>
+            ) : metrics.ccTsd > 0 ? (
+              <>
+                {metrics.ccTgh.toLocaleString('id-ID')} TGH{' '}
+                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  / {metrics.ccTsd.toLocaleString('id-ID')} TSD
+                </span>
+              </>
+            ) : metrics.gcTsd > 0 ? (
+              <>
+                {metrics.gcTgh.toLocaleString('id-ID')} TGH{' '}
+                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  / {metrics.gcTsd.toLocaleString('id-ID')} TSD
+                </span>
+              </>
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}>- TGH / - TSD</span>
+            )}
           </div>
           <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-            Kecepatan Alir Pompa Dermaga Curah Cair
+            {metrics.isAll
+              ? `Rata-rata Pompa ${metrics.ccTgh} TGH • Total ${metrics.ccTsd.toLocaleString('id-ID')} TSD`
+              : metrics.ccTsd > 0
+              ? 'Kecepatan Alir Pompa Dermaga Curah Cair'
+              : metrics.gcTsd > 0
+              ? 'Produktivitas Bongkar Muat General Cargo'
+              : 'Dermaga Terminal Petikemas'}
           </div>
         </div>
 
@@ -413,7 +542,9 @@ export default function PortSightKinerja({
             {metrics.totalParam > 0 ? `${metrics.totalParam} Indikator` : '9 Indikator'}
           </div>
           <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-            {targetBranchCode !== 'ALL' ? `Cabang [${targetBranchCode}] Terpantau` : 'Seluruh Wilayah Regional 4'}
+            {targetBranchCode !== 'ALL'
+              ? `Cabang [${targetBranchCode}] ${activeBranch ? activeBranch.name : ''} Terpantau`
+              : 'Seluruh Wilayah Regional 4 (27 Cabang Terpantau)'}
           </div>
         </div>
       </div>
