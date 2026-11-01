@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar,
-  Building2,
-  Filter,
   RefreshCw,
   Download,
   PlusCircle,
@@ -15,9 +13,6 @@ import {
   Activity,
   Wrench,
   Layers,
-  ArrowRight,
-  FileSpreadsheet,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -818,7 +813,7 @@ export default function PortSightPeriode({
             <Boxes size={18} color="#f59e0b" />
           </div>
           <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
-            {summary.totalVolume.toLocaleString('id-ID')}
+            {(summary.totalVolume ?? 0).toLocaleString('id-ID')}
           </div>
           <div style={{ fontSize: '11px', color: '#94a3b8' }}>
             {summary.countOpkom} record layanan operasi
@@ -1007,8 +1002,8 @@ export default function PortSightPeriode({
                           <td>{f.month}</td>
                           <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{f.branchCode}</td>
                           <td style={{ fontWeight: 600 }}>{f.branchName}</td>
-                          <td style={{ fontWeight: 600, color: f.rekening.includes('Beban') ? '#f87171' : f.rekening.includes('Laba') ? '#34d399' : '#38bdf8' }}>
-                            {f.rekening}
+                          <td style={{ fontWeight: 600, color: (f.rekening || '').includes('Beban') ? '#f87171' : (f.rekening || '').includes('Laba') ? '#34d399' : '#38bdf8' }}>
+                            {f.rekening || '-'}
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatRupiahFull(f.cabangRp)}</td>
                           <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.pmtRp)}</td>
@@ -1064,7 +1059,7 @@ export default function PortSightPeriode({
                           <td style={{ fontWeight: 600, color: '#ffffff' }}>{o.layanan}</td>
                           <td><span className="badge-category">{o.satuan}</span></td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>
-                            {o.jumlah.toLocaleString('id-ID')}
+                            {(o.jumlah ?? 0).toLocaleString('id-ID')}
                           </td>
                           <td style={{ textAlign: 'center', color: o.yoy >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{o.yoy}%</td>
                           <td style={{ textAlign: 'center', color: o.rka >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{o.rka}%</td>
@@ -1261,7 +1256,7 @@ export default function PortSightPeriode({
                           <td>{f.satuan}</td>
                           <td style={{ textAlign: 'right' }}>{f.panjang}</td>
                           <td style={{ textAlign: 'right' }}>{f.lebar}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{f.mLws.toLocaleString('id-ID')}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{(f.mLws ?? 0).toLocaleString('id-ID')}</td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>{formatRupiahFull(f.nilai)}</td>
                           <td style={{ fontSize: '11px', color: '#94a3b8' }}>{f.ket}</td>
                         </tr>

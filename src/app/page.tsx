@@ -20,7 +20,7 @@ import ManualDataInputModal, { ModuleType } from '@/components/admin/ManualDataI
 import AuthModal from '@/components/auth/AuthModal';
 import LoginScreen from '@/components/auth/LoginScreen';
 import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User } from '@/lib/types';
-import { X, Target, CheckCircle2, TrendingUp, Database, Layers, FileSpreadsheet, Sliders, History, Anchor } from 'lucide-react';
+import { X, CheckCircle2, Database, Layers, FileSpreadsheet, Sliders, History, Anchor } from 'lucide-react';
 
 export default function DashboardHome() {
   // Navigation active tab

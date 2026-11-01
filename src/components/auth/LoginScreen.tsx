@@ -2,12 +2,8 @@
 
 import React, { useState } from 'react';
 import {
-  Lock,
   UserCheck,
   UserPlus,
-  Shield,
-  Building2,
-  Layers,
   Eye,
   EyeOff,
   CheckCircle2,
@@ -16,7 +12,6 @@ import {
   Moon,
   ArrowRight,
   Anchor,
-  Sparkles,
   KeyRound,
   User as UserIcon,
 } from 'lucide-react';
