@@ -380,7 +380,9 @@ export default function DashboardHome() {
         {activeTab === 'kinerja' && (
           <PortSightKinerja
             selectedTerminal={selectedTerminal}
+            selectedPeriod={selectedPeriod}
             onOpenManualInput={() => handleOpenManualInput('kinerja')}
+            onSelectTerminal={(tId) => setSelectedTerminal(tId)}
           />
         )}
 
