@@ -11,7 +11,7 @@ import {
   CartesianGrid,
   Legend
 } from 'recharts';
-import { Gauge, Ship, Layers, Warehouse, Search } from 'lucide-react';
+import { Gauge, Ship, Layers, Warehouse, Search, PlusCircle } from 'lucide-react';
 
 interface UtilisasiItem {
   year: number;
@@ -26,9 +26,10 @@ interface UtilisasiItem {
 
 interface PortSightUtilisasiProps {
   selectedTerminal?: string;
+  onOpenManualInput?: () => void;
 }
 
-export default function PortSightUtilisasi({ selectedTerminal = 'ALL' }: PortSightUtilisasiProps) {
+export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightUtilisasiProps) {
   const [data, setData] = useState<UtilisasiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -197,16 +198,44 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL' }: PortSig
             </div>
           </div>
 
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
-            <input
-              type="text"
-              className="filter-select"
-              placeholder="Cari cabang / dermaga..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: '32px', width: '220px' }}
-            />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onOpenManualInput && (
+              <button
+                type="button"
+                onClick={onOpenManualInput}
+                className="btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: '#06b6d4',
+                  borderColor: '#06b6d4',
+                  color: '#ffffff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(6, 182, 212, 0.3)',
+                }}
+                title="Input data manual utilisasi dermaga"
+              >
+                <PlusCircle size={13} />
+                <span>+ Input Manual</span>
+              </button>
+            )}
+
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+              <input
+                type="text"
+                className="filter-select"
+                placeholder="Cari cabang / dermaga..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ paddingLeft: '32px', width: '220px' }}
+              />
+            </div>
           </div>
         </div>
 

@@ -30,10 +30,81 @@ function getVal(row: any, name: string): any {
   return undefined;
 }
 
+function matchesPeriod(
+  rowYear: number,
+  rowMonth: number,
+  exactYear?: number,
+  exactMonth?: number,
+  startYear?: number,
+  startMonth?: number,
+  endYear?: number,
+  endMonth?: number
+): boolean {
+  if (exactYear && !startYear) {
+    if (rowYear !== exactYear) return false;
+    if (exactMonth && rowMonth !== exactMonth) return false;
+    return true;
+  }
+  if (startYear || endYear) {
+    const sY = startYear || 2020;
+    const sM = startMonth || 1;
+    const eY = endYear || 2035;
+    const eM = endMonth || 12;
+
+    const rowVal = rowYear * 100 + rowMonth;
+    const startVal = sY * 100 + sM;
+    const endVal = eY * 100 + eM;
+
+    return rowVal >= startVal && rowVal <= endVal;
+  }
+  return true;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const branchCode = searchParams.get('branchCode') || searchParams.get('terminal') || undefined;
+
+    // Period filters
+    const exactYearParam = searchParams.get('year') ? Number(searchParams.get('year')) : undefined;
+    const exactMonthParam = searchParams.get('month') ? Number(searchParams.get('month')) : undefined;
+
+    let startYear = searchParams.get('startYear') ? Number(searchParams.get('startYear')) : undefined;
+    let startMonth = searchParams.get('startMonth') ? Number(searchParams.get('startMonth')) : undefined;
+    let endYear = searchParams.get('endYear') ? Number(searchParams.get('endYear')) : undefined;
+    let endMonth = searchParams.get('endMonth') ? Number(searchParams.get('endMonth')) : undefined;
+
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    if (startDate) {
+      const parts = startDate.split('-').map(Number);
+      if (parts.length >= 2) {
+        startYear = parts[0];
+        startMonth = parts[1];
+      }
+    }
+    if (endDate) {
+      const parts = endDate.split('-').map(Number);
+      if (parts.length >= 2) {
+        endYear = parts[0];
+        endMonth = parts[1];
+      }
+    }
+
+    // Handle named period presets
+    const periodName = searchParams.get('period');
+    if (periodName) {
+      const p = periodName.toUpperCase();
+      if (p.includes('FY 2025') || p.includes('2025')) {
+        startYear = 2025; startMonth = 1; endYear = 2025; endMonth = 12;
+      } else if (p.includes('YTD SEP 2026') || p.includes('SEP 2026')) {
+        startYear = 2026; startMonth = 1; endYear = 2026; endMonth = 9;
+      } else if (p.includes('YTD JUN 2026') || p.includes('JUN 2026')) {
+        startYear = 2026; startMonth = 1; endYear = 2026; endMonth = 6;
+      } else if (p.includes('YTD MAR 2026') || p.includes('MAR 2026')) {
+        startYear = 2026; startMonth = 1; endYear = 2026; endMonth = 3;
+      }
+    }
 
     const excelPath = path.join(process.cwd(), 'data', 'input_data.xlsx');
     if (!fs.existsSync(excelPath)) {
@@ -51,9 +122,11 @@ export async function GET(req: NextRequest) {
       const cabang = parseNumeric(getVal(r, 'CABANG'), 0);
       const yoy = parseNumeric(getVal(r, 'YOY'), 0);
       const rka = parseNumeric(getVal(r, 'RKA'), 0);
+      const year = parseNumeric(getVal(r, 'TAHUN'), 2025);
+      const month = parseNumeric(getVal(r, 'BULAN'), 9);
       return {
-        year: parseNumeric(getVal(r, 'TAHUN'), 2026),
-        month: parseNumeric(getVal(r, 'BULAN'), 9),
+        year,
+        month,
         branchCode: code,
         branchName: String(getVal(r, 'NM_CBG') || '').trim(),
         rekening: String(getVal(r, 'REKENING') || '').trim(),
@@ -69,7 +142,10 @@ export async function GET(req: NextRequest) {
         yoy: Number(yoy.toFixed(1)),
         rka: Number(rka.toFixed(1)),
       };
-    }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
+    }).filter(r => {
+      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+    });
 
     // 2. Opkom (Operasi & Komersial)
     const rawOpkom: any[] = wb.Sheets['opkom'] ? xlsx.utils.sheet_to_json(wb.Sheets['opkom']) : [];
@@ -90,7 +166,10 @@ export async function GET(req: NextRequest) {
         yoy: Number(yoy.toFixed(1)),
         rka: Number(rka.toFixed(1)),
       };
-    }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
+    }).filter(r => {
+      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+    });
 
     // 3. Kinerja
     const rawKin: any[] = wb.Sheets['kinerja'] ? xlsx.utils.sheet_to_json(wb.Sheets['kinerja']) : [];
@@ -106,7 +185,10 @@ export async function GET(req: NextRequest) {
         satuan: String(getVal(r, 'SATUAN') || '').trim(),
         nilai: parseNumeric(getVal(r, 'NILAI'), 0),
       };
-    }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
+    }).filter(r => {
+      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+    });
 
     // 4. Utilisasi
     const rawUtil: any[] = wb.Sheets['utilisasi'] ? xlsx.utils.sheet_to_json(wb.Sheets['utilisasi']) : [];
@@ -122,7 +204,10 @@ export async function GET(req: NextRequest) {
         yor: parseNumeric(getVal(r, 'YOR'), 0),
         sor: parseNumeric(getVal(r, 'SOR'), 0),
       };
-    }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
+    }).filter(r => {
+      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+    });
 
     // 5. Peralatan
     const rawAlat: any[] = wb.Sheets['peralatan'] ? xlsx.utils.sheet_to_json(wb.Sheets['peralatan']) : [];
@@ -141,7 +226,10 @@ export async function GET(req: NextRequest) {
         availability: parseNumeric(getVal(r, 'AVAILABILITY'), 0),
         utilisasi: parseNumeric(getVal(r, 'UTILISASI'), 0),
       };
-    }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
+    }).filter(r => {
+      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+    });
 
     // 6. Fasilitas
     const rawFas: any[] = (wb.Sheets['fasilitas (2)'] || wb.Sheets['fasilitas'])
@@ -163,7 +251,10 @@ export async function GET(req: NextRequest) {
         kapasitas: getVal(r, 'kapasitas') ? String(getVal(r, 'kapasitas')).trim() : null,
         keterangan: getVal(r, 'ket') ? String(getVal(r, 'ket')).trim() : '',
       };
-    }).filter(r => !branchCode || branchCode === 'ALL' || r.branchCode === branchCode);
+    }).filter(r => {
+      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+    });
 
     // 7. Equipment Catalog from master
     const masterSheet = wb.Sheets['master'];

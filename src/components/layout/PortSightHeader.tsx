@@ -26,6 +26,7 @@ import {
   Building2,
   BarChart3,
   ChevronRight,
+  PlusCircle,
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES, MAIN_NAVIGATION_TABS } from '@/lib/constants';
@@ -44,6 +45,7 @@ interface PortSightHeaderProps {
   onLogout?: () => void;
   onExportExcel: () => void;
   onPrint: () => void;
+  onOpenManualInput?: () => void;
   pendingCount?: number;
   theme: 'dark' | 'light';
   onThemeChange: (theme: 'dark' | 'light') => void;
@@ -63,6 +65,7 @@ export default function PortSightHeader({
   onLogout,
   onExportExcel,
   onPrint,
+  onOpenManualInput,
   pendingCount = 0,
   theme,
   onThemeChange,
@@ -91,6 +94,7 @@ export default function PortSightHeader({
 
   const pageHeadings: Record<string, string> = {
     beranda: 'Ringkasan Eksekutif Regional 4',
+    periode: 'Data per Periode & Analisis Rentang Waktu (Multi-Modul)',
     keuangan: 'Dashboard Finance (Keuangan) Pelindo R4',
     opkom: 'Dashboard Opkom (Operasi & Komersial) Pelindo R4',
     kinerja: 'Dashboard Kinerja Pelayanan Operasional Pelindo R4',
@@ -237,6 +241,32 @@ export default function PortSightHeader({
 
           {/* Desktop Only Tools (Hidden on Mobile/Tablet) */}
           <div className="header-desktop-tools">
+            {onOpenManualInput && (
+              <button
+                type="button"
+                onClick={onOpenManualInput}
+                className="btn-primary"
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  borderRadius: 'var(--radius-pill)',
+                  fontWeight: 700,
+                  backgroundColor: 'var(--accent-orange, #f97316)',
+                  borderColor: 'var(--accent-orange, #f97316)',
+                  color: '#ffffff',
+                  boxShadow: '0 2px 6px rgba(249, 115, 22, 0.35)',
+                  cursor: 'pointer',
+                }}
+                title="Input Data Manual (Finance, Opkom, Kinerja, Utilisasi, Peralatan, Fasilitas)"
+              >
+                <PlusCircle size={12} />
+                <span>+ Input Manual</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => onOpenAuth('register')}
@@ -638,7 +668,38 @@ export default function PortSightHeader({
             </div>
 
             {/* Quick Utilities */}
-            <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+            {onOpenManualInput && (
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenManualInput();
+                  }}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontWeight: 700,
+                    backgroundColor: 'var(--accent-orange, #f97316)',
+                    borderColor: 'var(--accent-orange, #f97316)',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <PlusCircle size={13} />
+                  <span>+ Input Data Manual</span>
+                </button>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', borderTop: onOpenManualInput ? 'none' : '1px solid var(--border-subtle)', paddingTop: onOpenManualInput ? '0' : '10px' }}>
               <button
                 type="button"
                 onClick={() => {

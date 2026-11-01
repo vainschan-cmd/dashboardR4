@@ -160,7 +160,7 @@ export interface AuditLog {
   user_id: string;
   user_name: string;
   user_role: string;
-  action: 'LOGIN' | 'UPLOAD' | 'VALIDATE' | 'IMPORT' | 'APPROVE' | 'REVISE' | 'CONFIG_UPDATE' | 'EXPORT';
+  action: 'LOGIN' | 'UPLOAD' | 'VALIDATE' | 'IMPORT' | 'APPROVE' | 'REVISE' | 'CONFIG_UPDATE' | 'EXPORT' | 'UPDATE_MANUAL_DATA' | 'CREATE_MANUAL_DATA';
   entity: string;
   entity_id?: string | null;
   details: string;

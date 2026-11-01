@@ -10,7 +10,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { Wrench, CheckCircle2, Gauge, Cpu, Search, Layers } from 'lucide-react';
+import { Wrench, CheckCircle2, Gauge, Cpu, Search, Layers, PlusCircle } from 'lucide-react';
 
 interface EquipmentRecord {
   year: number;
@@ -35,9 +35,10 @@ interface EquipmentCatalogItem {
 
 interface PortSightPeralatanProps {
   selectedTerminal?: string;
+  onOpenManualInput?: () => void;
 }
 
-export default function PortSightPeralatan({ selectedTerminal = 'ALL' }: PortSightPeralatanProps) {
+export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightPeralatanProps) {
   const [data, setData] = useState<EquipmentRecord[]>([]);
   const [catalog, setCatalog] = useState<EquipmentCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,6 +232,32 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL' }: PortSig
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {onOpenManualInput && (
+                  <button
+                    type="button"
+                    onClick={onOpenManualInput}
+                    className="btn-primary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      backgroundColor: '#a855f7',
+                      borderColor: '#a855f7',
+                      color: '#ffffff',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(168, 85, 247, 0.3)',
+                    }}
+                    title="Input data manual peralatan"
+                  >
+                    <PlusCircle size={13} />
+                    <span>+ Input Manual</span>
+                  </button>
+                )}
+
                 <div style={{ position: 'relative' }}>
                   <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
                   <input

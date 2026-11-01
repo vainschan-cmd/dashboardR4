@@ -10,7 +10,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { Building2, Compass, Layers, Warehouse, Search, Waves } from 'lucide-react';
+import { Building2, Compass, Layers, Warehouse, Search, Waves, PlusCircle } from 'lucide-react';
 
 interface FasilitasItem {
   year: number;
@@ -29,9 +29,10 @@ interface FasilitasItem {
 
 interface PortSightFasilitasProps {
   selectedTerminal?: string;
+  onOpenManualInput?: () => void;
 }
 
-export default function PortSightFasilitas({ selectedTerminal = 'ALL' }: PortSightFasilitasProps) {
+export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightFasilitasProps) {
   const [data, setData] = useState<FasilitasItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJenis, setSelectedJenis] = useState('ALL');
@@ -218,6 +219,32 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL' }: PortSig
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {onOpenManualInput && (
+              <button
+                type="button"
+                onClick={onOpenManualInput}
+                className="btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: '#ec4899',
+                  borderColor: '#ec4899',
+                  color: '#ffffff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(236, 72, 153, 0.3)',
+                }}
+                title="Input data manual fasilitas pelabuhan"
+              >
+                <PlusCircle size={13} />
+                <span>+ Input Manual</span>
+              </button>
+            )}
+
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               <input

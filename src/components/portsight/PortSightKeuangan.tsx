@@ -15,7 +15,7 @@ import {
   BarChart,
   Bar
 } from 'recharts';
-import { DollarSign, TrendingUp, Search, Building2, Layers } from 'lucide-react';
+import { DollarSign, TrendingUp, Search, Building2, Layers, PlusCircle } from 'lucide-react';
 import { formatRupiahFull } from '@/lib/formatters';
 
 interface FinItem {
@@ -39,9 +39,10 @@ interface FinItem {
 
 interface PortSightKeuanganProps {
   selectedTerminal?: string;
+  onOpenManualInput?: () => void;
 }
 
-export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSightKeuanganProps) {
+export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightKeuanganProps) {
   const [data, setData] = useState<FinItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -261,16 +262,44 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL' }: PortSigh
             </div>
           </div>
 
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
-            <input
-              type="text"
-              className="filter-select"
-              placeholder="Cari cabang / pos..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: '32px', width: '220px' }}
-            />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onOpenManualInput && (
+              <button
+                type="button"
+                onClick={onOpenManualInput}
+                className="btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: '#0284c7',
+                  borderColor: '#0284c7',
+                  color: '#ffffff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)',
+                }}
+                title="Input data manual finansial"
+              >
+                <PlusCircle size={13} />
+                <span>+ Input Manual</span>
+              </button>
+            )}
+
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+              <input
+                type="text"
+                className="filter-select"
+                placeholder="Cari cabang / pos..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ paddingLeft: '32px', width: '220px' }}
+              />
+            </div>
           </div>
         </div>
 

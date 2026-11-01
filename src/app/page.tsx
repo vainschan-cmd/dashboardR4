@@ -9,12 +9,14 @@ import PortSightKinerja from '@/components/portsight/PortSightKinerja';
 import PortSightUtilisasi from '@/components/portsight/PortSightUtilisasi';
 import PortSightPeralatan from '@/components/portsight/PortSightPeralatan';
 import PortSightFasilitas from '@/components/portsight/PortSightFasilitas';
+import PortSightPeriode from '@/components/portsight/PortSightPeriode';
 import ImportCenter from '@/components/admin/ImportCenter';
 import VerificationQueue from '@/components/admin/VerificationQueue';
 import TemplateMapping from '@/components/admin/TemplateMapping';
 import MasterDataView from '@/components/admin/MasterDataView';
 import AuditTrailView from '@/components/admin/AuditTrailView';
 import DataRecordsView from '@/components/admin/DataRecordsView';
+import ManualDataInputModal, { ModuleType } from '@/components/admin/ManualDataInputModal';
 import AuthModal from '@/components/auth/AuthModal';
 import LoginScreen from '@/components/auth/LoginScreen';
 import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User } from '@/lib/types';
@@ -52,6 +54,17 @@ export default function DashboardHome() {
 
   // Drilldown Modal
   const [drilldownItem, setDrilldownItem] = useState<any | null>(null);
+
+  // Manual Data Input Modal
+  const [manualInputModalOpen, setManualInputModalOpen] = useState<boolean>(false);
+  const [manualInputDefaultModule, setManualInputDefaultModule] = useState<ModuleType>('finansial');
+
+  const handleOpenManualInput = (moduleName?: string) => {
+    if (moduleName && ['finansial', 'opkom', 'kinerja', 'utilisasi', 'peralatan', 'fasilitas'].includes(moduleName)) {
+      setManualInputDefaultModule(moduleName as ModuleType);
+    }
+    setManualInputModalOpen(true);
+  };
 
   // Load saved theme & user auth from localStorage on mount
   useEffect(() => {
@@ -228,6 +241,7 @@ export default function DashboardHome() {
         onLogout={handleLogout}
         onExportExcel={handleExportExcel}
         onPrint={handlePrint}
+        onOpenManualInput={() => handleOpenManualInput()}
         pendingCount={pendingCount}
         theme={theme}
         onThemeChange={handleThemeChange}
@@ -301,34 +315,61 @@ export default function DashboardHome() {
           />
         )}
 
+        {/* Data per Periode (Range Waktu Multi-Modul) */}
+        {activeTab === 'periode' && (
+          <PortSightPeriode
+            selectedTerminal={selectedTerminal}
+            selectedPeriod={selectedPeriod}
+            onOpenManualInput={(mod) => handleOpenManualInput(mod)}
+          />
+        )}
+
         {/* Finance (Keuangan) */}
         {activeTab === 'keuangan' && (
-          <PortSightKeuangan selectedTerminal={selectedTerminal} />
+          <PortSightKeuangan
+            selectedTerminal={selectedTerminal}
+            onOpenManualInput={() => handleOpenManualInput('finansial')}
+          />
         )}
 
         {/* Opkom (Operasi dan Komersial) */}
         {activeTab === 'opkom' && (
-          <PortSightOpkom selectedTerminal={selectedTerminal} />
+          <PortSightOpkom
+            selectedTerminal={selectedTerminal}
+            onOpenManualInput={() => handleOpenManualInput('opkom')}
+          />
         )}
 
         {/* Kinerja */}
         {activeTab === 'kinerja' && (
-          <PortSightKinerja selectedTerminal={selectedTerminal} />
+          <PortSightKinerja
+            selectedTerminal={selectedTerminal}
+            onOpenManualInput={() => handleOpenManualInput('kinerja')}
+          />
         )}
 
         {/* Utilisasi */}
         {activeTab === 'utilisasi' && (
-          <PortSightUtilisasi selectedTerminal={selectedTerminal} />
+          <PortSightUtilisasi
+            selectedTerminal={selectedTerminal}
+            onOpenManualInput={() => handleOpenManualInput('utilisasi')}
+          />
         )}
 
         {/* Peralatan */}
         {activeTab === 'peralatan' && (
-          <PortSightPeralatan selectedTerminal={selectedTerminal} />
+          <PortSightPeralatan
+            selectedTerminal={selectedTerminal}
+            onOpenManualInput={() => handleOpenManualInput('peralatan')}
+          />
         )}
 
         {/* Fasilitas */}
         {activeTab === 'fasilitas' && (
-          <PortSightFasilitas selectedTerminal={selectedTerminal} />
+          <PortSightFasilitas
+            selectedTerminal={selectedTerminal}
+            onOpenManualInput={() => handleOpenManualInput('fasilitas')}
+          />
         )}
 
         {/* Data Governance & Admin Tools */}
@@ -459,6 +500,16 @@ export default function DashboardHome() {
         currentUser={currentUser}
         initialMode={authModalMode}
         onLoginSuccess={handleLoginSuccess}
+      />
+
+      {/* Manual Data Input Modal (Finance, Opkom, Kinerja, Utilisasi, Peralatan, Fasilitas) */}
+      <ManualDataInputModal
+        isOpen={manualInputModalOpen}
+        onClose={() => setManualInputModalOpen(false)}
+        defaultModule={manualInputDefaultModule}
+        onSuccess={() => {
+          loadMasterData();
+        }}
       />
     </div>
   );

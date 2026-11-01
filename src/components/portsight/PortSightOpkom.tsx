@@ -13,7 +13,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Anchor, Package, Ship, Users, Layers, TrendingUp, Search } from 'lucide-react';
+import { Anchor, Package, Ship, Users, Layers, TrendingUp, Search, PlusCircle } from 'lucide-react';
 import { formatRupiahFull } from '@/lib/formatters';
 
 interface OpkomItem {
@@ -31,6 +31,7 @@ interface OpkomItem {
 
 interface PortSightOpkomProps {
   selectedTerminal?: string;
+  onOpenManualInput?: () => void;
 }
 
 const COMMODITY_COLORS: Record<string, string> = {
@@ -41,7 +42,7 @@ const COMMODITY_COLORS: Record<string, string> = {
   'RUPA-RUPA': '#ec4899',
 };
 
-export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOpkomProps) {
+export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightOpkomProps) {
   const [data, setData] = useState<OpkomItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLayanan, setSelectedLayanan] = useState<string>('ALL');
@@ -254,6 +255,32 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL' }: PortSightOp
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {onOpenManualInput && (
+              <button
+                type="button"
+                onClick={onOpenManualInput}
+                className="btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: '#f59e0b',
+                  borderColor: '#f59e0b',
+                  color: '#ffffff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)',
+                }}
+                title="Input data manual operasi & komersial"
+              >
+                <PlusCircle size={13} />
+                <span>+ Input Manual</span>
+              </button>
+            )}
+
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               <input
