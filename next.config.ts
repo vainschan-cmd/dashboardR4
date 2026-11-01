@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     'localhost',
     '*.local',
     '*.trycloudflare.com',
+    'improved-populations-diane-least.trycloudflare.com',
+    'grow-waiting-edited-innocent.trycloudflare.com',
     '*.loca.lt',
   ],
 };
