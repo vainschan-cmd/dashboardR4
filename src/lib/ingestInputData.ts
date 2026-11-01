@@ -2,7 +2,7 @@ import { getDb } from './db';
 import * as xlsx from 'xlsx';
 import path from 'path';
 import fs from 'fs';
-import { OFFICIAL_BRANCHES } from './constants';
+import { OFFICIAL_BRANCHES, getCanonicalBranchCode } from './constants';
 
 export const BRANCH_CODE_TO_ID: Record<string, string> = {
   'R01': 'term_makassar',
@@ -37,6 +37,10 @@ export const BRANCH_CODE_TO_ID: Record<string, string> = {
 };
 
 export function getBranchId(code: string, name?: string): string {
+  const canonicalCode = getCanonicalBranchCode(code, name);
+  if (BRANCH_CODE_TO_ID[canonicalCode]) {
+    return BRANCH_CODE_TO_ID[canonicalCode];
+  }
   const cleanCode = (code || '').trim().toUpperCase();
   if (BRANCH_CODE_TO_ID[cleanCode]) {
     return BRANCH_CODE_TO_ID[cleanCode];
@@ -508,8 +512,9 @@ export function ingestInputData(filePath?: string) {
 
   let countOpkom = 0;
   for (const row of opkomRows) {
-    const code = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
+    const rawCode = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
     const branchName = String(getField(row, 'NM_CBG') || '').trim();
+    const code = getCanonicalBranchCode(rawCode, branchName);
     const branchId = getBranchId(code, branchName);
     const year = Number(getField(row, 'TAHUN') || 2026);
     const month = Number(getField(row, 'BULAN') || 9);

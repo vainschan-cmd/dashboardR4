@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { Anchor, Package, Ship, Users, Layers, TrendingUp, Search, PlusCircle } from 'lucide-react';
 import { formatRupiahFull } from '@/lib/formatters';
+import { getCanonicalBranchCode } from '@/lib/constants';
 
 interface OpkomItem {
   year: number;
@@ -69,9 +70,11 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
   // Filter based on selected terminal and commodity
   const filteredData = data.filter(d => {
     if (selectedTerminal !== 'ALL') {
+      const canonicalTarget = getCanonicalBranchCode(selectedTerminal);
       const matchTerminal =
         d.branchCode === selectedTerminal ||
-        `term_${d.branchName.toLowerCase().replace(/[^a-z0-9]/g, '_')}` === selectedTerminal;
+        (canonicalTarget && d.branchCode === canonicalTarget) ||
+        `term_${d.branchName.toLowerCase().replace(/[^a-z0-9]/g, '_')}` === selectedTerminal.toLowerCase();
       if (!matchTerminal) return false;
     }
     if (selectedLayanan !== 'ALL' && d.layanan !== selectedLayanan) return false;

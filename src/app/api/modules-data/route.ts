@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import * as xlsx from 'xlsx';
-import { OFFICIAL_BRANCHES } from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from '@/lib/constants';
 
 
 function cleanKey(k: string): string {
@@ -63,7 +63,8 @@ function matchesPeriod(
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const branchCode = searchParams.get('branchCode') || searchParams.get('terminal') || undefined;
+    const rawBranch = searchParams.get('branchCode') || searchParams.get('branch') || searchParams.get('terminal') || undefined;
+    const branchCode = rawBranch && rawBranch !== 'ALL' ? getCanonicalBranchCode(rawBranch) : undefined;
 
     // Period filters
     const exactYearParam = searchParams.get('year') ? Number(searchParams.get('year')) : undefined;
@@ -117,7 +118,10 @@ export async function GET(req: NextRequest) {
     // 1. Finansial
     const rawFin: any[] = wb.Sheets['finansial'] ? xlsx.utils.sheet_to_json(wb.Sheets['finansial']) : [];
     const allFinMapped = rawFin.map(r => {
-      const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawCode = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawName = String(getVal(r, 'NM_CBG') || getVal(r, 'CABANG') || '').trim();
+      const code = getCanonicalBranchCode(rawCode, rawName);
+      const branchName = getBranchNameByCode(code) || rawName;
       const konsolidasi = parseNumeric(getVal(r, 'KONSOLIDASI'), 0);
       const cabang = parseNumeric(getVal(r, 'CABANG'), 0);
       const yoy = parseNumeric(getVal(r, 'YOY'), 0);
@@ -128,7 +132,7 @@ export async function GET(req: NextRequest) {
         year,
         month,
         branchCode: code,
-        branchName: String(getVal(r, 'NM_CBG') || '').trim(),
+        branchName,
         rekening: String(getVal(r, 'REKENING') || '').trim(),
         cabangRp: cabang,
         cabangM: Number((cabang / 1_000_000_000).toFixed(2)),
@@ -172,7 +176,10 @@ export async function GET(req: NextRequest) {
     // 2. Opkom (Operasi & Komersial)
     const rawOpkom: any[] = wb.Sheets['opkom'] ? xlsx.utils.sheet_to_json(wb.Sheets['opkom']) : [];
     const opkom = rawOpkom.map(r => {
-      const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawCode = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawName = String(getVal(r, 'NM_CBG') || '').trim();
+      const code = getCanonicalBranchCode(rawCode, rawName);
+      const branchName = getBranchNameByCode(code) || rawName;
       const jumlahRp = parseNumeric(getVal(r, 'JUMLAH'), 0);
       const yoy = parseNumeric(getVal(r, 'YOY'), 0);
       const rka = parseNumeric(getVal(r, 'RKA'), 0);
@@ -180,7 +187,7 @@ export async function GET(req: NextRequest) {
         year: parseNumeric(getVal(r, 'TAHUN'), 2026),
         month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
-        branchName: String(getVal(r, 'NM_CBG') || '').trim(),
+        branchName,
         layanan: String(getVal(r, 'LAYANAN') || '').trim().toUpperCase(),
         satuan: String(getVal(r, 'SATUAN') || 'Rp').trim(),
         jumlahRp,
@@ -196,12 +203,15 @@ export async function GET(req: NextRequest) {
     // 3. Kinerja
     const rawKin: any[] = wb.Sheets['kinerja'] ? xlsx.utils.sheet_to_json(wb.Sheets['kinerja']) : [];
     const kinerja = rawKin.map(r => {
-      const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawCode = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawName = String(getVal(r, 'NM_CBG') || '').trim();
+      const code = getCanonicalBranchCode(rawCode, rawName);
+      const branchName = getBranchNameByCode(code) || rawName;
       return {
         year: parseNumeric(getVal(r, 'TAHUN'), 2026),
         month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
-        branchName: String(getVal(r, 'NM_CBG') || '').trim(),
+        branchName,
         kdKine: String(getVal(r, 'KD_KINE') || '').trim(),
         nmKine: String(getVal(r, 'NM_KINE') || '').trim().toUpperCase(),
         satuan: String(getVal(r, 'SATUAN') || '').trim(),
@@ -215,12 +225,15 @@ export async function GET(req: NextRequest) {
     // 4. Utilisasi
     const rawUtil: any[] = wb.Sheets['utilisasi'] ? xlsx.utils.sheet_to_json(wb.Sheets['utilisasi']) : [];
     const utilisasi = rawUtil.map(r => {
-      const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawCode = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawName = String(getVal(r, 'NM_CBG') || '').trim();
+      const code = getCanonicalBranchCode(rawCode, rawName);
+      const branchName = getBranchNameByCode(code) || rawName;
       return {
         year: parseNumeric(getVal(r, 'TAHUN'), 2026),
         month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
-        branchName: String(getVal(r, 'NM_CBG') || '').trim(),
+        branchName,
         dermaga: String(getVal(r, 'DERMAGA') || 'MULTIPURPOSE').trim(),
         bor: parseNumeric(getVal(r, 'BOR'), 0),
         yor: parseNumeric(getVal(r, 'YOR'), 0),
@@ -234,12 +247,15 @@ export async function GET(req: NextRequest) {
     // 5. Peralatan
     const rawAlat: any[] = wb.Sheets['peralatan'] ? xlsx.utils.sheet_to_json(wb.Sheets['peralatan']) : [];
     const peralatan = rawAlat.map(r => {
-      const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawCode = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawName = String(getVal(r, 'NM_CBG') || '').trim();
+      const code = getCanonicalBranchCode(rawCode, rawName);
+      const branchName = getBranchNameByCode(code) || rawName;
       return {
         year: parseNumeric(getVal(r, 'TAHUN'), 2026),
         month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
-        branchName: String(getVal(r, 'NM_CBG') || '').trim(),
+        branchName,
         kdAlat: String(getVal(r, 'KD_ALAT') || '').trim(),
         nmAlat: String(getVal(r, 'NM_ALAT') || '').trim(),
         singkatan: String(getVal(r, 'SINGKATAN_ALAT') || '').trim(),
@@ -258,12 +274,15 @@ export async function GET(req: NextRequest) {
       ? xlsx.utils.sheet_to_json(wb.Sheets['fasilitas (2)'] || wb.Sheets['fasilitas'])
       : [];
     const fasilitas = rawFas.map(r => {
-      const code = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawCode = String(getVal(r, 'KODE_CBG') || '').trim().toUpperCase();
+      const rawName = String(getVal(r, 'NM_CBG') || '').trim();
+      const code = getCanonicalBranchCode(rawCode, rawName);
+      const branchName = getBranchNameByCode(code) || rawName;
       return {
         year: parseNumeric(getVal(r, 'TAHUN'), 2026),
         month: parseNumeric(getVal(r, 'BULAN'), 9),
         branchCode: code,
-        branchName: String(getVal(r, 'NM_CBG') || '').trim(),
+        branchName,
         namaFasilitas: String(getVal(r, 'nm_pasfel') || getVal(r, 'nm_faspel') || 'Fasilitas').trim(),
         jenisFasilitas: String(getVal(r, 'jns_faspel') || '').trim(),
         panjangM: parseNumeric(getVal(r, 'panjang'), 0),

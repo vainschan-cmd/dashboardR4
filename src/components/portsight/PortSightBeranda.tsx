@@ -87,28 +87,38 @@ export default function PortSightBeranda({
   // Filter dataset by selected branch or use all
   const filteredFin = useMemo(() => {
     if (isAll) return finansial;
-    return finansial.filter(f => f.branchCode === selectedTerminal);
-  }, [isAll, selectedTerminal, finansial]);
+    const termCode = selectedTerminal.toUpperCase();
+    const branchName = activeBranch?.name?.toLowerCase();
+    return finansial.filter(f => f.branchCode === termCode || (branchName && f.branchName && f.branchName.toLowerCase() === branchName));
+  }, [isAll, selectedTerminal, activeBranch, finansial]);
 
   const filteredOpkom = useMemo(() => {
     if (isAll) return opkom;
-    return opkom.filter(o => o.branchCode === selectedTerminal);
-  }, [isAll, selectedTerminal, opkom]);
+    const termCode = selectedTerminal.toUpperCase();
+    const branchName = activeBranch?.name?.toLowerCase();
+    return opkom.filter(o => o.branchCode === termCode || (branchName && o.branchName && o.branchName.toLowerCase() === branchName));
+  }, [isAll, selectedTerminal, activeBranch, opkom]);
 
   const filteredPeralatan = useMemo(() => {
     if (isAll) return peralatan;
-    return peralatan.filter(p => p.branchCode === selectedTerminal);
-  }, [isAll, selectedTerminal, peralatan]);
+    const termCode = selectedTerminal.toUpperCase();
+    const branchName = activeBranch?.name?.toLowerCase();
+    return peralatan.filter(p => p.branchCode === termCode || (branchName && p.branchName && p.branchName.toLowerCase() === branchName));
+  }, [isAll, selectedTerminal, activeBranch, peralatan]);
 
   const filteredKinerja = useMemo(() => {
     if (isAll) return kinerja;
-    return kinerja.filter(k => k.branchCode === selectedTerminal);
-  }, [isAll, selectedTerminal, kinerja]);
+    const termCode = selectedTerminal.toUpperCase();
+    const branchName = activeBranch?.name?.toLowerCase();
+    return kinerja.filter(k => k.branchCode === termCode || (branchName && k.branchName && k.branchName.toLowerCase() === branchName));
+  }, [isAll, selectedTerminal, activeBranch, kinerja]);
 
   const filteredUtilisasi = useMemo(() => {
     if (isAll) return utilisasi;
-    return utilisasi.filter(u => u.branchCode === selectedTerminal);
-  }, [isAll, selectedTerminal, utilisasi]);
+    const termCode = selectedTerminal.toUpperCase();
+    const branchName = activeBranch?.name?.toLowerCase();
+    return utilisasi.filter(u => u.branchCode === termCode || (branchName && u.branchName && u.branchName.toLowerCase() === branchName));
+  }, [isAll, selectedTerminal, activeBranch, utilisasi]);
 
   // 1. Calculate 6 Top KPI Metrics (Dynamic per branch or total Regional 4)
   const topKpis = useMemo(() => {
@@ -387,12 +397,16 @@ export default function PortSightBeranda({
   const branchCommoditiesBreakdown = useMemo(() => {
     if (isAll) return [];
     
-    // Group opkom by layanan
+    // Group opkom by layanan (prioritize commercial revenue Rp so units are not mixed)
     const groups: Record<string, { jumlah: number; satuan: string; rka: number[]; yoy: number[] }> = {};
-    filteredOpkom.forEach(o => {
+    const targetRows = filteredOpkom.some(o => o.satuan === 'Rp')
+      ? filteredOpkom.filter(o => o.satuan === 'Rp')
+      : filteredOpkom;
+
+    targetRows.forEach(o => {
       const lay = o.layanan || 'LAINNYA';
       if (!groups[lay]) {
-        groups[lay] = { jumlah: 0, satuan: o.satuan || '', rka: [], yoy: [] };
+        groups[lay] = { jumlah: 0, satuan: o.satuan || 'Rp', rka: [], yoy: [] };
       }
       groups[lay].jumlah += (o.jumlahRp || 0);
       if (o.rka) groups[lay].rka.push(o.rka);
