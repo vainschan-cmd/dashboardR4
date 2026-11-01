@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import * as xlsx from 'xlsx';
 import { User, UserRole } from './types';
+import { OFFICIAL_BRANCHES } from './constants';
 
 export const MASTER_USER_FILE = 'master_user_pic.xlsx';
 export const DRIVE_ACCOUNT = 'regdashr@gmail.com';
@@ -150,12 +151,74 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   },
 ];
 
+export function normalizeRole(raw: any): UserRole {
+  if (!raw) return 'pic_cabang';
+  const str = String(raw).trim().toLowerCase();
+  if (str.includes('super') || str === 'super_admin' || str === 'superadmin') return 'super_admin';
+  if (str.includes('regional 4') || str.includes('admin regional') || str === 'admin_regional') return 'admin_regional';
+  if (str.includes('dept') || str.includes('regional') || str === 'pic_dept_regional') return 'pic_dept_regional';
+  if (str.includes('viewer') || str.includes('bod') || str === 'viewer') return 'viewer';
+  if (str.includes('cabang') || str === 'pic_cabang') return 'pic_cabang';
+  return 'pic_cabang';
+}
+
+export function normalizeBranch(raw: any): string {
+  if (!raw) return 'R99';
+  const str = String(raw).trim();
+  const codeMatch = str.match(/\b(R\d{2})\b/i);
+  if (codeMatch) {
+    return codeMatch[1].toUpperCase();
+  }
+  const lower = str.toLowerCase();
+  for (const b of OFFICIAL_BRANCHES) {
+    if (lower.includes(b.name.toLowerCase())) {
+      return b.code;
+    }
+  }
+  if (lower.includes('regional') || lower.includes('pusat')) {
+    return 'R99';
+  }
+  return 'R99';
+}
+
 export function getMasterUserSpreadsheetPath(): string {
   const dataDir = path.join(process.cwd(), 'data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
   return path.join(dataDir, MASTER_USER_FILE);
+}
+
+/**
+ * Find the latest master_user_pic.xlsx between Downloads folder and data folder
+ */
+export function findLatestMasterUserSpreadsheet(): { path: string; source: 'downloads' | 'data'; mtime: Date } | null {
+  const downloadsPath = path.join(os.homedir(), 'Downloads', MASTER_USER_FILE);
+  const dataPath = path.join(process.cwd(), 'data', MASTER_USER_FILE);
+
+  let downloadsStat: fs.Stats | null = null;
+  let dataStat: fs.Stats | null = null;
+
+  if (fs.existsSync(downloadsPath)) {
+    try { downloadsStat = fs.statSync(downloadsPath); } catch {}
+  }
+  if (fs.existsSync(dataPath)) {
+    try { dataStat = fs.statSync(dataPath); } catch {}
+  }
+
+  if (downloadsStat && dataStat) {
+    if (downloadsStat.mtimeMs >= dataStat.mtimeMs) {
+      return { path: downloadsPath, source: 'downloads', mtime: downloadsStat.mtime };
+    } else {
+      return { path: dataPath, source: 'data', mtime: dataStat.mtime };
+    }
+  } else if (downloadsStat) {
+    return { path: downloadsPath, source: 'downloads', mtime: downloadsStat.mtime };
+  } else if (dataStat) {
+    return { path: dataPath, source: 'data', mtime: dataStat.mtime };
+  }
+
+  return null;
 }
 
 /**
@@ -171,7 +234,7 @@ export function exportUsersToSpreadsheet(users: User[]): string {
     'DIVISI': u.divisi || '-',
     'DEPARTEMEN': u.departemen || '-',
     'HAK AKSES (ROLE)': u.role,
-    'CABANG': u.branch_id || 'R99 - Regional 4',
+    'CABANG': u.branch_id || 'R99',
     'EMAIL': u.email || `${(u.nipp || u.username)}@pelindo.co.id`,
     'STATUS': u.active ? 'AKTIF' : 'NONAKTIF',
     'TANGGAL TERDAFTAR': u.created_at || new Date().toISOString().split('T')[0],
@@ -254,6 +317,133 @@ export function ensureMasterUserSpreadsheet(): string {
     exportUsersToSpreadsheet(initialUsers);
   }
   return filePath;
+}
+
+export interface ImportUserResult {
+  totalInSheet: number;
+  createdCount: number;
+  updatedCount: number;
+  sourcePath: string;
+  sourceType: 'downloads' | 'data' | 'buffer' | 'fallback';
+  users: User[];
+}
+
+/**
+ * Read and import users from spreadsheet into database (Pull from My Drive)
+ */
+export function importUsersFromSpreadsheet(customInput?: string | Buffer): ImportUserResult {
+  let wb: xlsx.WorkBook;
+  let sourcePath = '';
+  let sourceType: 'downloads' | 'data' | 'buffer' | 'fallback' = 'data';
+
+  if (Buffer.isBuffer(customInput)) {
+    wb = xlsx.read(customInput, { type: 'buffer' });
+    sourceType = 'buffer';
+    sourcePath = 'Uploaded Buffer';
+  } else if (typeof customInput === 'string' && fs.existsSync(customInput)) {
+    sourcePath = customInput;
+    sourceType = customInput.includes('Downloads') ? 'downloads' : 'data';
+    const buf = fs.readFileSync(customInput);
+    wb = xlsx.read(buf, { type: 'buffer' });
+  } else {
+    const latest = findLatestMasterUserSpreadsheet();
+    if (latest && fs.existsSync(latest.path)) {
+      sourcePath = latest.path;
+      sourceType = latest.source;
+      const buf = fs.readFileSync(latest.path);
+      wb = xlsx.read(buf, { type: 'buffer' });
+    } else {
+      const defaultPath = ensureMasterUserSpreadsheet();
+      sourcePath = defaultPath;
+      sourceType = 'fallback';
+      const buf = fs.readFileSync(defaultPath);
+      wb = xlsx.read(buf, { type: 'buffer' });
+    }
+  }
+
+  const sheetName = wb.SheetNames.includes('MASTER_USER_PIC') ? 'MASTER_USER_PIC' : wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  if (!sheet) {
+    throw new Error(`Sheet ${sheetName} tidak ditemukan dalam file spreadsheet.`);
+  }
+
+  const rawRows: any[] = xlsx.utils.sheet_to_json(sheet);
+  if (!rawRows || rawRows.length === 0) {
+    throw new Error('Spreadsheet kosong atau tidak memiliki data pengguna pada sheet pertama.');
+  }
+
+  const { dbQueries } = require('./db');
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const row of rawRows) {
+    const rawNipp = row['NIPP (USERNAME)'] || row['NIPP'] || row['nipp'] || row['Username'] || row['username'] || row['NIP'] || row['nip'];
+    if (!rawNipp) continue;
+
+    const nipp = String(rawNipp).trim();
+    const rawName = row['NAMA LENGKAP'] || row['NAMA PEGAWAI'] || row['Nama'] || row['name'] || row['NAMA'];
+    const name = rawName ? String(rawName).trim() : `Pegawai ${nipp}`;
+    const divisi = String(row['DIVISI'] || row['divisi'] || row['Divisi'] || '-').trim();
+    const departemen = String(row['DEPARTEMEN'] || row['departemen'] || row['Departemen'] || '-').trim();
+    const rawRole = row['HAK AKSES (ROLE)'] || row['HAK AKSES'] || row['ROLE'] || row['role'] || row['Role'];
+    const role = normalizeRole(rawRole);
+    const rawBranch = row['CABANG'] || row['PENUGASAN CABANG'] || row['cabang'] || row['branch_id'];
+    const branch_id = normalizeBranch(rawBranch);
+    const rawEmail = row['EMAIL'] || row['email'];
+    const email = rawEmail ? String(rawEmail).trim() : `${nipp}@pelindo.co.id`;
+
+    const rawStatus = row['STATUS'] || row['status'];
+    let active = true;
+    if (typeof rawStatus === 'boolean') {
+      active = rawStatus;
+    } else if (rawStatus !== undefined && rawStatus !== null) {
+      const s = String(rawStatus).trim().toUpperCase();
+      if (s.includes('NON') || s === '0' || s === 'FALSE' || s === 'INACTIVE' || s === 'TIDAK') {
+        active = false;
+      } else {
+        active = true;
+      }
+    }
+
+    const existing = dbQueries.getUserByNipp(nipp);
+    if (existing) {
+      dbQueries.updateUser(existing.id, {
+        name,
+        nipp,
+        divisi,
+        departemen,
+        role,
+        branch_id,
+        email,
+        active,
+      });
+      updatedCount++;
+    } else {
+      dbQueries.createUser({
+        nipp,
+        name,
+        divisi,
+        departemen,
+        role,
+        branch_id,
+        email,
+        password: 'password123',
+      });
+      createdCount++;
+    }
+  }
+
+  const allUsers: User[] = dbQueries.getUsers();
+  exportUsersToSpreadsheet(allUsers);
+
+  return {
+    totalInSheet: rawRows.length,
+    createdCount,
+    updatedCount,
+    sourcePath,
+    sourceType,
+    users: allUsers,
+  };
 }
 
 /**

@@ -1,8 +1,32 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Database, Building2, Layers, Target, Wrench, CheckCircle2, UserCheck, UserPlus, Download, RefreshCw, FileSpreadsheet, Trash2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  Database,
+  Building2,
+  Layers,
+  Target,
+  Wrench,
+  CheckCircle2,
+  UserCheck,
+  UserPlus,
+  Download,
+  RefreshCw,
+  FileSpreadsheet,
+  Trash2,
+  Edit2,
+  ArrowDownToLine,
+  UploadCloud,
+  X,
+  Save,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Upload
+} from 'lucide-react';
 import { Branch, Department, KPIIndicator, EquipmentItem, User, UserRole } from '@/lib/types';
+import { OFFICIAL_BRANCHES } from '@/lib/constants';
 import AuthModal from '@/components/auth/AuthModal';
 
 interface MasterDataViewProps {
@@ -25,30 +49,203 @@ export default function MasterDataView({
   const [activeTab, setActiveTab] = useState<'kpi' | 'branches' | 'departments' | 'equipment' | 'users'>('users');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('ALL');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [syncingDrive, setSyncingDrive] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // Edit user modal state
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editNipp, setEditNipp] = useState('');
+  const [editDivisi, setEditDivisi] = useState('');
+  const [editDepartemen, setEditDepartemen] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('pic_cabang');
+  const [editBranch, setEditBranch] = useState('R99');
+  const [editActive, setEditActive] = useState(true);
+  const [editPassword, setEditPassword] = useState('');
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Dual sync state (Ambil dari Drive vs Sinkron ke Drive)
+  const [pullingDrive, setPullingDrive] = useState(false);
+  const [pushingDrive, setPushingDrive] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const filteredIndicators = indicators.filter(i =>
     selectedDeptFilter === 'ALL' || i.department_id === selectedDeptFilter
   );
 
-  const handleSyncDrive = async () => {
-    setSyncingDrive(true);
-    setSyncMessage(null);
+  // Opsi 1: Ambil Data dari My Drive (Pull / Import dari Spreadsheet)
+  const handlePullFromDrive = async () => {
+    setPullingDrive(true);
+    setSyncStatus(null);
     try {
-      const res = await fetch('/api/users/sync-drive', { method: 'POST' });
+      const res = await fetch('/api/users/sync-drive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pull' }),
+      });
       const data = await res.json();
       if (data.success) {
-        setSyncMessage(`Spreadsheet master_user_pic.xlsx berhasil diperbarui (${data.totalUsers} PIC) dan disalin ke folder Downloads. Siap di-upload ke My Drive (regdashr@gmail.com).`);
+        setSyncStatus({
+          type: 'success',
+          message: data.message || `Berhasil mengambil data dari spreadsheet My Drive! Total ${data.totalUsers} PIC tersinkronisasi.`,
+        });
         if (onRefreshUsers) onRefreshUsers();
       } else {
-        setSyncMessage(`Gagal sinkron: ${data.error}`);
+        setSyncStatus({
+          type: 'error',
+          message: `Gagal mengambil data dari spreadsheet: ${data.error}`,
+        });
       }
     } catch (e: any) {
-      setSyncMessage(`Gagal sinkron: ${e.message}`);
+      setSyncStatus({
+        type: 'error',
+        message: `Gagal mengambil data: ${e.message}`,
+      });
     } finally {
-      setSyncingDrive(false);
-      setTimeout(() => setSyncMessage(null), 4000);
+      setPullingDrive(false);
+      setTimeout(() => setSyncStatus(null), 5000);
+    }
+  };
+
+  // Opsi 2: Sinkron ke My Drive (Push / Export ke Spreadsheet)
+  const handlePushToDrive = async () => {
+    setPushingDrive(true);
+    setSyncStatus(null);
+    try {
+      const res = await fetch('/api/users/sync-drive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'push' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncStatus({
+          type: 'success',
+          message: `Spreadsheet master_user_pic.xlsx berhasil diperbarui (${data.totalUsers} PIC) dan disalin ke folder Downloads. Siap di-upload ke My Drive (regdashr@gmail.com).`,
+        });
+        if (onRefreshUsers) onRefreshUsers();
+      } else {
+        setSyncStatus({
+          type: 'error',
+          message: `Gagal sinkron ke My Drive: ${data.error}`,
+        });
+      }
+    } catch (e: any) {
+      setSyncStatus({
+        type: 'error',
+        message: `Gagal sinkron: ${e.message}`,
+      });
+    } finally {
+      setPushingDrive(false);
+      setTimeout(() => setSyncStatus(null), 5000);
+    }
+  };
+
+  // Opsional: Upload file spreadsheet .xlsx manual
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPullingDrive(true);
+    setSyncStatus(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/users/sync-drive', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncStatus({
+          type: 'success',
+          message: data.message || `Berhasil mengimpor ${file.name}!`,
+        });
+        if (onRefreshUsers) onRefreshUsers();
+      } else {
+        setSyncStatus({
+          type: 'error',
+          message: `Gagal mengimpor file: ${data.error}`,
+        });
+      }
+    } catch (err: any) {
+      setSyncStatus({
+        type: 'error',
+        message: `Gagal upload file: ${err.message}`,
+      });
+    } finally {
+      setPullingDrive(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setTimeout(() => setSyncStatus(null), 5000);
+    }
+  };
+
+  // Buka modal Edit PIC
+  const handleOpenEdit = (u: User) => {
+    setEditingUser(u);
+    setEditName(u.name);
+    setEditNipp(u.nipp || u.username);
+    setEditDivisi(u.divisi || '');
+    setEditDepartemen(u.departemen || '');
+    setEditRole(u.role || 'pic_cabang');
+    setEditBranch(u.branch_id || 'R99');
+    setEditActive(u.active !== undefined ? Boolean(u.active) : true);
+    setEditPassword('');
+    setShowEditPassword(false);
+    setEditError(null);
+    setIsEditUserOpen(true);
+  };
+
+  // Simpan perubahan Edit PIC
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    if (!editName.trim() || !editDivisi.trim() || !editDepartemen.trim()) {
+      setEditError('Nama, Divisi, dan Departemen wajib diisi!');
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError(null);
+
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingUser.id,
+          name: editName.trim(),
+          nipp: editNipp.trim() || editingUser.nipp,
+          divisi: editDivisi.trim(),
+          departemen: editDepartemen.trim(),
+          role: editRole,
+          branch_id: editBranch,
+          active: editActive,
+          password: editPassword.trim() ? editPassword.trim() : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setEditError(data.error || 'Gagal menyimpan perubahan.');
+      } else {
+        setIsEditUserOpen(false);
+        setEditingUser(null);
+        setSyncStatus({
+          type: 'success',
+          message: `Data PIC ${editName} (NIPP: ${editNipp}) berhasil diperbarui dan disinkronkan ke Spreadsheet My Drive!`,
+        });
+        if (onRefreshUsers) onRefreshUsers();
+        setTimeout(() => setSyncStatus(null), 4500);
+      }
+    } catch (err: any) {
+      setEditError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -58,7 +255,12 @@ export default function MasterDataView({
       const res = await fetch(`/api/users?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
+        setSyncStatus({
+          type: 'success',
+          message: `User PIC ${name} berhasil dihapus dan spreadsheet diperbarui.`,
+        });
         if (onRefreshUsers) onRefreshUsers();
+        setTimeout(() => setSyncStatus(null), 4000);
       } else {
         alert(data.error || 'Gagal menghapus user');
       }
@@ -173,18 +375,53 @@ export default function MasterDataView({
                   <span>Tambah PIC Baru</span>
                 </button>
 
+                {/* Opsi 1: Ambil Data dari My Drive */}
                 <button
                   type="button"
-                  onClick={handleSyncDrive}
-                  disabled={syncingDrive}
+                  onClick={handlePullFromDrive}
+                  disabled={pullingDrive || pushingDrive}
                   className="btn-dark"
-                  style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  title="Sinkronkan data akun ke file master_user_pic.xlsx di My Drive"
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderColor: 'rgba(56, 189, 248, 0.4)',
+                    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                    color: '#38bdf8',
+                    fontWeight: 600,
+                  }}
+                  title="Ambil dan sinkronkan data PIC dari file spreadsheet master_user_pic.xlsx di My Drive"
                 >
-                  <RefreshCw size={13} className={syncingDrive ? 'spin' : ''} />
-                  <span>{syncingDrive ? 'Menyinkronkan...' : 'Sinkron ke My Drive'}</span>
+                  <ArrowDownToLine size={13} className={pullingDrive ? 'spin' : ''} />
+                  <span>{pullingDrive ? 'Mengambil Data...' : 'Ambil dari My Drive'}</span>
                 </button>
 
+                {/* Opsi 2: Sinkron ke My Drive */}
+                <button
+                  type="button"
+                  onClick={handlePushToDrive}
+                  disabled={pushingDrive || pullingDrive}
+                  className="btn-dark"
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderColor: 'rgba(16, 185, 129, 0.4)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    color: '#34d399',
+                    fontWeight: 600,
+                  }}
+                  title="Kirim dan perbarui data PIC ke file master_user_pic.xlsx di My Drive"
+                >
+                  <UploadCloud size={13} className={pushingDrive ? 'spin' : ''} />
+                  <span>{pushingDrive ? 'Menyinkronkan...' : 'Sinkron ke My Drive'}</span>
+                </button>
+
+                {/* Unduh Excel */}
                 <a
                   href="/api/users/export"
                   download="master_user_pic.xlsx"
@@ -195,26 +432,46 @@ export default function MasterDataView({
                   <Download size={13} />
                   <span>Download .xlsx</span>
                 </a>
+
+                {/* Unggah File Manual */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".xlsx,.xls"
+                  onChange={handleUploadFile}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn-dark"
+                  disabled={pullingDrive || pushingDrive}
+                  style={{ padding: '6px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px', opacity: 0.85 }}
+                  title="Unggah file .xlsx PIC lain dari komputer Anda"
+                >
+                  <Upload size={12} />
+                  <span>Pilih File...</span>
+                </button>
               </div>
             </div>
 
             {/* Sync Notification Banner */}
-            {syncMessage && (
+            {syncStatus && (
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   padding: '9px 14px',
-                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                  border: '1px solid #10b981',
+                  backgroundColor: syncStatus.type === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                  border: `1px solid ${syncStatus.type === 'success' ? '#10b981' : '#ef4444'}`,
                   borderRadius: '6px',
-                  color: '#34d399',
+                  color: syncStatus.type === 'success' ? '#34d399' : '#f87171',
                   fontSize: '12px',
                 }}
               >
-                <CheckCircle2 size={15} />
-                <span>{syncMessage}</span>
+                {syncStatus.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                <span>{syncStatus.message}</span>
               </div>
             )}
 
@@ -230,7 +487,7 @@ export default function MasterDataView({
                     <th>Hak Akses / Role</th>
                     <th>Penugasan Cabang</th>
                     <th style={{ textAlign: 'center' }}>Status</th>
-                    <th style={{ textAlign: 'center', width: '80px' }}>Aksi</th>
+                    <th style={{ textAlign: 'center', width: '120px' }}>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -272,25 +529,56 @@ export default function MasterDataView({
                           </span>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {u.username !== '10001' && u.username !== 'superadmin' ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                            {/* Tombol Edit */}
                             <button
                               type="button"
-                              onClick={() => handleDeleteUser(u.id, u.name)}
+                              onClick={() => handleOpenEdit(u)}
                               style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#f87171',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 8px',
+                                backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                                border: '1px solid rgba(56, 189, 248, 0.35)',
+                                borderRadius: '5px',
+                                color: '#38bdf8',
+                                fontSize: '11px',
+                                fontWeight: 600,
                                 cursor: 'pointer',
-                                padding: '4px',
-                                borderRadius: '4px',
+                                transition: 'all 0.15s ease',
                               }}
-                              title={`Hapus user ${u.name}`}
+                              title={`Edit data PIC ${u.name}`}
                             >
-                              <Trash2 size={14} />
+                              <Edit2 size={12} />
+                              <span>Edit</span>
                             </button>
-                          ) : (
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sistem</span>
-                          )}
+
+                            {/* Tombol Hapus */}
+                            {u.username !== '10001' && u.username !== 'superadmin' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(u.id, u.name)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: '4px 6px',
+                                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                                  borderRadius: '5px',
+                                  color: '#f87171',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                title={`Hapus user ${u.name}`}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sistem</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -316,6 +604,270 @@ export default function MasterDataView({
                 if (onRefreshUsers) onRefreshUsers();
               }}
             />
+
+            {/* Modal Edit Data PIC */}
+            {isEditUserOpen && editingUser && (
+              <div className="modal-overlay" onClick={() => setIsEditUserOpen(false)}>
+                <div
+                  className="modal-content"
+                  style={{ maxWidth: '580px', width: '100%', overflow: 'hidden' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header Modal */}
+                  <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#38bdf8',
+                        }}
+                      >
+                        <Edit2 size={18} />
+                      </div>
+                      <div>
+                        <h3 className="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+                          Edit Data Pegawai / PIC
+                        </h3>
+                        <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                          NIPP: <strong style={{ color: 'var(--accent-cyan)' }}>{editingUser.nipp || editingUser.username}</strong> • ID Akun: {editingUser.id}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsEditUserOpen(false)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                      }}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Body Modal Form */}
+                  <form onSubmit={handleSaveEdit}>
+                    <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {editError && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px',
+                            padding: '10px 14px',
+                            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid #ef4444',
+                            borderRadius: '8px',
+                            color: '#f87171',
+                            fontSize: '12px',
+                          }}
+                        >
+                          <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
+                          <span>{editError}</span>
+                        </div>
+                      )}
+
+                      {/* Row 1: NIPP & Status */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                            NIPP (Username)
+                          </label>
+                          <input
+                            type="text"
+                            value={editNipp}
+                            onChange={(e) => setEditNipp(e.target.value)}
+                            className="form-control"
+                            style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                            Status Akun
+                          </label>
+                          <select
+                            value={editActive ? 'active' : 'inactive'}
+                            onChange={(e) => setEditActive(e.target.value === 'active')}
+                            className="form-control"
+                          >
+                            <option value="active">Aktif (Dapat Login & Akses)</option>
+                            <option value="inactive">Nonaktif (Akses Dinonaktifkan)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Nama Lengkap */}
+                      <div className="form-group">
+                        <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                          Nama Pegawai & Gelar
+                        </label>
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="form-control"
+                          placeholder="Contoh: Capt. Rudi Hartono, M.Mar."
+                          required
+                        />
+                      </div>
+
+                      {/* Row 3: Divisi & Departemen */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                            Divisi
+                          </label>
+                          <input
+                            type="text"
+                            value={editDivisi}
+                            onChange={(e) => setEditDivisi(e.target.value)}
+                            className="form-control"
+                            placeholder="Contoh: Divisi Operasi & Pelayanan Kapal"
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                            Departemen
+                          </label>
+                          <input
+                            type="text"
+                            value={editDepartemen}
+                            onChange={(e) => setEditDepartemen(e.target.value)}
+                            className="form-control"
+                            placeholder="Contoh: Departemen Pelayanan Kapal"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Row 4: Hak Akses & Penugasan Cabang */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                            Hak Akses / Role
+                          </label>
+                          <select
+                            value={editRole}
+                            onChange={(e) => setEditRole(e.target.value as UserRole)}
+                            className="form-control"
+                          >
+                            <option value="super_admin">Super Admin (Akses Penuh)</option>
+                            <option value="admin_regional">Admin Regional 4 (Verifikator Regional)</option>
+                            <option value="pic_dept_regional">PIC Dept Regional (PIC Departemen Pusat)</option>
+                            <option value="pic_cabang">PIC Cabang (PIC Operasional Cabang)</option>
+                            <option value="viewer">BOD / Viewer (Eksekutif Read-Only)</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                            Penugasan Cabang
+                          </label>
+                          <select
+                            value={editBranch}
+                            onChange={(e) => setEditBranch(e.target.value)}
+                            className="form-control"
+                          >
+                            {OFFICIAL_BRANCHES.map((b) => (
+                              <option key={b.code} value={b.code}>
+                                {b.code} - {b.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Row 5: Reset / Ganti Password (Opsional) */}
+                      <div className="form-group" style={{ backgroundColor: 'var(--bg-inner)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Lock size={13} color="var(--accent-blue)" />
+                            <span>Ubah Kata Sandi (Opsional)</span>
+                          </label>
+                          <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                            Kosongkan jika tidak ingin mengubah kata sandi
+                          </span>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type={showEditPassword ? 'text' : 'password'}
+                            value={editPassword}
+                            onChange={(e) => setEditPassword(e.target.value)}
+                            className="form-control"
+                            placeholder="Masukkan kata sandi baru jika ingin mereset..."
+                            style={{ paddingRight: '36px' }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowEditPassword(!showEditPassword)}
+                            style={{
+                              position: 'absolute',
+                              right: '10px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: 0,
+                            }}
+                          >
+                            {showEditPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Modal Actions */}
+                    <div
+                      className="modal-footer"
+                      style={{
+                        borderTop: '1px solid var(--border-subtle)',
+                        padding: '14px 20px',
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: '10px',
+                        backgroundColor: 'var(--bg-inner)',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setIsEditUserOpen(false)}
+                        className="btn-dark"
+                        disabled={editSaving}
+                        style={{ padding: '8px 16px', fontSize: '12.5px' }}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={editSaving}
+                        style={{
+                          padding: '8px 18px',
+                          fontSize: '12.5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Save size={14} />
+                        <span>{editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

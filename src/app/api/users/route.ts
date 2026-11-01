@@ -95,6 +95,71 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { id, name, nipp, divisi, departemen, password, role, branch_id, department_id, email, active } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'User ID wajib disertakan.' },
+        { status: 400 }
+      );
+    }
+
+    if (!name || !divisi || !departemen) {
+      return NextResponse.json(
+        { success: false, error: 'Kolom Nama, Divisi, dan Departemen wajib diisi!' },
+        { status: 400 }
+      );
+    }
+
+    // If NIPP is changed, verify it doesn't conflict with another user
+    if (nipp) {
+      const cleanNipp = String(nipp).trim();
+      const existing = dbQueries.getUserByNipp(cleanNipp);
+      if (existing && existing.id !== id) {
+        return NextResponse.json(
+          { success: false, error: `NIPP ${cleanNipp} sudah digunakan oleh ${existing.name}.` },
+          { status: 409 }
+        );
+      }
+    }
+
+    const updated = dbQueries.updateUser(id, {
+      name: String(name).trim(),
+      nipp: nipp ? String(nipp).trim() : undefined,
+      divisi: String(divisi).trim(),
+      departemen: String(departemen).trim(),
+      role: role || undefined,
+      branch_id: branch_id || null,
+      department_id: department_id || null,
+      email: email ? String(email).trim() : undefined,
+      active: active !== undefined ? Boolean(active) : undefined,
+      password: password && String(password).trim().length > 0 ? String(password).trim() : undefined,
+    });
+
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, error: 'User PIC tidak ditemukan.' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Data PIC ${updated.name} (NIPP: ${updated.nipp}) berhasil diperbarui dan disinkronkan ke Spreadsheet My Drive!`,
+      user: updated,
+      driveAccount: DRIVE_ACCOUNT,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -118,3 +183,4 @@ export async function DELETE(req: NextRequest) {
     );
   }
 }
+

@@ -24,6 +24,8 @@
 .DS_Store
 *.pem
 cloudflared
+~$*.xlsx
+~$*.xls
 
 # debug
 npm-debug.log*

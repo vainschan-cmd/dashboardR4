@@ -298,6 +298,11 @@ export const dbQueries = {
     if (!r) return null;
     return { ...r, nipp: r.nipp || r.username, active: Boolean(r.active) };
   },
+  getUserById: (id: string): User | null => {
+    const r = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    if (!r) return null;
+    return { ...r, nipp: r.nipp || r.username, active: Boolean(r.active) };
+  },
   createUser: (data: {
     nipp: string;
     name: string;
@@ -367,23 +372,28 @@ export const dbQueries = {
     if (!existing) return null;
 
     const name = data.name !== undefined ? data.name : existing.name;
+    const cleanNipp = data.nipp !== undefined ? String(data.nipp).trim() : (existing.nipp || existing.username);
     const divisi = data.divisi !== undefined ? data.divisi : existing.divisi;
     const departemen = data.departemen !== undefined ? data.departemen : existing.departemen;
     const role = data.role !== undefined ? data.role : existing.role;
     const branch_id = data.branch_id !== undefined ? data.branch_id : existing.branch_id;
+    const department_id = data.department_id !== undefined ? data.department_id : existing.department_id;
+    const email = data.email !== undefined ? data.email : (existing.email || `${cleanNipp}@pelindo.co.id`);
     const active = data.active !== undefined ? (data.active ? 1 : 0) : existing.active;
+    const password = (data.password && data.password.trim().length > 0) ? data.password.trim() : existing.password;
 
     db.prepare(`
-      UPDATE users SET name = ?, divisi = ?, departemen = ?, role = ?, branch_id = ?, active = ?
+      UPDATE users 
+      SET name = ?, username = ?, nipp = ?, divisi = ?, departemen = ?, role = ?, branch_id = ?, department_id = ?, email = ?, active = ?, password = ?
       WHERE id = ?
-    `).run(name, divisi, departemen, role, branch_id, active, id);
+    `).run(name, cleanNipp, cleanNipp, divisi, departemen, role, branch_id, department_id, email, active, password, id);
 
     try {
       const { exportUsersToSpreadsheet } = require('./userPicSync');
       exportUsersToSpreadsheet(dbQueries.getUsers());
     } catch (e) {}
 
-    return dbQueries.getUserByUsername(existing.username);
+    return dbQueries.getUserById(id);
   },
   deleteUser: (id: string): boolean => {
     const db = getDb();
