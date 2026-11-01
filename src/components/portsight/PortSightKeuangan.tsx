@@ -88,7 +88,8 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
   const netRows = filteredData.filter(d => d.rekening.toLowerCase().includes('bersih'));
 
   const totalRevRp = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-  const totalCostRp = costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const rawCostRp = costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const totalCostRp = rawCostRp === 0 ? 0 : (rawCostRp < 0 ? rawCostRp : -rawCostRp);
   const totalOpRp = opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
   const totalNetRp = netRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
   const totalRevM = revRows.reduce((a, b) => a + b.konsolidasiM, 0);

@@ -11,7 +11,7 @@ export function formatRupiahFull(val: number | null | undefined): string {
   const absVal = Math.abs(Math.round(val));
   // Standard id-ID locale uses dot '.' for thousands separator
   const formatted = absVal.toLocaleString('id-ID');
-  return `${isNegative ? '-' : ''}Rp ${formatted}`;
+  return isNegative ? `Rp -${formatted}` : `Rp ${formatted}`;
 }
 
 export function formatNominalFull(val: number | null | undefined): string {
@@ -19,5 +19,5 @@ export function formatNominalFull(val: number | null | undefined): string {
   const isNegative = val < 0;
   const absVal = Math.abs(Math.round(val));
   const formatted = absVal.toLocaleString('id-ID');
-  return `${isNegative ? '-' : ''}${formatted}`;
+  return isNegative ? `-${formatted}` : formatted;
 }

@@ -234,7 +234,9 @@ export default function PortSightPeriode({
     const allLabaRows = finansial.filter(f => (f.rekening || '').toLowerCase().includes('laba'));
 
     const totalRevRp = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    const totalBebanRp = Math.abs(costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0));
+    const rawCost = costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+    // Nilai beban usaha adalah minus / pengeluaran (format: Rp -xxx)
+    const totalBebanRp = rawCost === 0 ? 0 : (rawCost < 0 ? rawCost : -rawCost);
 
     let totalLabaRp = 0;
     if (labaUsahaRows.length > 0) {
@@ -243,8 +245,8 @@ export default function PortSightPeriode({
       totalLabaRp = labaBersihRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
     } else if (allLabaRows.length > 0) {
       totalLabaRp = allLabaRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    } else if (totalRevRp > 0 || totalBebanRp > 0) {
-      totalLabaRp = totalRevRp - totalBebanRp;
+    } else if (totalRevRp !== 0 || totalBebanRp !== 0) {
+      totalLabaRp = totalRevRp + totalBebanRp;
     }
 
     // Total Opkom Volume
