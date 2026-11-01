@@ -286,39 +286,26 @@ export default function PortSightHeader({
               <span>Daftar</span>
             </button>
 
-            {/* Role Persona Switcher */}
+            {/* Informasi Role Aktif Pengguna (Sesuai Konfigurasi User) */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
-                backgroundColor: 'var(--bg-inner)',
-                border: '1px solid var(--border-subtle)',
-                padding: '3px 8px',
+                backgroundColor: 'rgba(2, 132, 199, 0.12)',
+                border: '1px solid rgba(2, 132, 199, 0.35)',
+                padding: '4px 10px',
                 borderRadius: 'var(--radius-pill)',
                 fontSize: '11px',
+                fontWeight: 700,
+                color: 'var(--accent-cyan)',
               }}
+              title={`Hak Akses: ${userRole === 'super_admin' ? 'Super Admin' : userRole === 'admin_regional' ? 'Admin Regional 4' : userRole === 'pic_dept_regional' ? 'PIC Dept Operasi' : userRole === 'pic_cabang' ? 'PIC Cabang' : 'BOD Regional 4'}`}
             >
-              <Shield size={11} color="var(--accent-blue)" />
-              <select
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-main)',
-                  fontWeight: 700,
-                  outline: 'none',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                }}
-                value={userRole}
-                onChange={(e) => setUserRole(e.target.value as UserRole)}
-              >
-                <option value="super_admin">Super Admin</option>
-                <option value="admin_regional">Admin Regional 4</option>
-                <option value="pic_dept_regional">PIC Dept Operasi</option>
-                <option value="pic_cabang">PIC Cabang</option>
-                <option value="viewer">BOD Regional 4</option>
-              </select>
+              <Shield size={11} color="var(--accent-cyan)" />
+              <span>
+                {userRole === 'super_admin' ? 'Super Admin' : userRole === 'admin_regional' ? 'Admin Regional 4' : userRole === 'pic_dept_regional' ? 'PIC Dept Operasi' : userRole === 'pic_cabang' ? 'PIC Cabang' : 'BOD Regional 4'}
+              </span>
             </div>
 
             <button onClick={onExportExcel} className="btn-dark" style={{ padding: '4px 8px', fontSize: '11px' }} title="Ekspor data Excel (.xlsx)">
@@ -328,21 +315,6 @@ export default function PortSightHeader({
             <button onClick={onPrint} className="btn-dark" style={{ padding: '4px 8px', fontSize: '11px' }} title="Cetak Ringkasan">
               <Printer size={12} />
             </button>
-
-            <a
-              href="https://github.com/vainschan-cmd/dashboardR4"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-dark"
-              style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
-              title="Repositori GitHub"
-            >
-              <GitBranch size={12} color="var(--accent-blue)" />
-            </a>
-
-            <div className="illustration-pill" style={{ fontSize: '10px', padding: '2px 8px' }}>
-              Data ilustrasi
-            </div>
           </div>
 
           {/* Mobile Menu Hamburger Button */}
@@ -572,23 +544,13 @@ export default function PortSightHeader({
               </div>
             </div>
 
-            {/* Role Switcher in Mobile Drawer */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Simulasi Hak Akses (Role):
-              </label>
-              <select
-                className="form-select"
-                value={userRole}
-                onChange={(e) => setUserRole(e.target.value as UserRole)}
-                style={{ fontSize: '12px', padding: '7px 10px' }}
-              >
-                <option value="super_admin">Super Admin (Penuh)</option>
-                <option value="admin_regional">Admin Regional 4</option>
-                <option value="pic_dept_regional">PIC Dept Regional</option>
-                <option value="pic_cabang">PIC Cabang</option>
-                <option value="viewer">BOD Regional 4 (Viewer)</option>
-              </select>
+            {/* Informasi Hak Akses (Role) Pengguna */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Hak Akses (Role):</span>
+              <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Shield size={12} color="var(--accent-cyan)" />
+                {userRole === 'super_admin' ? 'Super Admin' : userRole === 'admin_regional' ? 'Admin Regional 4' : userRole === 'pic_dept_regional' ? 'PIC Dept Operasi' : userRole === 'pic_cabang' ? 'PIC Cabang' : 'BOD Regional 4'}
+              </span>
             </div>
 
             {/* Menu Navigasi Utama */}

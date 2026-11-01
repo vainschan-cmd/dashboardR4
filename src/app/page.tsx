@@ -307,9 +307,10 @@ export default function DashboardHome() {
         {/* Beranda */}
         {activeTab === 'beranda' && (
           <PortSightBeranda
+            selectedTerminal={selectedTerminal}
+            selectedPeriod={selectedPeriod}
             onSelectTerminal={(tId) => {
               setSelectedTerminal(tId);
-              setActiveTab('opkom');
             }}
             onOpenDrilldown={(item) => setDrilldownItem(item)}
           />
