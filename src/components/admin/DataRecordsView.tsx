@@ -14,25 +14,37 @@ import {
   ArrowUpDown,
   FileSpreadsheet
 } from 'lucide-react';
-import { MonthlyRecord, Branch, Department } from '@/lib/types';
+import { MonthlyRecord, Branch, Department, User, UserRole } from '@/lib/types';
 import StatusBadge from '../ui/StatusBadge';
 
 interface DataRecordsViewProps {
   branches: Branch[];
   departments: Department[];
+  userRole?: UserRole;
+  currentUser?: User | null;
   onRefreshNeeded?: () => void;
 }
 
 export default function DataRecordsView({
   branches,
   departments,
+  userRole,
+  currentUser,
   onRefreshNeeded,
 }: DataRecordsViewProps) {
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
+  const userBranchObj = currentUser?.branch_id ? branches.find(b => b.code === currentUser.branch_id || b.id === currentUser.branch_id) : undefined;
+
   // Filters
-  const [selectedBranch, setSelectedBranch] = useState('ALL');
+  const [selectedBranch, setSelectedBranch] = useState<string>(() => {
+    if (isPicCabang && userBranchObj) {
+      return userBranchObj.id;
+    }
+    return 'ALL';
+  });
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [selectedMonth, setSelectedMonth] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
@@ -181,11 +193,22 @@ export default function DataRecordsView({
           {/* Terminal Filter */}
           <select
             className="filter-select"
-            style={{ height: '36px', fontSize: '12px' }}
+            style={{
+              height: '36px',
+              fontSize: '12px',
+              opacity: isPicCabang ? 0.9 : 1,
+              cursor: isPicCabang ? 'not-allowed' : 'pointer',
+            }}
             value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
+            onChange={(e) => {
+              if (!isPicCabang) {
+                setSelectedBranch(e.target.value);
+              }
+            }}
+            disabled={isPicCabang}
+            title={isPicCabang ? `Terkunci: Data khusus cabang ${userBranchObj?.name || currentUser?.branch_id}` : 'Pilih Terminal'}
           >
-            <option value="ALL">🏢 Semua Terminal</option>
+            {!isPicCabang && <option value="ALL">🏢 Semua Terminal</option>}
             {branches.map((b) => (
               <option key={b.id} value={b.id} style={{ background: '#122137' }}>
                 {b.name}

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
+import { User } from '@/lib/types';
 
 export type ModuleType = 'finansial' | 'opkom' | 'kinerja' | 'utilisasi' | 'peralatan' | 'fasilitas';
 
@@ -27,6 +28,8 @@ interface ManualDataInputModalProps {
   onClose: () => void;
   defaultModule?: ModuleType;
   selectedTerminal?: string;
+  isBranchLocked?: boolean;
+  currentUser?: User | null;
   onSuccess?: () => void;
 }
 
@@ -59,6 +62,8 @@ export default function ManualDataInputModal({
   onClose,
   defaultModule = 'finansial',
   selectedTerminal = 'R01',
+  isBranchLocked = false,
+  currentUser,
   onSuccess,
 }: ManualDataInputModalProps) {
   const [activeModule, setActiveModule] = useState<ModuleType>(defaultModule);
@@ -66,9 +71,12 @@ export default function ManualDataInputModal({
   // Common fields
   const [year, setYear] = useState<number>(2026);
   const [month, setMonth] = useState<number>(9);
-  const [branchCode, setBranchCode] = useState<string>(
-    selectedTerminal && selectedTerminal !== 'ALL' ? selectedTerminal : 'R01'
-  );
+  const [branchCode, setBranchCode] = useState<string>(() => {
+    if (currentUser?.role === 'pic_cabang' && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      return currentUser.branch_id;
+    }
+    return selectedTerminal && selectedTerminal !== 'ALL' ? selectedTerminal : 'R01';
+  });
 
   // 1. Finansial state
   const [finRekening, setFinRekening] = useState('Pendapatan');
@@ -125,10 +133,12 @@ export default function ManualDataInputModal({
 
   useEffect(() => {
     setActiveModule(defaultModule);
-    if (selectedTerminal && selectedTerminal !== 'ALL') {
+    if (currentUser?.role === 'pic_cabang' && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      setBranchCode(currentUser.branch_id);
+    } else if (selectedTerminal && selectedTerminal !== 'ALL') {
       setBranchCode(selectedTerminal);
     }
-  }, [defaultModule, selectedTerminal, isOpen]);
+  }, [defaultModule, selectedTerminal, currentUser, isOpen]);
 
   if (!isOpen) return null;
 
@@ -400,15 +410,32 @@ export default function ManualDataInputModal({
               }}
             >
               <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
-                  <Building2 size={12} color="var(--accent-cyan)" />
-                  <span>Cabang Pelabuhan (KODE_CBG)</span>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Building2 size={12} color="var(--accent-cyan)" />
+                    <span>Cabang Pelabuhan (KODE_CBG)</span>
+                  </span>
+                  {isBranchLocked && (
+                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)', backgroundColor: 'rgba(2, 132, 199, 0.2)', padding: '1px 6px', borderRadius: '8px' }}>
+                      🔒 Terkunci PIC
+                    </span>
+                  )}
                 </label>
                 <select
                   value={branchCode}
-                  onChange={(e) => setBranchCode(e.target.value)}
+                  onChange={(e) => {
+                    if (!isBranchLocked) {
+                      setBranchCode(e.target.value);
+                    }
+                  }}
+                  disabled={isBranchLocked}
                   className="form-control"
-                  style={{ fontSize: '12px', fontWeight: 600 }}
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    opacity: isBranchLocked ? 0.85 : 1,
+                    cursor: isBranchLocked ? 'not-allowed' : 'pointer',
+                  }}
                   required
                 >
                   {OFFICIAL_BRANCHES.map((b) => (

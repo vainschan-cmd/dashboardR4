@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
+import { User, UserRole } from '@/lib/types';
 
 interface PortSightBerandaProps {
   selectedTerminal?: string;
@@ -29,6 +30,8 @@ interface PortSightBerandaProps {
   onSelectTerminal?: (terminalId: string) => void;
   onNavigateTab?: (tabId: string, branchCode?: string) => void;
   onOpenDrilldown?: (item: any) => void;
+  currentUser?: User | null;
+  userRole?: UserRole;
 }
 
 export default function PortSightBeranda({
@@ -37,6 +40,8 @@ export default function PortSightBeranda({
   onSelectTerminal,
   onNavigateTab,
   onOpenDrilldown,
+  currentUser,
+  userRole,
 }: PortSightBerandaProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [finansial, setFinansial] = useState<any[]>([]);
@@ -516,6 +521,8 @@ export default function PortSightBeranda({
     ];
   }, [isAll, activeBranch, selectedTerminal, filteredOpkom, filteredPeralatan]);
 
+  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       {/* Active Branch Filter Banner (When a specific branch is selected) */}
@@ -525,8 +532,8 @@ export default function PortSightBeranda({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            backgroundColor: 'rgba(2, 132, 199, 0.12)',
-            border: '1px solid rgba(2, 132, 199, 0.35)',
+            backgroundColor: isPicCabang ? 'rgba(2, 132, 199, 0.16)' : 'rgba(2, 132, 199, 0.12)',
+            border: isPicCabang ? '1px solid rgba(2, 132, 199, 0.5)' : '1px solid rgba(2, 132, 199, 0.35)',
             padding: '10px 16px',
             borderRadius: 'var(--radius-md)',
             flexWrap: 'wrap',
@@ -536,52 +543,77 @@ export default function PortSightBeranda({
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
               style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '6px',
-                backgroundColor: 'var(--accent-blue)',
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#ffffff',
                 fontWeight: 800,
                 fontSize: '12px',
+                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
               }}
             >
               <Building2 size={16} />
             </div>
             <div>
               <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-title)' }}>
-                Filter Aktif: [{selectedTerminal}] {activeBranch?.name || selectedTerminal}
+                {isPicCabang
+                  ? `Cabang Penugasan PIC: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`
+                  : `Filter Aktif: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                Menampilkan performa dan data operasional khusus cabang terpilih
+                {isPicCabang
+                  ? `Tampilan dashboard, ringkasan eksekutif, dan data operasional disesuaikan khusus untuk cabang penugasan Anda.`
+                  : `Menampilkan performa dan data operasional khusus cabang terpilih.`}
               </div>
             </div>
           </div>
 
-          {onSelectTerminal && (
-            <button
-              type="button"
-              onClick={() => onSelectTerminal('ALL')}
-              className="btn-dark"
+          {isPicCabang ? (
+            <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '11.5px',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: 'var(--accent-cyan)',
+                backgroundColor: 'rgba(2, 132, 199, 0.18)',
+                border: '1px solid rgba(2, 132, 199, 0.4)',
                 padding: '5px 12px',
                 borderRadius: 'var(--radius-pill)',
-                borderColor: 'var(--accent-blue)',
-                color: 'var(--accent-cyan)',
-                fontWeight: 700,
-                cursor: 'pointer',
               }}
-              title="Reset ke akumulasi seluruh 28 cabang"
+              title="Informasi terkunci sesuai akun PIC cabang"
             >
-              <RotateCcw size={12} />
-              <span>Tampilkan Akumulasi Semua Cabang (ALL)</span>
-            </button>
+              <span>🔒 Terkunci Sesuai Akun PIC Cabang</span>
+            </div>
+          ) : (
+            onSelectTerminal && (
+              <button
+                type="button"
+                onClick={() => onSelectTerminal('ALL')}
+                className="btn-dark"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '11.5px',
+                  padding: '5px 12px',
+                  borderRadius: 'var(--radius-pill)',
+                  borderColor: 'var(--accent-blue)',
+                  color: 'var(--accent-cyan)',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                title="Reset ke akumulasi seluruh 28 cabang"
+              >
+                <RotateCcw size={12} />
+                <span>Tampilkan Akumulasi Semua Cabang (ALL)</span>
+              </button>
+            )
           )}
         </div>
       )}

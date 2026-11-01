@@ -491,6 +491,131 @@ export default function LoginScreen({
                     </>
                   )}
                 </button>
+
+                {/* Quick Role & Branch Selector for Easy Evaluation */}
+                <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: 'var(--text-muted)',
+                      marginBottom: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <span>⚡ Coba Login Cepat Sesuai Role & Cabang:</span>
+                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Password: password123</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginNipp('10004');
+                        setLoginPassword('password123');
+                        submitLogin('10004', 'password123');
+                      }}
+                      className="btn-dark"
+                      style={{
+                        padding: '8px 10px',
+                        fontSize: '11px',
+                        textAlign: 'left',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        borderRadius: 'var(--radius-sm)',
+                        borderColor: 'rgba(2, 132, 199, 0.4)',
+                        backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                        cursor: 'pointer',
+                      }}
+                      title="Login sebagai PIC Cabang Makassar (R01)"
+                    >
+                      <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R01]</span>
+                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)' }}>Makassar • 10004</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginNipp('10008');
+                        setLoginPassword('password123');
+                        submitLogin('10008', 'password123');
+                      }}
+                      className="btn-dark"
+                      style={{
+                        padding: '8px 10px',
+                        fontSize: '11px',
+                        textAlign: 'left',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        borderRadius: 'var(--radius-sm)',
+                        borderColor: 'rgba(2, 132, 199, 0.4)',
+                        backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                        cursor: 'pointer',
+                      }}
+                      title="Login sebagai PIC Cabang Balikpapan (R04)"
+                    >
+                      <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R04]</span>
+                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)' }}>Balikpapan • 10008</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginNipp('10001');
+                        setLoginPassword('password123');
+                        submitLogin('10001', 'password123');
+                      }}
+                      className="btn-dark"
+                      style={{
+                        padding: '8px 10px',
+                        fontSize: '11px',
+                        textAlign: 'left',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        borderRadius: 'var(--radius-sm)',
+                        borderColor: 'rgba(56, 189, 248, 0.4)',
+                        backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                        cursor: 'pointer',
+                      }}
+                      title="Login sebagai Super Admin (Semua Cabang)"
+                    >
+                      <span style={{ fontWeight: 800, color: '#38bdf8' }}>Super Admin</span>
+                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)' }}>Budi S. • 10001</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginNipp('10002');
+                        setLoginPassword('password123');
+                        submitLogin('10002', 'password123');
+                      }}
+                      className="btn-dark"
+                      style={{
+                        padding: '8px 10px',
+                        fontSize: '11px',
+                        textAlign: 'left',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        borderRadius: 'var(--radius-sm)',
+                        borderColor: 'rgba(167, 139, 250, 0.4)',
+                        backgroundColor: 'rgba(167, 139, 250, 0.08)',
+                        cursor: 'pointer',
+                      }}
+                      title="Login sebagai Admin Regional 4"
+                    >
+                      <span style={{ fontWeight: 800, color: '#a78bfa' }}>Admin Regional 4</span>
+                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)' }}>Hendra W. • 10002</span>
+                    </button>
+                  </div>
+                </div>
               </form>
             ) : (
               /* TAB 2: REGISTER */

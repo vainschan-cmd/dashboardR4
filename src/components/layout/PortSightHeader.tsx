@@ -75,33 +75,83 @@ export default function PortSightHeader({
 
   const mainTabs = MAIN_NAVIGATION_TABS;
 
-  const adminTabs = [
-    { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
-    { id: 'master_data', label: 'Master Data & KPI', icon: Layers },
-    { id: 'verification', label: `Verifikasi & Monitoring ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
-    { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
-    { id: 'templates', label: 'Template & Mapping', icon: Sliders },
-    { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
-  ];
+  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
+  const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
+  const currentBranchName = OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal)?.name;
+  const isAll = selectedTerminal === 'ALL';
 
-  const terminals = [
-    { id: 'ALL', name: 'Semua Cabang (28 Cabang)' },
-    ...OFFICIAL_BRANCHES.map(b => ({
-      id: b.code,
-      name: `[${b.code}] ${b.name}`
-    }))
-  ];
+  const getRoleLabel = () => {
+    if (userRole === 'super_admin') return 'Super Admin';
+    if (userRole === 'admin_regional') return 'Admin Regional 4';
+    if (userRole === 'pic_dept_regional') return 'PIC Dept Operasi';
+    if (userRole === 'pic_cabang') {
+      const bCode = currentUser?.branch_id || selectedTerminal;
+      const bName = assignedBranch?.name || currentBranchName;
+      return bCode && bCode !== 'R99'
+        ? `PIC Cabang [${bCode}]${bName ? ` • ${bName}` : ''}`
+        : 'PIC Cabang';
+    }
+    return 'BOD Regional 4';
+  };
+
+  const adminTabs = isPicCabang
+    ? [
+        { id: 'data_records', label: 'Data Record Kinerja Cabang', icon: Database },
+        { id: 'import_center', label: 'Import Data Cabang (.xlsx)', icon: FileSpreadsheet },
+        { id: 'verification', label: `Monitoring Status Pengesahan ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
+      ]
+    : [
+        { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
+        { id: 'master_data', label: 'Master Data & KPI', icon: Layers },
+        { id: 'verification', label: `Verifikasi & Monitoring ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
+        { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
+        { id: 'templates', label: 'Template & Mapping', icon: Sliders },
+        { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
+      ];
+
+  const terminals = isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99'
+    ? [
+        {
+          id: currentUser.branch_id,
+          name: `[${currentUser.branch_id}] ${assignedBranch?.name || currentUser.branch_id} (Cabang Anda)`,
+        },
+      ]
+    : [
+        { id: 'ALL', name: 'Semua Cabang (28 Cabang)' },
+        ...OFFICIAL_BRANCHES.map(b => ({
+          id: b.code,
+          name: `[${b.code}] ${b.name}`
+        }))
+      ];
 
   const pageHeadings: Record<string, string> = {
-    beranda: 'Ringkasan Eksekutif Regional 4',
-    periode: 'Data per Periode & Analisis Rentang Waktu (Multi-Modul)',
-    keuangan: 'Dashboard Finance (Keuangan) Pelindo R4',
-    opkom: 'Dashboard Opkom (Operasi & Komersial) Pelindo R4',
-    kinerja: 'Dashboard Kinerja Pelayanan Operasional Pelindo R4',
-    utilisasi: 'Dashboard Utilisasi Dermaga & Lapangan (BOR/YOR/SOR)',
-    peralatan: 'Dashboard Monitoring Kesiapan & Utilisasi Peralatan',
-    fasilitas: 'Dashboard Fasilitas & Infrastruktur Pelabuhan Regional 4',
-    data_records: 'Data Record Kinerja Pelabuhan Regional 4',
+    beranda: isAll
+      ? 'Ringkasan Eksekutif Regional 4 (Konsolidasi 28 Cabang)'
+      : `Ringkasan Eksekutif - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    periode: isAll
+      ? 'Data per Periode & Analisis Rentang Waktu (Multi-Modul)'
+      : `Data per Periode - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    keuangan: isAll
+      ? 'Dashboard Finance (Keuangan) Pelindo R4'
+      : `Dashboard Finance - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    opkom: isAll
+      ? 'Dashboard Opkom (Operasi & Komersial) Pelindo R4'
+      : `Dashboard Opkom - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    kinerja: isAll
+      ? 'Dashboard Kinerja Pelayanan Operasional Pelindo R4'
+      : `Dashboard Kinerja - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    utilisasi: isAll
+      ? 'Dashboard Utilisasi Dermaga & Lapangan (BOR/YOR/SOR)'
+      : `Dashboard Utilisasi - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    peralatan: isAll
+      ? 'Dashboard Monitoring Kesiapan & Utilisasi Peralatan'
+      : `Dashboard Peralatan - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    fasilitas: isAll
+      ? 'Dashboard Fasilitas & Infrastruktur Pelabuhan Regional 4'
+      : `Dashboard Fasilitas - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
+    data_records: isAll
+      ? 'Data Record Kinerja Pelabuhan Regional 4'
+      : `Data Record Kinerja - Cabang [${selectedTerminal}] ${currentBranchName || selectedTerminal}`,
     master_data: 'Master Data Pelindo Regional 4',
     verification: 'Verifikasi & Pengesahan Data Kinerja',
     import_center: 'Pusat Impor Spreadsheet & Google Sheets',
@@ -300,12 +350,10 @@ export default function PortSightHeader({
                 fontWeight: 700,
                 color: 'var(--accent-cyan)',
               }}
-              title={`Hak Akses: ${userRole === 'super_admin' ? 'Super Admin' : userRole === 'admin_regional' ? 'Admin Regional 4' : userRole === 'pic_dept_regional' ? 'PIC Dept Operasi' : userRole === 'pic_cabang' ? 'PIC Cabang' : 'BOD Regional 4'}`}
+              title={`Hak Akses: ${getRoleLabel()}`}
             >
               <Shield size={11} color="var(--accent-cyan)" />
-              <span>
-                {userRole === 'super_admin' ? 'Super Admin' : userRole === 'admin_regional' ? 'Admin Regional 4' : userRole === 'pic_dept_regional' ? 'PIC Dept Operasi' : userRole === 'pic_cabang' ? 'PIC Cabang' : 'BOD Regional 4'}
-              </span>
+              <span>{getRoleLabel()}</span>
             </div>
 
             <button onClick={onExportExcel} className="btn-dark" style={{ padding: '4px 8px', fontSize: '11px' }} title="Ekspor data Excel (.xlsx)">
@@ -504,8 +552,8 @@ export default function PortSightHeader({
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
-                <span>Role: <strong style={{ color: 'var(--text-main)' }}>{userRole}</strong></span>
-                <span>Cabang: <strong style={{ color: 'var(--text-main)' }}>{currentUser?.branch_id || 'R99'}</strong></span>
+                <span>Role: <strong style={{ color: 'var(--text-main)' }}>{getRoleLabel()}</strong></span>
+                <span>Cabang: <strong style={{ color: 'var(--text-main)' }}>{currentUser?.branch_id || 'R99'} {assignedBranch ? `(${assignedBranch.name})` : ''}</strong></span>
               </div>
 
               <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
@@ -549,7 +597,7 @@ export default function PortSightHeader({
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Hak Akses (Role):</span>
               <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Shield size={12} color="var(--accent-cyan)" />
-                {userRole === 'super_admin' ? 'Super Admin' : userRole === 'admin_regional' ? 'Admin Regional 4' : userRole === 'pic_dept_regional' ? 'PIC Dept Operasi' : userRole === 'pic_cabang' ? 'PIC Cabang' : 'BOD Regional 4'}
+                {getRoleLabel()}
               </span>
             </div>
 
@@ -722,22 +770,29 @@ export default function PortSightHeader({
           </div>
 
           {/* Terminal / Cabang Chip */}
-          <div className="filter-chip" style={{ maxWidth: '100%' }}>
+          <div className="filter-chip" style={{ maxWidth: '100%', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Building2 size={13} style={{ flexShrink: 0 }} />
             <select
               value={selectedTerminal}
-              onChange={(e) => setSelectedTerminal(e.target.value)}
+              onChange={(e) => {
+                if (!isPicCabang) {
+                  setSelectedTerminal(e.target.value);
+                }
+              }}
+              disabled={isPicCabang}
               style={{
                 background: 'transparent',
                 border: 'none',
                 color: 'inherit',
                 fontWeight: 600,
                 outline: 'none',
-                cursor: 'pointer',
+                cursor: isPicCabang ? 'default' : 'pointer',
                 fontSize: '11.5px',
                 maxWidth: '220px',
                 textOverflow: 'ellipsis',
+                opacity: isPicCabang ? 0.95 : 1,
               }}
+              title={isPicCabang ? `Terkunci: Akun PIC Cabang [${currentUser?.branch_id}] ${assignedBranch?.name || ''}` : 'Pilih Cabang Pelabuhan'}
             >
               {terminals.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -745,6 +800,23 @@ export default function PortSightHeader({
                 </option>
               ))}
             </select>
+            {isPicCabang && (
+              <span
+                style={{
+                  fontSize: '9.5px',
+                  fontWeight: 800,
+                  backgroundColor: 'rgba(2, 132, 199, 0.2)',
+                  color: 'var(--accent-cyan)',
+                  padding: '1px 5px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(2, 132, 199, 0.35)',
+                  letterSpacing: '0.02em',
+                }}
+                title="Filter cabang terkunci sesuai penugasan PIC"
+              >
+                🔒 Cabang PIC
+              </span>
+            )}
           </div>
 
           {/* Comparison Chip */}

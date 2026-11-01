@@ -403,6 +403,79 @@ export default function AuthModal({
                   Daftar Akun Baru
                 </button>
               </div>
+
+              {/* Quick Role & Branch Selector for Easy Switching */}
+              <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
+                <div
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span>⚡ Ganti Cepat Akun / Role:</span>
+                  <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Password: password123</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginNipp('10004');
+                      setLoginPassword('password123');
+                      submitLogin('10004', 'password123');
+                    }}
+                    className="btn-dark"
+                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                  >
+                    <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R01]</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Makassar • 10004</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginNipp('10008');
+                      setLoginPassword('password123');
+                      submitLogin('10008', 'password123');
+                    }}
+                    className="btn-dark"
+                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                  >
+                    <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R04]</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Balikpapan • 10008</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginNipp('10001');
+                      setLoginPassword('password123');
+                      submitLogin('10001', 'password123');
+                    }}
+                    className="btn-dark"
+                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                  >
+                    <span style={{ fontWeight: 800, color: '#38bdf8' }}>Super Admin</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Budi S. • 10001</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginNipp('10002');
+                      setLoginPassword('password123');
+                      submitLogin('10002', 'password123');
+                    }}
+                    className="btn-dark"
+                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                  >
+                    <span style={{ fontWeight: 800, color: '#a78bfa' }}>Admin Regional 4</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Hendra W. • 10002</span>
+                  </button>
+                </div>
+              </div>
             </form>
           ) : (
             /* TAB 2: FORM DAFTAR AKUN BARU */

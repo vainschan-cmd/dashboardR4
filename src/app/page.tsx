@@ -82,6 +82,9 @@ export default function DashboardHome() {
           setCurrentUser(u);
           setUserRole(u.role);
           setUsername(u.nipp || u.username);
+          if (u.role === 'pic_cabang' && u.branch_id && u.branch_id !== 'R99') {
+            setSelectedTerminal(u.branch_id);
+          }
         }
       }
     } catch (e) {
@@ -138,8 +141,10 @@ export default function DashboardHome() {
     setCurrentUser(user);
     setUserRole(user.role);
     setUsername(user.nipp || user.username);
-    if (user.branch_id && user.branch_id !== 'R99' && user.role === 'pic_cabang') {
+    if (user.role === 'pic_cabang' && user.branch_id && user.branch_id !== 'R99') {
       setSelectedTerminal(user.branch_id);
+    } else {
+      setSelectedTerminal('ALL');
     }
     try {
       localStorage.setItem('portsight_auth_user', JSON.stringify(user));
@@ -310,13 +315,23 @@ export default function DashboardHome() {
             selectedTerminal={selectedTerminal}
             selectedPeriod={selectedPeriod}
             onSelectTerminal={(tId) => {
+              if (currentUser?.role === 'pic_cabang' && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+                return;
+              }
               setSelectedTerminal(tId);
             }}
             onNavigateTab={(tabId, branchCode) => {
+              if (currentUser?.role === 'pic_cabang' && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+                setSelectedTerminal(currentUser.branch_id);
+                setActiveTab(tabId);
+                return;
+              }
               if (branchCode) setSelectedTerminal(branchCode);
               setActiveTab(tabId);
             }}
             onOpenDrilldown={(item) => setDrilldownItem(item)}
+            currentUser={currentUser}
+            userRole={userRole}
           />
         )}
 
@@ -381,6 +396,8 @@ export default function DashboardHome() {
           <DataRecordsView
             branches={branches}
             departments={departments}
+            userRole={userRole}
+            currentUser={currentUser}
             onRefreshNeeded={loadMasterData}
           />
         )}
@@ -511,6 +528,9 @@ export default function DashboardHome() {
         isOpen={manualInputModalOpen}
         onClose={() => setManualInputModalOpen(false)}
         defaultModule={manualInputDefaultModule}
+        selectedTerminal={selectedTerminal}
+        isBranchLocked={currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99'}
+        currentUser={currentUser}
         onSuccess={() => {
           loadMasterData();
         }}
