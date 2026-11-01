@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     '192.168.1.*',
     'localhost',
     '*.local',
+    '*.trycloudflare.com',
+    '*.loca.lt',
   ],
 };
 

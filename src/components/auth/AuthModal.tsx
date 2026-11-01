@@ -59,13 +59,6 @@ export default function AuthModal({
 
   if (!isOpen) return null;
 
-  // Handle Quick Switch demo account
-  const handleQuickLogin = (nipp: string, pass: string = 'password123') => {
-    setLoginNipp(nipp);
-    setLoginPassword(pass);
-    submitLogin(nipp, pass);
-  };
-
   const submitLogin = async (nippToUse?: string, passToUse?: string) => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -387,79 +380,6 @@ export default function AuthModal({
                 {loading ? <span className="spin">⏳</span> : <Lock size={15} />}
                 <span>{loading ? 'Memverifikasi...' : 'Masuk ke Dashboard'}</span>
               </button>
-
-              {/* Quick Login Demo Accounts */}
-              <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
-                <p style={{ margin: '0 0 8px 0', fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  Akses Cepat Akun Demo (Klik untuk langsung masuk):
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('10001')}
-                    style={{
-                      textAlign: 'left',
-                      padding: '7px 10px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--bg-inner)',
-                      border: '1px solid var(--border-subtle)',
-                      cursor: 'pointer',
-                      fontSize: '11.5px',
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, color: 'var(--text-title)' }}>10001 - Budi Santoso</div>
-                    <div style={{ color: 'var(--accent-blue)', fontSize: '10.5px' }}>Super Admin</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('10002')}
-                    style={{
-                      textAlign: 'left',
-                      padding: '7px 10px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--bg-inner)',
-                      border: '1px solid var(--border-subtle)',
-                      cursor: 'pointer',
-                      fontSize: '11.5px',
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, color: 'var(--text-title)' }}>10002 - Hendra Wijaya</div>
-                    <div style={{ color: '#10b981', fontSize: '10.5px' }}>Admin Regional 4</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('10003')}
-                    style={{
-                      textAlign: 'left',
-                      padding: '7px 10px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--bg-inner)',
-                      border: '1px solid var(--border-subtle)',
-                      cursor: 'pointer',
-                      fontSize: '11.5px',
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, color: 'var(--text-title)' }}>10003 - Capt. Rudi H.</div>
-                    <div style={{ color: '#f59e0b', fontSize: '10.5px' }}>PIC Dept Operasi</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('10004')}
-                    style={{
-                      textAlign: 'left',
-                      padding: '7px 10px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--bg-inner)',
-                      border: '1px solid var(--border-subtle)',
-                      cursor: 'pointer',
-                      fontSize: '11.5px',
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, color: 'var(--text-title)' }}>10004 - Ahmad Dahlan</div>
-                    <div style={{ color: '#06b6d4', fontSize: '10.5px' }}>PIC Cabang Makassar</div>
-                  </button>
-                </div>
-              </div>
 
               <div style={{ textAlign: 'center', marginTop: '6px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Belum memiliki akun PIC? </span>

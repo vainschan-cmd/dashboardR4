@@ -57,22 +57,6 @@ export default function LoginScreen({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Quick Demo Accounts
-  const quickAccounts = [
-    { nipp: '10002', name: 'Hendra Wijaya', role: 'Admin Regional 4', dept: 'Regional 4 Pusat', pass: 'password123' },
-    { nipp: '10001', name: 'Budi Santoso', role: 'Super Admin', dept: 'TI & Digitalisasi', pass: 'password123' },
-    { nipp: '10003', name: 'Capt. Rudi Hartono', role: 'PIC Dept Regional', dept: 'Pelayanan Kapal', pass: 'password123' },
-    { nipp: '10004', name: 'Ahmad Dahlan', role: 'PIC Cabang Makassar', dept: 'Operasi Makassar', pass: 'password123' },
-    { nipp: '105515', name: 'Chandra', role: 'Super Admin', dept: 'IT Teknik', pass: 'password123' },
-    { nipp: '10000', name: 'BOD Regional 4', role: 'Viewer (Eksekutif)', dept: 'Kantor Regional 4', pass: 'password123' },
-  ];
-
-  const handleQuickLogin = (nipp: string, pass: string) => {
-    setLoginNipp(nipp);
-    setLoginPassword(pass);
-    submitLogin(nipp, pass);
-  };
-
   const submitLogin = async (nippToUse?: string, passToUse?: string) => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -512,74 +496,6 @@ export default function LoginScreen({
                     </>
                   )}
                 </button>
-
-                {/* Quick Demo Accounts */}
-                <div
-                  style={{
-                    marginTop: '16px',
-                    paddingTop: '16px',
-                    borderTop: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: 'var(--text-muted)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      marginBottom: '10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                    }}
-                  >
-                    <Sparkles size={12} color="var(--accent-blue)" />
-                    <span>Pilihan Cepat Masuk (1-Klik Akun Demo PIC):</span>
-                  </div>
-
-                  <div className="responsive-grid-2">
-                    {quickAccounts.map((acc) => (
-                      <button
-                        key={acc.nipp}
-                        type="button"
-                        onClick={() => handleQuickLogin(acc.nipp, acc.pass)}
-                        style={{
-                          textAlign: 'left',
-                          padding: '8px 10px',
-                          backgroundColor: 'var(--bg-inner)',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px',
-                          transition: 'all 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--accent-blue)';
-                          e.currentTarget.style.backgroundColor = 'rgba(2, 132, 199, 0.08)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                          e.currentTarget.style.backgroundColor = 'var(--bg-inner)';
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
-                            {acc.name}
-                          </span>
-                          <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
-                            [{acc.nipp}]
-                          </span>
-                        </div>
-                        <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                          {acc.role}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </form>
             ) : (
               /* TAB 2: REGISTER */
