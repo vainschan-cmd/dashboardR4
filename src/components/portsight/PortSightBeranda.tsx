@@ -17,6 +17,8 @@ import {
   ChevronRight,
   ExternalLink,
   FileSpreadsheet,
+  Search,
+  X,
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
@@ -42,6 +44,7 @@ export default function PortSightBeranda({
   const [peralatan, setPeralatan] = useState<any[]>([]);
   const [kinerja, setKinerja] = useState<any[]>([]);
   const [utilisasi, setUtilisasi] = useState<any[]>([]);
+  const [terminalSearch, setTerminalSearch] = useState<string>('');
 
   // Fetch complete modules data from backend
   useEffect(() => {
@@ -261,12 +264,10 @@ export default function PortSightBeranda({
     ];
   }, [filteredOpkom, filteredFin, filteredPeralatan, filteredKinerja, isAll]);
 
-  // 2. Terminal cards list for "Semua Cabang" view
+  // 2. Terminal cards list for "Semua Cabang" view - Menampilkan seluruh Cabang Resmi Regional 4
   const terminalsOverview = useMemo(() => {
-    // 8 Core Branches Regional 4
-    const keyBranchCodes = ['R01', 'R02', 'R04', 'R05', 'R06', 'R07', 'R08', 'R24'];
-    return keyBranchCodes.map(code => {
-      const branchInfo = OFFICIAL_BRANCHES.find(b => b.code === code);
+    return OFFICIAL_BRANCHES.map(branchInfo => {
+      const code = branchInfo.code;
       const bOp = opkom.filter(o => o.branchCode === code);
       const bFin = finansial.filter(f => f.branchCode === code);
 
@@ -280,20 +281,26 @@ export default function PortSightBeranda({
 
       const avgRka = bOp.length > 0
         ? Number((bOp.reduce((a, b) => a + (b.rka || 0), 0) / bOp.length).toFixed(1))
-        : 101.5;
+        : (bFin.length > 0 && bFin[0].rka ? Number(bFin[0].rka.toFixed(1)) : 101.5);
       const avgYoy = bOp.length > 0
         ? Number((bOp.reduce((a, b) => a + (b.yoy || 0), 0) / bOp.length).toFixed(1))
-        : 104.2;
+        : (bFin.length > 0 && bFin[0].yoy ? Number(bFin[0].yoy.toFixed(1)) : 104.2);
 
       let subtype = 'Multipurpose';
-      let valueDisplay = '1,45 jt ton';
-      if (code === 'R02' || code === 'R06' || code === 'R07' || code === 'R08') {
+      if (code === 'R02' || code === 'R06' || code === 'R07' || code === 'R08' || branchInfo.name.toLowerCase().includes('tpk')) {
         subtype = 'Petikemas';
       } else if (code === 'R24') {
         subtype = 'Petikemas Modern';
+      } else if (code === 'R26') {
+        subtype = 'Petikemas (KKT)';
+      } else if (code === 'R99') {
+        subtype = 'Regional 4 (Konsolidasi)';
       }
 
-      if (teusTotal > 0) {
+      let valueDisplay = 'Rp 0';
+      if (revTotal > 0) {
+        valueDisplay = formatRupiahFull(revTotal);
+      } else if (teusTotal > 0) {
         valueDisplay = teusTotal >= 1_000_000
           ? `${(teusTotal / 1_000_000).toFixed(2)} jt TEUs`
           : `${(teusTotal / 1_000).toFixed(1)} rb TEUs`;
@@ -301,8 +308,13 @@ export default function PortSightBeranda({
         valueDisplay = tonTotal >= 1_000_000
           ? `${(tonTotal / 1_000_000).toFixed(2)} jt ton`
           : `${(tonTotal / 1_000).toFixed(1)} rb ton`;
-      } else if (revTotal > 0) {
-        valueDisplay = formatRupiahFull(revTotal);
+      } else {
+        const totalOpkom = bOp.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+        if (totalOpkom > 0) {
+          valueDisplay = formatRupiahFull(totalOpkom);
+        } else {
+          valueDisplay = 'Rp 0';
+        }
       }
 
       const isGood = avgRka >= 100;
@@ -310,7 +322,7 @@ export default function PortSightBeranda({
       return {
         id: code,
         code,
-        name: branchInfo?.name || code,
+        name: branchInfo.name || code,
         subtype,
         status: isGood ? 'Baik' : 'Waspada',
         value: valueDisplay,
@@ -320,6 +332,16 @@ export default function PortSightBeranda({
       };
     });
   }, [opkom, finansial]);
+
+  const filteredTerminalsOverview = useMemo(() => {
+    if (!terminalSearch.trim()) return terminalsOverview;
+    const q = terminalSearch.toLowerCase().trim();
+    return terminalsOverview.filter(t =>
+      t.name.toLowerCase().includes(q) ||
+      t.code.toLowerCase().includes(q) ||
+      t.subtype.toLowerCase().includes(q)
+    );
+  }, [terminalsOverview, terminalSearch]);
 
   // 3. Single Branch Breakdown cards when a specific branch is selected
   const branchCommoditiesBreakdown = useMemo(() => {
@@ -556,54 +578,129 @@ export default function PortSightBeranda({
       <div className="split-dashboard-layout">
         {/* Left Section: Kinerja per terminal / Kinerja per Layanan Cabang */}
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
-              {isAll ? 'Kinerja per terminal' : `Kinerja Layanan Cabang: ${activeBranch?.name || selectedTerminal}`}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
+                {isAll ? 'Kinerja per terminal' : `Kinerja Layanan Cabang: ${activeBranch?.name || selectedTerminal}`}
+              </div>
+              {isAll && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                    color: 'var(--accent-blue)',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-pill)',
+                    border: '1px solid rgba(2, 132, 199, 0.25)',
+                  }}
+                >
+                  {terminalsOverview.length} Cabang
+                </span>
+              )}
             </div>
+
             {isAll && (
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                Klik kartu terminal untuk filter cabang spesifik
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <Search size={13} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    value={terminalSearch}
+                    onChange={(e) => setTerminalSearch(e.target.value)}
+                    placeholder="Cari cabang / kode..."
+                    style={{
+                      padding: '5px 26px 5px 28px',
+                      fontSize: '11.5px',
+                      borderRadius: 'var(--radius-pill)',
+                      border: '1px solid var(--border-subtle)',
+                      backgroundColor: 'var(--bg-inner)',
+                      color: 'var(--text-main)',
+                      outline: 'none',
+                      width: '180px',
+                    }}
+                  />
+                  {terminalSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setTerminalSearch('')}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      title="Hapus pencarian"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Klik kartu untuk filter cabang spesifik
+                </span>
+              </div>
             )}
           </div>
 
-          {/* If All Branches: Grid of Terminals */}
+          {/* If All Branches: Grid of Terminals (Menampilkan seluruh 28 Cabang) */}
           {isAll ? (
-            <div className="terminal-grid">
-              {terminalsOverview.map((t) => (
-                <div
-                  key={t.id}
-                  className="terminal-card"
-                  onClick={() => onSelectTerminal && onSelectTerminal(t.id)}
-                  style={{ cursor: 'pointer' }}
-                  title={`Klik untuk memfilter data cabang [${t.code}] ${t.name}`}
-                >
-                  <div className="terminal-card-top">
-                    <div>
-                      <div className="terminal-name">{t.name}</div>
-                      <div className="terminal-subtype">{t.subtype}</div>
-                    </div>
-                    <span className={`status-badge-chip ${t.isGood ? 'status-baik' : 'status-waspada'}`}>
-                      {t.status}
-                    </span>
-                  </div>
-
-                  <div className="terminal-metric-value">{t.value}</div>
-
-                  <div className="terminal-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <span className={t.isGood ? 'text-positive' : 'text-alert'}>
-                        {t.rkap}
-                      </span>{' '}
-                      <span className={t.isGood ? 'text-positive' : 'text-alert'}>
-                        {t.yoy}
+            filteredTerminalsOverview.length === 0 ? (
+              <div
+                style={{
+                  padding: '24px',
+                  textAlign: 'center',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px dashed var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-muted)',
+                  fontSize: '13px',
+                }}
+              >
+                Tidak ditemukan cabang dengan kata kunci "{terminalSearch}".
+              </div>
+            ) : (
+              <div className="terminal-grid">
+                {filteredTerminalsOverview.map((t) => (
+                  <div
+                    key={t.id}
+                    className="terminal-card"
+                    onClick={() => onSelectTerminal && onSelectTerminal(t.id)}
+                    style={{ cursor: 'pointer' }}
+                    title={`Klik untuk memfilter data cabang [${t.code}] ${t.name}`}
+                  >
+                    <div className="terminal-card-top">
+                      <div>
+                        <div className="terminal-name">{t.name}</div>
+                        <div className="terminal-subtype">{t.subtype}</div>
+                      </div>
+                      <span className={`status-badge-chip ${t.isGood ? 'status-baik' : 'status-waspada'}`}>
+                        {t.status}
                       </span>
                     </div>
-                    <ChevronRight size={14} color="var(--accent-blue)" />
+
+                    <div className="terminal-metric-value">{t.value}</div>
+
+                    <div className="terminal-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span className={t.isGood ? 'text-positive' : 'text-alert'}>
+                          {t.rkap}
+                        </span>{' '}
+                        <span className={t.isGood ? 'text-positive' : 'text-alert'}>
+                          {t.yoy}
+                        </span>
+                      </div>
+                      <ChevronRight size={14} color="var(--accent-blue)" />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )
           ) : (
             /* If Specific Branch Selected: Detailed commodities breakdown */
             <div className="terminal-grid">
