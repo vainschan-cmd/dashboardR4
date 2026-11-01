@@ -312,6 +312,10 @@ export default function DashboardHome() {
             onSelectTerminal={(tId) => {
               setSelectedTerminal(tId);
             }}
+            onNavigateTab={(tabId, branchCode) => {
+              if (branchCode) setSelectedTerminal(branchCode);
+              setActiveTab(tabId);
+            }}
             onOpenDrilldown={(item) => setDrilldownItem(item)}
           />
         )}

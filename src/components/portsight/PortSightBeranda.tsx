@@ -15,6 +15,8 @@ import {
   RotateCcw,
   DollarSign,
   ChevronRight,
+  ExternalLink,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
@@ -23,6 +25,7 @@ interface PortSightBerandaProps {
   selectedTerminal?: string;
   selectedPeriod?: string;
   onSelectTerminal?: (terminalId: string) => void;
+  onNavigateTab?: (tabId: string, branchCode?: string) => void;
   onOpenDrilldown?: (item: any) => void;
 }
 
@@ -30,6 +33,7 @@ export default function PortSightBeranda({
   selectedTerminal = 'ALL',
   selectedPeriod = 'FY 2025',
   onSelectTerminal,
+  onNavigateTab,
   onOpenDrilldown,
 }: PortSightBerandaProps) {
   const [loading, setLoading] = useState<boolean>(true);
@@ -359,21 +363,56 @@ export default function PortSightBeranda({
     });
   }, [isAll, filteredOpkom]);
 
-  // 4. Dynamic "Perlu Perhatian" alerts
+  // 4. Dynamic "Perlu Perhatian" alerts with Source Links
   const attentionItems = useMemo(() => {
     if (!isAll) {
       // Find low performing items for this specific branch
-      const alerts: { header: string; desc: string }[] = [];
+      const alerts: {
+        header: string;
+        desc: string;
+        sourceSheet: string;
+        sourceModule: string;
+        tabId: string;
+        branchCode: string;
+        linkText: string;
+      }[] = [];
+
       filteredOpkom.filter(o => o.rka && o.rka < 100).slice(0, 3).forEach(o => {
         alerts.push({
           header: `${activeBranch?.name || selectedTerminal} - ${o.layanan}`,
           desc: `Realisasi ${o.layanan} ${o.rka}% RKAP, perubahan ${(o.yoy - 100).toFixed(1)}% YoY`,
+          sourceSheet: 'opkom',
+          sourceModule: 'Opkom (Operasi & Komersial)',
+          tabId: 'opkom',
+          branchCode: selectedTerminal,
+          linkText: `Buka Data Opkom [${selectedTerminal}]`,
         });
       });
+
+      if (filteredPeralatan.some(p => p.utilisasi && p.utilisasi < 50)) {
+        const lowAlat = filteredPeralatan.find(p => p.utilisasi && p.utilisasi < 50);
+        if (lowAlat) {
+          alerts.push({
+            header: `${activeBranch?.name || selectedTerminal} - Alat ${lowAlat.nmAlat || lowAlat.kdAlat}`,
+            desc: `Utilisasi alat hanya ${lowAlat.utilisasi}%, perlu optimasi kesiapan operasi`,
+            sourceSheet: 'peralatan',
+            sourceModule: 'Peralatan Pelabuhan',
+            tabId: 'peralatan',
+            branchCode: selectedTerminal,
+            linkText: `Buka Data Peralatan [${selectedTerminal}]`,
+          });
+        }
+      }
+
       if (alerts.length === 0) {
         alerts.push({
           header: `${activeBranch?.name || selectedTerminal} Operasional Prima`,
           desc: 'Semua target layanan operasional cabang terpantau di atas 100% RKAP.',
+          sourceSheet: 'opkom',
+          sourceModule: 'Opkom (Operasi & Komersial)',
+          tabId: 'opkom',
+          branchCode: selectedTerminal,
+          linkText: `Periksa Data Opkom`,
         });
       }
       return alerts;
@@ -384,21 +423,41 @@ export default function PortSightBeranda({
       {
         header: 'Makassar [R01]',
         desc: 'Petikemas 85,1% RKAP, perlu akselerasi bongkar muat throughput',
+        sourceSheet: 'opkom',
+        sourceModule: 'Opkom (Operasi & Komersial)',
+        tabId: 'opkom',
+        branchCode: 'R01',
+        linkText: 'Lihat Data Opkom [R01]',
       },
       {
         header: 'Pantoloan [R11]',
         desc: 'Arus barang 93,9% RKAP, turun 2,3% YoY akibat siklus komoditas',
+        sourceSheet: 'opkom',
+        sourceModule: 'Opkom (Operasi & Komersial)',
+        tabId: 'opkom',
+        branchCode: 'R11',
+        linkText: 'Lihat Data Opkom [R11]',
       },
       {
         header: 'RTG TPK Makassar [R02]',
         desc: '3 unit dalam jadwal pemeliharaan preventif, kesiapan alat 93,6%',
+        sourceSheet: 'peralatan',
+        sourceModule: 'Peralatan Pelabuhan',
+        tabId: 'peralatan',
+        branchCode: 'R02',
+        linkText: 'Lihat Data Alat [R02]',
       },
       {
         header: 'Layanan Pelanggan & SLA',
         desc: '2 tiket keluhan teknis mendekati batas toleransi SLA (RTG & autogate)',
+        sourceSheet: 'kinerja',
+        sourceModule: 'Kinerja Operasi',
+        tabId: 'kinerja',
+        branchCode: 'R01',
+        linkText: 'Lihat Data Kinerja',
       },
     ];
-  }, [isAll, activeBranch, selectedTerminal, filteredOpkom]);
+  }, [isAll, activeBranch, selectedTerminal, filteredOpkom, filteredPeralatan]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -599,19 +658,145 @@ export default function PortSightBeranda({
           )}
         </div>
 
-        {/* Right Section: Perlu Perhatian Card */}
+        {/* Right Section: Perlu Perhatian Card dengan Link Sumber Informasi */}
         <div className="attention-card">
-          <div className="attention-title">
-            <AlertTriangle size={16} color="#fbbf24" />
-            <span>Perlu perhatian</span>
+          <div className="attention-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertTriangle size={16} color="#fbbf24" />
+              <span>Perlu perhatian</span>
+            </div>
+            <span
+              style={{
+                fontSize: '10.5px',
+                color: '#fbbf24',
+                backgroundColor: 'rgba(251, 191, 36, 0.12)',
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-pill)',
+                fontWeight: 700,
+              }}
+            >
+              {attentionItems.length} Isu
+            </span>
           </div>
 
-          {attentionItems.map((item, idx) => (
-            <div key={idx} className="attention-item">
-              <div className="attention-item-header">{item.header}</div>
-              <div className="attention-item-desc">{item.desc}</div>
-            </div>
-          ))}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {attentionItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="attention-item"
+                style={{
+                  paddingTop: idx === 0 ? '2px' : '12px',
+                  paddingBottom: '12px',
+                  borderBottom: idx === attentionItems.length - 1 ? 'none' : '1px solid var(--border-subtle)',
+                }}
+              >
+                <div className="attention-item-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-title)' }}>{item.header}</span>
+                  {item.sourceSheet && (
+                    <span
+                      style={{
+                        fontSize: '9.5px',
+                        fontFamily: 'var(--font-mono)',
+                        color: 'var(--accent-blue)',
+                        backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                        border: '1px solid rgba(2, 132, 199, 0.25)',
+                        padding: '1.5px 6px',
+                        borderRadius: '4px',
+                        whiteSpace: 'nowrap',
+                        fontWeight: 600,
+                      }}
+                      title={`Sumber data: Sheet "${item.sourceSheet}" pada file input_data.xlsx`}
+                    >
+                      Sheet: {item.sourceSheet}
+                    </span>
+                  )}
+                </div>
+
+                <div className="attention-item-desc" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '8px' }}>
+                  {item.desc}
+                </div>
+
+                {item.tabId && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab && onNavigateTab(item.tabId, item.branchCode)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        backgroundColor: 'transparent',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--accent-blue)',
+                        padding: '3px 9px',
+                        borderRadius: 'var(--radius-pill)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(2, 132, 199, 0.1)';
+                        e.currentTarget.style.borderColor = 'var(--accent-blue)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                      }}
+                      title={`Buka modul ${item.sourceModule} (${item.branchCode || ''})`}
+                    >
+                      <ExternalLink size={11} />
+                      <span>{item.linkText || `Buka ${item.sourceModule}`}</span>
+                    </button>
+                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                      Sumber: {item.sourceModule.split(' ')[0]}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Footer Sumber Data Utama */}
+          <div
+            style={{
+              marginTop: '12px',
+              paddingTop: '10px',
+              borderTop: '1px solid var(--border-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <FileSpreadsheet size={13} color="var(--accent-blue)" />
+              <span>Sumber: input_data.xlsx (My Drive)</span>
+            </span>
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('import_center')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent-blue)',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: 0,
+                }}
+                title="Buka Pusat Impor & Sinkronisasi Spreadsheet"
+              >
+                <span>Pusat Data</span>
+                <ExternalLink size={10} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
