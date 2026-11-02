@@ -13,6 +13,7 @@ import {
   ImportBatch,
   AuditLog,
   GoogleSheetsConfig,
+  SystemParameters,
 } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
 
@@ -679,5 +680,39 @@ export const dbQueries = {
       INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
       VALUES (?, 'google_sheets', ?, ?)
     `).run('cfg_gsheet', JSON.stringify(cfg), now);
+  },
+
+  // System & Session Parameters
+  getSystemParameters: (): SystemParameters => {
+    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'system_parameters'").get() as any;
+    if (!row) {
+      return {
+        session_timeout_minutes: 30,
+        auto_logout_idle: true,
+        warning_before_minutes: 2,
+        default_theme: 'light',
+      };
+    }
+    return {
+      session_timeout_minutes: 30,
+      auto_logout_idle: true,
+      warning_before_minutes: 2,
+      default_theme: 'light',
+      ...JSON.parse(row.config_json),
+    };
+  },
+  saveSystemParameters: (params: Partial<SystemParameters>): SystemParameters => {
+    const db = getDb();
+    const current = dbQueries.getSystemParameters();
+    const updated: SystemParameters = {
+      ...current,
+      ...params,
+      updated_at: new Date().toISOString(),
+    };
+    db.prepare(`
+      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
+      VALUES ('cfg_system_params', 'system_parameters', ?, ?)
+    `).run(JSON.stringify(updated), updated.updated_at!);
+    return updated;
   }
 };

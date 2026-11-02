@@ -14,6 +14,7 @@ import {
   Anchor,
   KeyRound,
   User as UserIcon,
+  Clock,
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
@@ -22,12 +23,14 @@ interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
   theme: 'dark' | 'light';
   onThemeChange: (theme: 'dark' | 'light') => void;
+  sessionExpiredMessage?: string | null;
 }
 
 export default function LoginScreen({
   onLoginSuccess,
   theme,
   onThemeChange,
+  sessionExpiredMessage,
 }: LoginScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
 
@@ -349,6 +352,29 @@ export default function LoginScreen({
           </div>
 
           <div style={{ padding: '24px 28px' }}>
+            {/* Session Timeout Banner */}
+            {sessionExpiredMessage && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 14px',
+                  backgroundColor: 'rgba(245, 158, 11, 0.14)',
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--accent-orange, #d97706)',
+                  fontSize: '12.5px',
+                  marginBottom: '18px',
+                  fontWeight: 600,
+                  lineHeight: 1.45,
+                }}
+              >
+                <Clock size={18} style={{ flexShrink: 0, color: '#f59e0b' }} />
+                <span>{sessionExpiredMessage}</span>
+              </div>
+            )}
+
             {/* Notifications */}
             {errorMsg && (
               <div

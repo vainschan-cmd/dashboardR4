@@ -10,6 +10,7 @@ export async function GET() {
     const templates = dbQueries.getTemplates();
     const equipment = dbQueries.getEquipmentCatalog();
     const gsheetsConfig = dbQueries.getGoogleSheetsConfig();
+    const systemParams = dbQueries.getSystemParameters();
 
     return NextResponse.json({
       success: true,
@@ -19,7 +20,8 @@ export async function GET() {
       equipment,
       users,
       templates,
-      gsheetsConfig
+      gsheetsConfig,
+      systemParams,
     });
   } catch (error: any) {
     return NextResponse.json(

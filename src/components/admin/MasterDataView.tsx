@@ -23,9 +23,14 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  Upload
+  Upload,
+  Sliders,
+  Clock,
+  Shield,
+  Sun,
+  Moon,
 } from 'lucide-react';
-import { Branch, Department, KPIIndicator, EquipmentItem, User, UserRole } from '@/lib/types';
+import { Branch, Department, KPIIndicator, EquipmentItem, User, UserRole, SystemParameters } from '@/lib/types';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
 import AuthModal from '@/components/auth/AuthModal';
 
@@ -36,6 +41,9 @@ interface MasterDataViewProps {
   equipment?: EquipmentItem[];
   users?: User[];
   onRefreshUsers?: () => void;
+  systemParams?: SystemParameters;
+  onUpdateSystemParams?: (newParams: SystemParameters) => void;
+  currentUser?: User | null;
 }
 
 export default function MasterDataView({
@@ -45,10 +53,66 @@ export default function MasterDataView({
   equipment = [],
   users = [],
   onRefreshUsers,
+  systemParams,
+  onUpdateSystemParams,
+  currentUser,
 }: MasterDataViewProps) {
-  const [activeTab, setActiveTab] = useState<'kpi' | 'branches' | 'departments' | 'equipment' | 'users'>('users');
+  const [activeTab, setActiveTab] = useState<'kpi' | 'branches' | 'departments' | 'equipment' | 'users' | 'parameter'>('users');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('ALL');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+
+  // System parameters state (Parameter Sesi & Konfigurasi)
+  const [sessionTimeoutInput, setSessionTimeoutInput] = useState<number>(systemParams?.session_timeout_minutes || 30);
+  const [autoLogoutInput, setAutoLogoutInput] = useState<boolean>(systemParams?.auto_logout_idle !== false);
+  const [warningBeforeInput, setWarningBeforeInput] = useState<number>(systemParams?.warning_before_minutes || 2);
+  const [defaultThemeInput, setDefaultThemeInput] = useState<'light' | 'dark'>(systemParams?.default_theme || 'light');
+  const [paramSaving, setParamSaving] = useState<boolean>(false);
+  const [paramSuccessMsg, setParamSuccessMsg] = useState<string | null>(null);
+  const [paramErrorMsg, setParamErrorMsg] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (systemParams) {
+      setSessionTimeoutInput(systemParams.session_timeout_minutes || 30);
+      setAutoLogoutInput(systemParams.auto_logout_idle !== false);
+      setWarningBeforeInput(systemParams.warning_before_minutes || 2);
+      setDefaultThemeInput(systemParams.default_theme || 'light');
+    }
+  }, [systemParams]);
+
+  const handleSaveParams = async () => {
+    setParamSaving(true);
+    setParamSuccessMsg(null);
+    setParamErrorMsg(null);
+    try {
+      const res = await fetch('/api/system-params', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_timeout_minutes: sessionTimeoutInput,
+          auto_logout_idle: autoLogoutInput,
+          warning_before_minutes: warningBeforeInput,
+          default_theme: defaultThemeInput,
+          user_id: currentUser?.id,
+          user_name: currentUser?.name || currentUser?.username,
+          user_role: currentUser?.role,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.params) {
+        setParamSuccessMsg('Parameter sistem dan durasi sesi 30 menit berhasil disimpan ke database!');
+        if (onUpdateSystemParams) {
+          onUpdateSystemParams(data.params);
+        }
+        setTimeout(() => setParamSuccessMsg(null), 4500);
+      } else {
+        setParamErrorMsg(data.error || 'Gagal menyimpan parameter sistem.');
+      }
+    } catch (err: any) {
+      setParamErrorMsg(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setParamSaving(false);
+    }
+  };
 
   // Edit user modal state
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
@@ -319,6 +383,13 @@ export default function MasterDataView({
           >
             <Wrench size={16} />
             <span>Master Katalog Peralatan ({equipment.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('parameter')}
+            className={`tab-btn ${activeTab === 'parameter' ? 'active' : ''}`}
+          >
+            <Sliders size={16} />
+            <span>Parameter Sistem & Sesi</span>
           </button>
         </div>
 
@@ -1040,6 +1111,383 @@ export default function MasterDataView({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {/* TAB 5: PARAMETER SISTEM & SESI */}
+        {activeTab === 'parameter' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Header info */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+                padding: '16px 20px',
+                backgroundColor: 'var(--bg-inner)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+                    color: 'var(--blue-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Sliders size={22} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                    Konfigurasi Parameter Sistem & Keamanan Sesi
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0' }}>
+                    Kelola batas waktu inaktivitas sesi, kebijakan auto-logout pengguna, dan preferensi tema default PortDash Regional 4.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="badge badge-green" style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px' }}>
+                  <Shield size={13} />
+                  <span>Sesi Terproteksi ({sessionTimeoutInput} Menit)</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Notification messages */}
+            {paramSuccessMsg && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                  border: '1px solid rgba(34, 197, 94, 0.4)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--accent-green, #16a34a)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                }}
+              >
+                <CheckCircle2 size={18} />
+                <span>{paramSuccessMsg}</span>
+              </div>
+            )}
+
+            {paramErrorMsg && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--accent-red, #dc2626)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                }}
+              >
+                <AlertCircle size={18} />
+                <span>{paramErrorMsg}</span>
+              </div>
+            )}
+
+            {/* Parameter Settings Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+              {/* Card 1: Session Timeout Duration */}
+              <div
+                style={{
+                  padding: '20px',
+                  backgroundColor: 'var(--bg-surface)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Clock size={18} color="var(--blue-primary)" />
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                    Batas Waktu Sesi (Inactivity Timeout)
+                  </h4>
+                </div>
+
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                  Jika tidak ada aktivitas pengguna (klik mouse, ketik, scroll) selama durasi ini, aplikasi otomatis keluar dan kembali ke menu login.
+                </p>
+
+                {/* Preset Chips */}
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+                    Pilihan Preset Waktu:
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {[15, 30, 45, 60, 120].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setSessionTimeoutInput(mins)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          border: sessionTimeoutInput === mins ? '1px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                          backgroundColor: sessionTimeoutInput === mins ? 'rgba(2, 132, 199, 0.18)' : 'var(--bg-inner)',
+                          color: sessionTimeoutInput === mins ? 'var(--blue-primary)' : 'var(--text-main)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {mins} Menit {mins === 30 ? '(Default)' : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Input Number */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
+                    Kustom Durasi:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="480"
+                    value={sessionTimeoutInput}
+                    onChange={(e) => setSessionTimeoutInput(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="form-input"
+                    style={{ width: '90px', textAlign: 'center', fontWeight: 700 }}
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Menit</span>
+                </div>
+              </div>
+
+              {/* Card 2: Auto-Logout Policy & Warning */}
+              <div
+                style={{
+                  padding: '20px',
+                  backgroundColor: 'var(--bg-surface)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Shield size={18} color="var(--blue-primary)" />
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                    Kebijakan Logout & Notifikasi Peringatan
+                  </h4>
+                </div>
+
+                {/* Toggle Auto-Logout */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <input
+                    type="checkbox"
+                    id="chk-auto-logout"
+                    checked={autoLogoutInput}
+                    onChange={(e) => setAutoLogoutInput(e.target.checked)}
+                    style={{ marginTop: '3px', cursor: 'pointer', width: '16px', height: '16px' }}
+                  />
+                  <label htmlFor="chk-auto-logout" style={{ cursor: 'pointer' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                      Aktifkan Auto-Logout saat Idle (Kembali ke Login)
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Memastikan keamanan data eksekutif pelabuhan jika perangkat ditinggalkan.
+                    </div>
+                  </label>
+                </div>
+
+                {/* Warning Timing */}
+                <div style={{ marginTop: '4px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                    Peringatan Hitung Mundur Sebelum Logout:
+                  </label>
+                  <select
+                    value={warningBeforeInput}
+                    onChange={(e) => setWarningBeforeInput(Number(e.target.value))}
+                    className="form-select"
+                    style={{ width: '100%' }}
+                  >
+                    <option value={1}>1 Menit Sebelum Sesi Berakhir</option>
+                    <option value={2}>2 Menit Sebelum Sesi Berakhir (Direkomendasikan)</option>
+                    <option value={5}>5 Menit Sebelum Sesi Berakhir</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Card 3: Default Theme Mode */}
+              <div
+                style={{
+                  padding: '20px',
+                  backgroundColor: 'var(--bg-surface)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Sun size={18} color="var(--accent-orange, #f59e0b)" />
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                    Mode Tampilan Default (Theme)
+                  </h4>
+                </div>
+
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                  Pilih tema bawaan saat aplikasi pertama kali dibuka oleh pengguna baru di web browser.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setDefaultThemeInput('light')}
+                    style={{
+                      padding: '14px',
+                      borderRadius: '10px',
+                      border: defaultThemeInput === 'light' ? '2px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                      backgroundColor: defaultThemeInput === 'light' ? 'rgba(2, 132, 199, 0.12)' : 'var(--bg-inner)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <Sun size={24} color="#f59e0b" />
+                    <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-title)' }}>
+                      Mode Terang (Light)
+                    </span>
+                    <span style={{ fontSize: '10.5px', color: 'var(--accent-green, #16a34a)', fontWeight: 700 }}>
+                      ✓ Rekomendasi Resmi
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDefaultThemeInput('dark')}
+                    style={{
+                      padding: '14px',
+                      borderRadius: '10px',
+                      border: defaultThemeInput === 'dark' ? '2px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                      backgroundColor: defaultThemeInput === 'dark' ? 'rgba(2, 132, 199, 0.12)' : 'var(--bg-inner)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <Moon size={24} color="#38bdf8" />
+                    <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-title)' }}>
+                      Mode Gelap (Dark)
+                    </span>
+                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                      Opsional
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 4: Audit & Security Summary */}
+              <div
+                style={{
+                  padding: '20px',
+                  backgroundColor: 'var(--bg-surface)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Database size={18} color="var(--blue-primary)" />
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                    Status Penyimpanan & Kepatuhan
+                  </h4>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Penyimpanan:</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>SQLite integration_settings</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Multi-Tab Sync:</span>
+                    <span style={{ fontWeight: 600, color: 'var(--accent-green, #16a34a)' }}>Aktif (localStorage listener)</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Terakhir Diperbarui:</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                      {systemParams?.updated_at ? new Date(systemParams.updated_at).toLocaleString('id-ID') : 'Bawaan Sistem'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Diperbarui Oleh:</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                      {systemParams?.updated_by || 'Admin Regional'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Actions Bar */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: '12px',
+                paddingTop: '12px',
+                borderTop: '1px solid var(--border-subtle)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setSessionTimeoutInput(30);
+                  setAutoLogoutInput(true);
+                  setWarningBeforeInput(2);
+                  setDefaultThemeInput('light');
+                }}
+                className="btn btn-secondary"
+                style={{ fontSize: '13px' }}
+              >
+                Reset ke Rekomendasi (30 Menit & Terang)
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveParams}
+                disabled={paramSaving}
+                className="btn btn-primary"
+                style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                {paramSaving ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
+                <span>{paramSaving ? 'Menyimpan...' : 'Simpan Parameter Sistem'}</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

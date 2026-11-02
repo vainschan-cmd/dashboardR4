@@ -194,3 +194,12 @@ export interface CompletenessItem {
   is_delayed: boolean;
   records_count: number;
 }
+
+export interface SystemParameters {
+  session_timeout_minutes: number;
+  auto_logout_idle: boolean;
+  warning_before_minutes: number;
+  default_theme: 'light' | 'dark';
+  updated_at?: string;
+  updated_by?: string;
+}

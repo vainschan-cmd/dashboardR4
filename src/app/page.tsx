@@ -20,15 +20,15 @@ import ManualDataInputModal, { ModuleType } from '@/components/admin/ManualDataI
 import ComparisonModal from '@/components/modals/ComparisonModal';
 import AuthModal from '@/components/auth/AuthModal';
 import LoginScreen from '@/components/auth/LoginScreen';
-import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User } from '@/lib/types';
-import { X, CheckCircle2, Database, Layers, FileSpreadsheet, Sliders, History, Anchor } from 'lucide-react';
+import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User, SystemParameters } from '@/lib/types';
+import { X, CheckCircle2, Database, Layers, FileSpreadsheet, Sliders, History, Anchor, Clock, AlertTriangle } from 'lucide-react';
 
 export default function DashboardHome() {
   // Navigation active tab
   const [activeTab, setActiveTab] = useState<string>('beranda');
 
-  // Theme: 'dark' (Mode Gelap) | 'light' (Mode Terang)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  // Theme: 'light' (Mode Terang - Default Resmi) | 'dark' (Mode Gelap)
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
 
   // Terminal & Period Filters
   const [selectedTerminal, setSelectedTerminal] = useState<string>('ALL');
@@ -38,6 +38,16 @@ export default function DashboardHome() {
   const [userRole, setUserRole] = useState<UserRole>('admin_regional');
   const [username, setUsername] = useState<string>('10002');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Inactivity Session & System Parameters
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
+  const [idleWarningSeconds, setIdleWarningSeconds] = useState<number | null>(null);
+  const [systemParams, setSystemParams] = useState<SystemParameters>({
+    session_timeout_minutes: 30,
+    auto_logout_idle: true,
+    warning_before_minutes: 2,
+    default_theme: 'light',
+  });
 
   // Auth Modal (Login & Register for internal actions)
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -74,9 +84,12 @@ export default function DashboardHome() {
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('portsight_theme') as 'dark' | 'light' | null;
-      if (savedTheme === 'light' || savedTheme === 'dark') {
-        setTheme(savedTheme);
-        document.documentElement.setAttribute('data-theme', savedTheme);
+      if (savedTheme === 'dark') {
+        setTheme('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        setTheme('light');
+        document.documentElement.setAttribute('data-theme', 'light');
       }
 
       const savedUser = localStorage.getItem('portsight_auth_user');
@@ -89,12 +102,76 @@ export default function DashboardHome() {
           if (u.role === 'pic_cabang' && u.branch_id && u.branch_id !== 'R99') {
             setSelectedTerminal(u.branch_id);
           }
+          try {
+            localStorage.setItem('portsight_last_activity', String(Date.now()));
+          } catch (e) {}
         }
       }
     } catch (e) {
       console.error(e);
     }
   }, []);
+
+  // Inactivity Activity Tracker & Auto-Logout Watcher (Default 30 Menit)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let lastRecord = Date.now();
+    try {
+      localStorage.setItem('portsight_last_activity', String(lastRecord));
+    } catch (e) {}
+
+    const handleUserInteraction = () => {
+      const now = Date.now();
+      if (now - lastRecord > 2000) {
+        lastRecord = now;
+        try {
+          localStorage.setItem('portsight_last_activity', String(now));
+        } catch (e) {}
+        setIdleWarningSeconds((prev) => (prev !== null ? null : null));
+      }
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach((evt) => window.addEventListener(evt, handleUserInteraction, { passive: true }));
+
+    const intervalId = setInterval(() => {
+      if (!systemParams.auto_logout_idle) return;
+
+      const lastActivityStr = localStorage.getItem('portsight_last_activity');
+      const lastActivity = lastActivityStr ? Number(lastActivityStr) : lastRecord;
+      const elapsedMs = Date.now() - lastActivity;
+      const timeoutMinutes = systemParams.session_timeout_minutes || 30;
+      const timeoutMs = timeoutMinutes * 60 * 1000;
+      const warningMinutes = systemParams.warning_before_minutes || 2;
+      const warningWindowMs = warningMinutes * 60 * 1000;
+
+      if (elapsedMs >= timeoutMs) {
+        // TIMEOUT EXPIRED: Otomatis kembali ke menu login
+        clearInterval(intervalId);
+        try {
+          localStorage.removeItem('portsight_auth_user');
+          localStorage.removeItem('portsight_last_activity');
+        } catch (e) {}
+        setIdleWarningSeconds(null);
+        setCurrentUser(null);
+        setSessionExpiredMessage(
+          `Sesi Anda telah berakhir karena tidak ada aktivitas selama ${timeoutMinutes} menit. Silakan masuk kembali.`
+        );
+      } else if (elapsedMs >= timeoutMs - warningWindowMs) {
+        // Tampilkan peringatan hitung mundur
+        const remainingSec = Math.max(1, Math.round((timeoutMs - elapsedMs) / 1000));
+        setIdleWarningSeconds(remainingSec);
+      } else {
+        setIdleWarningSeconds(null);
+      }
+    }, 4000);
+
+    return () => {
+      events.forEach((evt) => window.removeEventListener(evt, handleUserInteraction));
+      clearInterval(intervalId);
+    };
+  }, [currentUser, systemParams]);
 
   const handleThemeChange = (newTheme: 'dark' | 'light') => {
     setTheme(newTheme);
@@ -121,6 +198,9 @@ export default function DashboardHome() {
         setIndicators(dataMaster.indicators || []);
         setEquipment(dataMaster.equipment || []);
         setTemplates(dataMaster.templates || []);
+        if (dataMaster.systemParams) {
+          setSystemParams(dataMaster.systemParams);
+        }
       }
       const dataVer = await resVer.json();
       if (dataVer.success) {
@@ -140,6 +220,8 @@ export default function DashboardHome() {
   }, []);
 
   const handleLoginSuccess = (user: User) => {
+    setSessionExpiredMessage(null);
+    setIdleWarningSeconds(null);
     setCurrentUser(user);
     setUserRole(user.role);
     setUsername(user.nipp || user.username);
@@ -150,6 +232,7 @@ export default function DashboardHome() {
     }
     try {
       localStorage.setItem('portsight_auth_user', JSON.stringify(user));
+      localStorage.setItem('portsight_last_activity', String(Date.now()));
     } catch (e) {}
     loadMasterData();
   };
@@ -157,7 +240,10 @@ export default function DashboardHome() {
   const handleLogout = () => {
     try {
       localStorage.removeItem('portsight_auth_user');
+      localStorage.removeItem('portsight_last_activity');
     } catch (e) {}
+    setSessionExpiredMessage(null);
+    setIdleWarningSeconds(null);
     setCurrentUser(null);
     setAuthModalOpen(false);
   };
@@ -189,6 +275,7 @@ export default function DashboardHome() {
         onLoginSuccess={handleLoginSuccess}
         theme={theme}
         onThemeChange={handleThemeChange}
+        sessionExpiredMessage={sessionExpiredMessage}
       />
     );
   }
@@ -417,6 +504,14 @@ export default function DashboardHome() {
               equipment={equipment}
               users={usersList}
               onRefreshUsers={loadMasterData}
+              systemParams={systemParams}
+              onUpdateSystemParams={(newParams) => {
+                setSystemParams(newParams);
+                if (newParams.default_theme && !localStorage.getItem('portsight_theme')) {
+                  handleThemeChange(newParams.default_theme);
+                }
+              }}
+              currentUser={currentUser}
             />
           ) : (
             <div
@@ -534,6 +629,75 @@ export default function DashboardHome() {
         selectedPeriod={selectedPeriod}
         selectedTerminal={selectedTerminal}
       />
+
+      {/* Floating Inactivity Session Warning Banner */}
+      {idleWarningSeconds !== null && currentUser && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            backgroundColor: 'var(--bg-surface)',
+            color: 'var(--text-main)',
+            padding: '16px 20px',
+            borderRadius: '12px',
+            border: '2px solid #f59e0b',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(245, 158, 11, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            maxWidth: '440px',
+          }}
+        >
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              backgroundColor: 'rgba(245, 158, 11, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#f59e0b',
+              flexShrink: 0,
+            }}
+          >
+            <Clock size={22} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-title)' }}>
+              Peringatan Sesi Tidak Aktif
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.4 }}>
+              Sesi akan berakhir dalam <strong style={{ color: '#f59e0b', fontSize: '13px' }}>{idleWarningSeconds} detik</strong> karena tidak ada aktivitas.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.setItem('portsight_last_activity', String(Date.now()));
+              } catch (e) {}
+              setIdleWarningSeconds(null);
+            }}
+            style={{
+              padding: '7px 14px',
+              backgroundColor: '#0284c7',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+            }}
+          >
+            Lanjutkan Sesi
+          </button>
+        </div>
+      )}
     </div>
   );
 }
