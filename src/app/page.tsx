@@ -38,7 +38,6 @@ export default function DashboardHome() {
   const [userRole, setUserRole] = useState<UserRole>('admin_regional');
   const [username, setUsername] = useState<string>('10002');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
 
   // Auth Modal (Login & Register for internal actions)
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -94,8 +93,6 @@ export default function DashboardHome() {
       }
     } catch (e) {
       console.error(e);
-    } finally {
-      setIsAuthChecking(false);
     }
   }, []);
 
@@ -184,46 +181,6 @@ export default function DashboardHome() {
   const canManageUsers = userRole === 'super_admin' || userRole === 'admin_regional';
   const isGovernanceView = ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
 
-  // 1. Tampilkan loading sebentar saat memeriksa sesi lokal
-  if (isAuthChecking) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'var(--bg-app)',
-          color: 'var(--text-main)',
-          gap: '16px',
-        }}
-      >
-        <div
-          style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '12px',
-            backgroundColor: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '5px',
-            boxShadow: '0 4px 16px rgba(2, 132, 199, 0.25)',
-          }}
-        >
-          <img
-            src="/pelindo-logo.png"
-            alt="Logo Pelindo"
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-        </div>
-        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          Memeriksa Sesi Pengguna PortDash Regional 4...
-        </div>
-      </div>
-    );
-  }
 
   // 2. Jika belum login (currentUser === null), tampilkan LoginScreen di awal
   if (!currentUser) {
