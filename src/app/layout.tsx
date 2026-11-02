@@ -8,11 +8,15 @@ export const metadata: Metadata = {
   authors: [{ name: "Regional Port Authority" }],
   icons: {
     icon: [
-      { url: '/pelindo-logo.png', type: 'image/png' },
-      { url: '/favicon.ico' },
+      { url: '/favicon.ico?v=2' },
+      { url: '/pelindo-logo.png?v=2', type: 'image/png', sizes: '256x256' },
+      { url: '/favicon-32x32.png?v=2', type: 'image/png', sizes: '32x32' },
+      { url: '/favicon-16x16.png?v=2', type: 'image/png', sizes: '16x16' },
     ],
-    shortcut: '/pelindo-logo.png',
-    apple: '/pelindo-logo.png',
+    shortcut: '/favicon.ico?v=2',
+    apple: [
+      { url: '/apple-touch-icon.png?v=2', sizes: '180x180', type: 'image/png' },
+    ],
   },
 };
 
@@ -30,8 +34,11 @@ export default function RootLayout({
   return (
     <html lang="id" data-theme="dark" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/pelindo-logo.png" type="image/png" sizes="any" />
-        <link rel="apple-touch-icon" href="/pelindo-logo.png" />
+        <link rel="icon" href="/favicon.ico?v=2" sizes="any" />
+        <link rel="icon" href="/pelindo-logo.png?v=2" type="image/png" sizes="256x256" />
+        <link rel="icon" href="/favicon-32x32.png?v=2" type="image/png" sizes="32x32" />
+        <link rel="icon" href="/favicon-16x16.png?v=2" type="image/png" sizes="16x16" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" sizes="180x180" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
