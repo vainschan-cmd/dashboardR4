@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "tunnel": "./cloudflared tunnel --url http://localhost:3000",
+    "tunnel:fixed": "npx -y localtunnel --port 3000 --subdomain pelindo4-ed-dashboard",
+    "tunnel:token": "./cloudflared tunnel run --token",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
     "lint": "eslint"
