@@ -203,3 +203,29 @@ export interface SystemParameters {
   updated_at?: string;
   updated_by?: string;
 }
+
+export interface DatabaseConfig {
+  engine: 'sqlite' | 'postgres';
+  sqlite_path: string;
+  pg_host?: string;
+  pg_port?: number;
+  pg_database?: string;
+  pg_user?: string;
+  pg_password?: string;
+  pg_ssl?: boolean;
+  max_connections?: number;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface IntegrationCredentials {
+  google_drive_email: string;
+  google_drive_file_path: string;
+  google_sheets_id: string;
+  google_sheets_name: string;
+  google_api_key?: string;
+  api_gateway_url?: string;
+  api_gateway_token?: string;
+  updated_at?: string;
+  updated_by?: string;
+}

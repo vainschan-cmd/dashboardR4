@@ -20,7 +20,7 @@ import ManualDataInputModal, { ModuleType } from '@/components/admin/ManualDataI
 import ComparisonModal from '@/components/modals/ComparisonModal';
 import AuthModal from '@/components/auth/AuthModal';
 import LoginScreen from '@/components/auth/LoginScreen';
-import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User, SystemParameters } from '@/lib/types';
+import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User, SystemParameters, DatabaseConfig, IntegrationCredentials } from '@/lib/types';
 import { X, CheckCircle2, Database, Layers, FileSpreadsheet, Sliders, History, Anchor, Clock, AlertTriangle } from 'lucide-react';
 
 export default function DashboardHome() {
@@ -48,6 +48,8 @@ export default function DashboardHome() {
     warning_before_minutes: 2,
     default_theme: 'light',
   });
+  const [dbConfig, setDbConfig] = useState<DatabaseConfig | undefined>();
+  const [credentials, setCredentials] = useState<IntegrationCredentials | undefined>();
 
   // Auth Modal (Login & Register for internal actions)
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -200,6 +202,12 @@ export default function DashboardHome() {
         setTemplates(dataMaster.templates || []);
         if (dataMaster.systemParams) {
           setSystemParams(dataMaster.systemParams);
+        }
+        if (dataMaster.dbConfig) {
+          setDbConfig(dataMaster.dbConfig);
+        }
+        if (dataMaster.credentials) {
+          setCredentials(dataMaster.credentials);
         }
       }
       const dataVer = await resVer.json();
@@ -511,6 +519,10 @@ export default function DashboardHome() {
                   handleThemeChange(newParams.default_theme);
                 }
               }}
+              dbConfig={dbConfig}
+              onUpdateDbConfig={(newCfg) => setDbConfig(newCfg)}
+              credentials={credentials}
+              onUpdateCredentials={(newCreds) => setCredentials(newCreds)}
               currentUser={currentUser}
             />
           ) : (

@@ -29,8 +29,25 @@ import {
   Shield,
   Sun,
   Moon,
+  Server,
+  Key,
+  FolderCheck,
+  HardDrive,
+  Link2,
+  Globe,
+  FileCheck,
 } from 'lucide-react';
-import { Branch, Department, KPIIndicator, EquipmentItem, User, UserRole, SystemParameters } from '@/lib/types';
+import {
+  Branch,
+  Department,
+  KPIIndicator,
+  EquipmentItem,
+  User,
+  UserRole,
+  SystemParameters,
+  DatabaseConfig,
+  IntegrationCredentials,
+} from '@/lib/types';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
 import AuthModal from '@/components/auth/AuthModal';
 
@@ -43,6 +60,10 @@ interface MasterDataViewProps {
   onRefreshUsers?: () => void;
   systemParams?: SystemParameters;
   onUpdateSystemParams?: (newParams: SystemParameters) => void;
+  dbConfig?: DatabaseConfig;
+  onUpdateDbConfig?: (newConfig: DatabaseConfig) => void;
+  credentials?: IntegrationCredentials;
+  onUpdateCredentials?: (newCreds: IntegrationCredentials) => void;
   currentUser?: User | null;
 }
 
@@ -55,6 +76,10 @@ export default function MasterDataView({
   onRefreshUsers,
   systemParams,
   onUpdateSystemParams,
+  dbConfig,
+  onUpdateDbConfig,
+  credentials,
+  onUpdateCredentials,
   currentUser,
 }: MasterDataViewProps) {
   const [activeTab, setActiveTab] = useState<'kpi' | 'branches' | 'departments' | 'equipment' | 'users' | 'parameter'>('users');
@@ -66,6 +91,40 @@ export default function MasterDataView({
   const [autoLogoutInput, setAutoLogoutInput] = useState<boolean>(systemParams?.auto_logout_idle !== false);
   const [warningBeforeInput, setWarningBeforeInput] = useState<number>(systemParams?.warning_before_minutes || 2);
   const [defaultThemeInput, setDefaultThemeInput] = useState<'light' | 'dark'>(systemParams?.default_theme || 'light');
+
+  // Database configuration state
+  const [dbEngineInput, setDbEngineInput] = useState<'sqlite' | 'postgres'>(dbConfig?.engine || 'sqlite');
+  const [dbSqlitePathInput, setDbSqlitePathInput] = useState<string>(dbConfig?.sqlite_path || 'data/ed_dashboard.db');
+  const [dbPgHostInput, setDbPgHostInput] = useState<string>(dbConfig?.pg_host || 'localhost');
+  const [dbPgPortInput, setDbPgPortInput] = useState<number>(dbConfig?.pg_port || 5432);
+  const [dbPgDatabaseInput, setDbPgDatabaseInput] = useState<string>(dbConfig?.pg_database || 'ed_dashboard');
+  const [dbPgUserInput, setDbPgUserInput] = useState<string>(dbConfig?.pg_user || 'postgres');
+  const [dbPgPasswordInput, setDbPgPasswordInput] = useState<string>(dbConfig?.pg_password || '');
+  const [dbPgSslInput, setDbPgSslInput] = useState<boolean>(dbConfig?.pg_ssl || false);
+  const [dbMaxConnInput, setDbMaxConnInput] = useState<number>(dbConfig?.max_connections || 10);
+
+  // Database validation state
+  const [validatingPath, setValidatingPath] = useState<boolean>(false);
+  const [pathValidationResult, setPathValidationResult] = useState<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    resolvedPath?: string;
+    exists?: boolean;
+    isWritable?: boolean;
+    sizeKb?: number;
+  } | null>(null);
+
+  // Integration credentials state
+  const [googleDriveEmailInput, setGoogleDriveEmailInput] = useState<string>(credentials?.google_drive_email || 'regdashr@gmail.com');
+  const [googleDriveFilePathInput, setGoogleDriveFilePathInput] = useState<string>(credentials?.google_drive_file_path || 'data/input_data.xlsx');
+  const [googleSheetsIdInput, setGoogleSheetsIdInput] = useState<string>(credentials?.google_sheets_id || '');
+  const [googleSheetsNameInput, setGoogleSheetsNameInput] = useState<string>(credentials?.google_sheets_name || 'Input_Kinerja_Bulanan');
+  const [googleApiKeyInput, setGoogleApiKeyInput] = useState<string>(credentials?.google_api_key || '');
+  const [apiGatewayUrlInput, setApiGatewayUrlInput] = useState<string>(credentials?.api_gateway_url || 'https://api.pelindo.co.id/v1/r4');
+  const [apiGatewayTokenInput, setApiGatewayTokenInput] = useState<string>(credentials?.api_gateway_token || '');
+  const [showSecretCredentials, setShowSecretCredentials] = useState<boolean>(false);
+
   const [paramSaving, setParamSaving] = useState<boolean>(false);
   const [paramSuccessMsg, setParamSuccessMsg] = useState<string | null>(null);
   const [paramErrorMsg, setParamErrorMsg] = useState<string | null>(null);
@@ -77,7 +136,51 @@ export default function MasterDataView({
       setWarningBeforeInput(systemParams.warning_before_minutes || 2);
       setDefaultThemeInput(systemParams.default_theme || 'light');
     }
-  }, [systemParams]);
+    if (dbConfig) {
+      setDbEngineInput(dbConfig.engine || 'sqlite');
+      setDbSqlitePathInput(dbConfig.sqlite_path || 'data/ed_dashboard.db');
+      setDbPgHostInput(dbConfig.pg_host || 'localhost');
+      setDbPgPortInput(dbConfig.pg_port || 5432);
+      setDbPgDatabaseInput(dbConfig.pg_database || 'ed_dashboard');
+      setDbPgUserInput(dbConfig.pg_user || 'postgres');
+      setDbPgPasswordInput(dbConfig.pg_password || '');
+      setDbPgSslInput(dbConfig.pg_ssl || false);
+      setDbMaxConnInput(dbConfig.max_connections || 10);
+    }
+    if (credentials) {
+      setGoogleDriveEmailInput(credentials.google_drive_email || 'regdashr@gmail.com');
+      setGoogleDriveFilePathInput(credentials.google_drive_file_path || 'data/input_data.xlsx');
+      setGoogleSheetsIdInput(credentials.google_sheets_id || '');
+      setGoogleSheetsNameInput(credentials.google_sheets_name || 'Input_Kinerja_Bulanan');
+      setGoogleApiKeyInput(credentials.google_api_key || '');
+      setApiGatewayUrlInput(credentials.api_gateway_url || 'https://api.pelindo.co.id/v1/r4');
+      setApiGatewayTokenInput(credentials.api_gateway_token || '');
+    }
+  }, [systemParams, dbConfig, credentials]);
+
+  const handleValidateDbPath = async () => {
+    setValidatingPath(true);
+    setPathValidationResult(null);
+    try {
+      const res = await fetch('/api/system-params', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'validate_db_path',
+          sqlite_path: dbSqlitePathInput,
+        }),
+      });
+      const data = await res.json();
+      setPathValidationResult(data);
+    } catch (err: any) {
+      setPathValidationResult({
+        success: false,
+        message: err.message || 'Gagal memvalidasi path database.',
+      });
+    } finally {
+      setValidatingPath(false);
+    }
+  };
 
   const handleSaveParams = async () => {
     setParamSaving(true);
@@ -88,22 +191,50 @@ export default function MasterDataView({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          session_timeout_minutes: sessionTimeoutInput,
-          auto_logout_idle: autoLogoutInput,
-          warning_before_minutes: warningBeforeInput,
-          default_theme: defaultThemeInput,
+          params: {
+            session_timeout_minutes: sessionTimeoutInput,
+            auto_logout_idle: autoLogoutInput,
+            warning_before_minutes: warningBeforeInput,
+            default_theme: defaultThemeInput,
+          },
+          dbConfig: {
+            engine: dbEngineInput,
+            sqlite_path: dbSqlitePathInput,
+            pg_host: dbPgHostInput,
+            pg_port: dbPgPortInput,
+            pg_database: dbPgDatabaseInput,
+            pg_user: dbPgUserInput,
+            pg_password: dbPgPasswordInput,
+            pg_ssl: dbPgSslInput,
+            max_connections: dbMaxConnInput,
+          },
+          credentials: {
+            google_drive_email: googleDriveEmailInput,
+            google_drive_file_path: googleDriveFilePathInput,
+            google_sheets_id: googleSheetsIdInput,
+            google_sheets_name: googleSheetsNameInput,
+            google_api_key: googleApiKeyInput,
+            api_gateway_url: apiGatewayUrlInput,
+            api_gateway_token: apiGatewayTokenInput,
+          },
           user_id: currentUser?.id,
           user_name: currentUser?.name || currentUser?.username,
           user_role: currentUser?.role,
         }),
       });
       const data = await res.json();
-      if (data.success && data.params) {
-        setParamSuccessMsg('Parameter sistem dan durasi sesi 30 menit berhasil disimpan ke database!');
-        if (onUpdateSystemParams) {
+      if (data.success) {
+        setParamSuccessMsg('Parameter sistem, konfigurasi lokasi database, dan kredensial integrasi berhasil disimpan!');
+        if (data.params && onUpdateSystemParams) {
           onUpdateSystemParams(data.params);
         }
-        setTimeout(() => setParamSuccessMsg(null), 4500);
+        if (data.dbConfig && onUpdateDbConfig) {
+          onUpdateDbConfig(data.dbConfig);
+        }
+        if (data.credentials && onUpdateCredentials) {
+          onUpdateCredentials(data.credentials);
+        }
+        setTimeout(() => setParamSuccessMsg(null), 5000);
       } else {
         setParamErrorMsg(data.error || 'Gagal menyimpan parameter sistem.');
       }
@@ -389,7 +520,7 @@ export default function MasterDataView({
             className={`tab-btn ${activeTab === 'parameter' ? 'active' : ''}`}
           >
             <Sliders size={16} />
-            <span>Parameter Sistem & Sesi</span>
+            <span>Parameter Sistem</span>
           </button>
         </div>
 
@@ -1113,10 +1244,10 @@ export default function MasterDataView({
             </table>
           </div>
         )}
-        {/* TAB 5: PARAMETER SISTEM & SESI */}
+        {/* TAB 5: PARAMETER SISTEM */}
         {activeTab === 'parameter' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Header info */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Header info banner */}
             <div
               style={{
                 display: 'flex',
@@ -1133,8 +1264,8 @@ export default function MasterDataView({
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div
                   style={{
-                    width: '40px',
-                    height: '40px',
+                    width: '42px',
+                    height: '42px',
                     borderRadius: '10px',
                     backgroundColor: 'rgba(2, 132, 199, 0.15)',
                     color: 'var(--blue-primary)',
@@ -1146,19 +1277,27 @@ export default function MasterDataView({
                   <Sliders size={22} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
-                    Konfigurasi Parameter Sistem & Keamanan Sesi
+                  <h3 style={{ fontSize: '15.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                    Konfigurasi Parameter Sistem, Database & Integrasi
                   </h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0' }}>
-                    Kelola batas waktu inaktivitas sesi, kebijakan auto-logout pengguna, dan preferensi tema default PortDash Regional 4.
+                    Kelola batas waktu sesi, lokasi penyimpanan database (dapat diedit jika lokasi file/server berubah), dan kredensial integrasi cloud.
                   </p>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span className="badge badge-green" style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px' }}>
                   <Shield size={13} />
-                  <span>Sesi Terproteksi ({sessionTimeoutInput} Menit)</span>
+                  <span>Sesi: {sessionTimeoutInput} Menit</span>
+                </span>
+                <span className="badge badge-blue" style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px' }}>
+                  <HardDrive size={13} />
+                  <span>DB: {dbEngineInput.toUpperCase()}</span>
+                </span>
+                <span className="badge badge-orange" style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px' }}>
+                  <UploadCloud size={13} />
+                  <span>Sync: {googleDriveEmailInput}</span>
                 </span>
               </div>
             </div>
@@ -1204,249 +1343,840 @@ export default function MasterDataView({
               </div>
             )}
 
-            {/* Parameter Settings Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-              {/* Card 1: Session Timeout Duration */}
-              <div
-                style={{
-                  padding: '20px',
-                  backgroundColor: 'var(--bg-surface)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Clock size={18} color="var(--blue-primary)" />
-                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
-                    Batas Waktu Sesi (Inactivity Timeout)
-                  </h4>
+            {/* SECTION 1: KEAMANAN SESI & TAMPILAN DEFAULT */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <Clock size={16} color="var(--blue-primary)" />
+                <h4 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  1. Kebijakan Sesi & Preferensi Tampilan
+                </h4>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))', gap: '16px' }}>
+                {/* Card 1: Session Timeout Duration */}
+                <div
+                  style={{
+                    padding: '18px',
+                    backgroundColor: 'var(--bg-surface)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Clock size={18} color="var(--blue-primary)" />
+                    <h5 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                      Batas Waktu Sesi (Inactivity Timeout)
+                    </h5>
+                  </div>
+
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                    Jika tidak ada aktivitas pengguna selama durasi ini, aplikasi otomatis keluar dan kembali ke menu login.
+                  </p>
+
+                  {/* Preset Chips */}
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      Pilihan Preset Waktu:
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {[15, 30, 45, 60, 120].map((mins) => (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => setSessionTimeoutInput(mins)}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '6px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            border: sessionTimeoutInput === mins ? '1px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                            backgroundColor: sessionTimeoutInput === mins ? 'rgba(2, 132, 199, 0.18)' : 'var(--bg-inner)',
+                            color: sessionTimeoutInput === mins ? 'var(--blue-primary)' : 'var(--text-main)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {mins}m {mins === 30 ? '(Default)' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Input Number */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
+                      Kustom Durasi:
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="480"
+                      value={sessionTimeoutInput}
+                      onChange={(e) => setSessionTimeoutInput(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="form-input"
+                      style={{ width: '85px', textAlign: 'center', fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Menit</span>
+                  </div>
                 </div>
 
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
-                  Jika tidak ada aktivitas pengguna (klik mouse, ketik, scroll) selama durasi ini, aplikasi otomatis keluar dan kembali ke menu login.
-                </p>
-
-                {/* Preset Chips */}
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    Pilihan Preset Waktu:
+                {/* Card 2: Auto-Logout Policy & Warning */}
+                <div
+                  style={{
+                    padding: '18px',
+                    backgroundColor: 'var(--bg-surface)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Shield size={18} color="var(--blue-primary)" />
+                    <h5 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                      Kebijakan Logout & Notifikasi
+                    </h5>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {[15, 30, 45, 60, 120].map((mins) => (
-                      <button
-                        key={mins}
-                        type="button"
-                        onClick={() => setSessionTimeoutInput(mins)}
+
+                  {/* Toggle Auto-Logout */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <input
+                      type="checkbox"
+                      id="chk-auto-logout"
+                      checked={autoLogoutInput}
+                      onChange={(e) => setAutoLogoutInput(e.target.checked)}
+                      style={{ marginTop: '3px', cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    <label htmlFor="chk-auto-logout" style={{ cursor: 'pointer' }}>
+                      <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-title)' }}>
+                        Aktifkan Auto-Logout saat Idle
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Kembali ke menu login jika tidak ada aktivitas pengguna.
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Warning Timing */}
+                  <div>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                      Peringatan Hitung Mundur:
+                    </label>
+                    <select
+                      value={warningBeforeInput}
+                      onChange={(e) => setWarningBeforeInput(Number(e.target.value))}
+                      className="form-select"
+                      style={{ width: '100%', fontSize: '12px' }}
+                    >
+                      <option value={1}>1 Menit Sebelum Sesi Berakhir</option>
+                      <option value={2}>2 Menit Sebelum Sesi Berakhir (Direkomendasikan)</option>
+                      <option value={5}>5 Menit Sebelum Sesi Berakhir</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Card 3: Default Theme Mode */}
+                <div
+                  style={{
+                    padding: '18px',
+                    backgroundColor: 'var(--bg-surface)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Sun size={18} color="var(--accent-orange, #f59e0b)" />
+                    <h5 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                      Mode Tampilan Bawaan (Theme)
+                    </h5>
+                  </div>
+
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                    Pilih tema bawaan saat aplikasi pertama kali dibuka oleh pengguna baru.
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setDefaultThemeInput('light')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: '8px',
+                        border: defaultThemeInput === 'light' ? '2px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                        backgroundColor: defaultThemeInput === 'light' ? 'rgba(2, 132, 199, 0.12)' : 'var(--bg-inner)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <Sun size={20} color="#f59e0b" />
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
+                        Mode Terang
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--accent-green, #16a34a)', fontWeight: 700 }}>
+                        ✓ Rekomendasi
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDefaultThemeInput('dark')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: '8px',
+                        border: defaultThemeInput === 'dark' ? '2px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                        backgroundColor: defaultThemeInput === 'dark' ? 'rgba(2, 132, 199, 0.12)' : 'var(--bg-inner)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <Moon size={20} color="#38bdf8" />
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
+                        Mode Gelap
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                        Opsional
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: LOKASI & KONFIGURASI DATABASE (BISA DIEDIT/DISESUAIKAN) */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-surface)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                      color: 'var(--accent-green, #10b981)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <HardDrive size={20} />
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '14.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                      2. Lokasi Database & Engine Penyimpanan (Bisa Disesuaikan)
+                    </h4>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                      Konfigurasi lokasi file SQLite atau koneksi database. Jika lokasi database berubah, sesuaikan di sini tanpa perlu restart aplikasi.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Engine Selector Buttons */}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setDbEngineInput('sqlite')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      border: dbEngineInput === 'sqlite' ? '1.5px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                      backgroundColor: dbEngineInput === 'sqlite' ? 'rgba(2, 132, 199, 0.15)' : 'var(--bg-inner)',
+                      color: dbEngineInput === 'sqlite' ? 'var(--blue-primary)' : 'var(--text-main)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <HardDrive size={14} />
+                    <span>SQLite (File Lokal / NAS)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDbEngineInput('postgres')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      border: dbEngineInput === 'postgres' ? '1.5px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
+                      backgroundColor: dbEngineInput === 'postgres' ? 'rgba(2, 132, 199, 0.15)' : 'var(--bg-inner)',
+                      color: dbEngineInput === 'postgres' ? 'var(--blue-primary)' : 'var(--text-main)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Server size={14} />
+                    <span>PostgreSQL (Enterprise Server)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Informational Guidance Box */}
+              <div
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: 'var(--bg-inner)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-subtle)',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.6,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--text-title)', marginBottom: '4px' }}>
+                  <FolderCheck size={16} color="var(--accent-green, #10b981)" />
+                  <span>Dukungan Relokasi File Database Dinamis</span>
+                </div>
+                Jika file database SQLite dipindahkan ke folder penyimpanan lain (misal: shared drive, external mount, atau folder backup seperti <code>/mnt/storage/ed_dashboard.db</code>), cukup ganti path di bawah dan klik <strong>Validasi Path</strong>. Sistem akan langsung mendeteksi dan membuka file tersebut secara dinamis.
+              </div>
+
+              {/* SQLITE CONFIGURATION VIEW */}
+              {dbEngineInput === 'sqlite' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Lokasi File Path Database SQLite (.db):
+                    </label>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        value={dbSqlitePathInput}
+                        onChange={(e) => {
+                          setDbSqlitePathInput(e.target.value);
+                          setPathValidationResult(null);
+                        }}
+                        placeholder="data/ed_dashboard.db"
+                        className="form-input"
                         style={{
-                          padding: '6px 14px',
-                          borderRadius: '8px',
-                          fontSize: '12px',
+                          flex: '1 1 340px',
+                          fontFamily: 'monospace',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          backgroundColor: 'var(--bg-inner)',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleValidateDbPath}
+                        disabled={validatingPath || !dbSqlitePathInput.trim()}
+                        className="btn btn-secondary"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12.5px',
                           fontWeight: 700,
-                          border: sessionTimeoutInput === mins ? '1px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
-                          backgroundColor: sessionTimeoutInput === mins ? 'rgba(2, 132, 199, 0.18)' : 'var(--bg-inner)',
-                          color: sessionTimeoutInput === mins ? 'var(--blue-primary)' : 'var(--text-main)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
+                          whiteSpace: 'nowrap',
                         }}
                       >
-                        {mins} Menit {mins === 30 ? '(Default)' : ''}
+                        {validatingPath ? <RefreshCw size={14} className="spin" /> : <FileCheck size={14} />}
+                        <span>{validatingPath ? 'Memeriksa...' : 'Cek / Validasi Path'}</span>
                       </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Input Number */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
-                    Kustom Durasi:
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="480"
-                    value={sessionTimeoutInput}
-                    onChange={(e) => setSessionTimeoutInput(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="form-input"
-                    style={{ width: '90px', textAlign: 'center', fontWeight: 700 }}
-                  />
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Menit</span>
-                </div>
-              </div>
-
-              {/* Card 2: Auto-Logout Policy & Warning */}
-              <div
-                style={{
-                  padding: '20px',
-                  backgroundColor: 'var(--bg-surface)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Shield size={18} color="var(--blue-primary)" />
-                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
-                    Kebijakan Logout & Notifikasi Peringatan
-                  </h4>
-                </div>
-
-                {/* Toggle Auto-Logout */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                  <input
-                    type="checkbox"
-                    id="chk-auto-logout"
-                    checked={autoLogoutInput}
-                    onChange={(e) => setAutoLogoutInput(e.target.checked)}
-                    style={{ marginTop: '3px', cursor: 'pointer', width: '16px', height: '16px' }}
-                  />
-                  <label htmlFor="chk-auto-logout" style={{ cursor: 'pointer' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
-                      Aktifkan Auto-Logout saat Idle (Kembali ke Login)
                     </div>
-                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      Memastikan keamanan data eksekutif pelabuhan jika perangkat ditinggalkan.
+
+                    {/* Quick Presets */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Preset Lokasi:</span>
+                      {['data/ed_dashboard.db', 'data/ed_dashboard_backup.db', 'data/production.db'].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => {
+                            setDbSqlitePathInput(p);
+                            setPathValidationResult(null);
+                          }}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: '5px',
+                            fontSize: '11px',
+                            border: '1px solid var(--border-subtle)',
+                            backgroundColor: dbSqlitePathInput === p ? 'rgba(2, 132, 199, 0.15)' : 'var(--bg-inner)',
+                            color: dbSqlitePathInput === p ? 'var(--blue-primary)' : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {p}
+                        </button>
+                      ))}
                     </div>
-                  </label>
-                </div>
+                  </div>
 
-                {/* Warning Timing */}
-                <div style={{ marginTop: '4px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-                    Peringatan Hitung Mundur Sebelum Logout:
-                  </label>
-                  <select
-                    value={warningBeforeInput}
-                    onChange={(e) => setWarningBeforeInput(Number(e.target.value))}
-                    className="form-select"
-                    style={{ width: '100%' }}
-                  >
-                    <option value={1}>1 Menit Sebelum Sesi Berakhir</option>
-                    <option value={2}>2 Menit Sebelum Sesi Berakhir (Direkomendasikan)</option>
-                    <option value={5}>5 Menit Sebelum Sesi Berakhir</option>
-                  </select>
+                  {/* Path Validation Result Banner */}
+                  {pathValidationResult && (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: pathValidationResult.success
+                          ? 'rgba(34, 197, 94, 0.12)'
+                          : 'rgba(239, 68, 68, 0.12)',
+                        border: pathValidationResult.success
+                          ? '1px solid rgba(34, 197, 94, 0.35)'
+                          : '1px solid rgba(239, 68, 68, 0.35)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: pathValidationResult.success ? 'var(--accent-green, #16a34a)' : 'var(--accent-red, #dc2626)' }}>
+                        {pathValidationResult.success ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                        <span>
+                          {pathValidationResult.success
+                            ? 'Hasil Validasi: Lokasi Database Valid & Siap Digunakan'
+                            : 'Hasil Validasi: Lokasi Database Tidak Valid'}
+                        </span>
+                      </div>
+                      <div style={{ color: 'var(--text-main)', lineHeight: 1.5 }}>
+                        {pathValidationResult.message || pathValidationResult.error}
+                      </div>
+                      {pathValidationResult.resolvedPath && (
+                        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '4px', fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                          <div><strong>Path Absolut:</strong> <code style={{ color: 'var(--text-main)' }}>{pathValidationResult.resolvedPath}</code></div>
+                          <div><strong>Ukuran File:</strong> {pathValidationResult.sizeKb || 0} KB</div>
+                          <div><strong>Akses Tulis Folder:</strong> <span style={{ color: pathValidationResult.isWritable ? '#16a34a' : '#dc2626', fontWeight: 700 }}>{pathValidationResult.isWritable ? 'Tersedia (Writable)' : 'Tidak Tersedia'}</span></div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
-              {/* Card 3: Default Theme Mode */}
-              <div
-                style={{
-                  padding: '20px',
-                  backgroundColor: 'var(--bg-surface)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Sun size={18} color="var(--accent-orange, #f59e0b)" />
-                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
-                    Mode Tampilan Default (Theme)
+              {/* POSTGRESQL CONFIGURATION VIEW */}
+              {dbEngineInput === 'postgres' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Host / Server IP:
+                      </label>
+                      <input
+                        type="text"
+                        value={dbPgHostInput}
+                        onChange={(e) => setDbPgHostInput(e.target.value)}
+                        placeholder="localhost atau 10.x.x.x"
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '12.5px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Port Database:
+                      </label>
+                      <input
+                        type="number"
+                        value={dbPgPortInput}
+                        onChange={(e) => setDbPgPortInput(Number(e.target.value) || 5432)}
+                        placeholder="5432"
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '12.5px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Nama Database:
+                      </label>
+                      <input
+                        type="text"
+                        value={dbPgDatabaseInput}
+                        onChange={(e) => setDbPgDatabaseInput(e.target.value)}
+                        placeholder="ed_dashboard"
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '12.5px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Username Database:
+                      </label>
+                      <input
+                        type="text"
+                        value={dbPgUserInput}
+                        onChange={(e) => setDbPgUserInput(e.target.value)}
+                        placeholder="postgres"
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '12.5px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Password Database:
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showSecretCredentials ? 'text' : 'password'}
+                          value={dbPgPasswordInput}
+                          onChange={(e) => setDbPgPasswordInput(e.target.value)}
+                          placeholder="Password database"
+                          className="form-input"
+                          style={{ width: '100%', fontSize: '12.5px', paddingRight: '32px' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSecretCredentials(!showSecretCredentials)}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {showSecretCredentials ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Max Pool Connections:
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={dbMaxConnInput}
+                        onChange={(e) => setDbMaxConnInput(Number(e.target.value) || 10)}
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '12.5px' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                    <input
+                      type="checkbox"
+                      id="chk-pg-ssl"
+                      checked={dbPgSslInput}
+                      onChange={(e) => setDbPgSslInput(e.target.checked)}
+                      style={{ cursor: 'pointer', width: '15px', height: '15px' }}
+                    />
+                    <label htmlFor="chk-pg-ssl" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
+                      Gunakan Enkripsi Koneksi SSL / TLS (Wajib untuk Cloud DB / AWS RDS / Google Cloud SQL)
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 3: KREDENSIAL & INTEGRASI LAYANAN */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Key size={16} color="var(--blue-primary)" />
+                  <h4 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    3. Kredensial & Integrasi Eksternal (Google Cloud & Gateway)
                   </h4>
                 </div>
 
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
-                  Pilih tema bawaan saat aplikasi pertama kali dibuka oleh pengguna baru di web browser.
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setDefaultThemeInput('light')}
-                    style={{
-                      padding: '14px',
-                      borderRadius: '10px',
-                      border: defaultThemeInput === 'light' ? '2px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
-                      backgroundColor: defaultThemeInput === 'light' ? 'rgba(2, 132, 199, 0.12)' : 'var(--bg-inner)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <Sun size={24} color="#f59e0b" />
-                    <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-title)' }}>
-                      Mode Terang (Light)
-                    </span>
-                    <span style={{ fontSize: '10.5px', color: 'var(--accent-green, #16a34a)', fontWeight: 700 }}>
-                      ✓ Rekomendasi Resmi
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDefaultThemeInput('dark')}
-                    style={{
-                      padding: '14px',
-                      borderRadius: '10px',
-                      border: defaultThemeInput === 'dark' ? '2px solid var(--blue-primary)' : '1px solid var(--border-subtle)',
-                      backgroundColor: defaultThemeInput === 'dark' ? 'rgba(2, 132, 199, 0.12)' : 'var(--bg-inner)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <Moon size={24} color="#38bdf8" />
-                    <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-title)' }}>
-                      Mode Gelap (Dark)
-                    </span>
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                      Opsional
-                    </span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSecretCredentials(!showSecretCredentials)}
+                  className="btn btn-secondary"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '5px 12px',
+                    fontSize: '11.5px',
+                  }}
+                >
+                  {showSecretCredentials ? <EyeOff size={13} /> : <Eye size={13} />}
+                  <span>{showSecretCredentials ? 'Sembunyikan Nilai Kunci' : 'Tampilkan Nilai Kunci'}</span>
+                </button>
               </div>
 
-              {/* Card 4: Audit & Security Summary */}
-              <div
-                style={{
-                  padding: '20px',
-                  backgroundColor: 'var(--bg-surface)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Database size={18} color="var(--blue-primary)" />
-                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
-                    Status Penyimpanan & Kepatuhan
-                  </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                {/* Card A: Google Drive Sync */}
+                <div
+                  style={{
+                    padding: '18px',
+                    backgroundColor: 'var(--bg-surface)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(234, 88, 12, 0.15)',
+                        color: 'var(--accent-orange, #ea580c)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <UploadCloud size={16} />
+                    </div>
+                    <div>
+                      <h5 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                        Integrasi Google Drive (My Drive)
+                      </h5>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sinkronisasi berkas input Excel</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                      Email Akun Google Drive:
+                    </label>
+                    <input
+                      type="email"
+                      value={googleDriveEmailInput}
+                      onChange={(e) => setGoogleDriveEmailInput(e.target.value)}
+                      placeholder="regdashr@gmail.com"
+                      className="form-input"
+                      style={{ width: '100%', fontSize: '12.5px', fontWeight: 600 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                      Path File Excel Input Terintegrasi:
+                    </label>
+                    <input
+                      type="text"
+                      value={googleDriveFilePathInput}
+                      onChange={(e) => setGoogleDriveFilePathInput(e.target.value)}
+                      placeholder="data/input_data.xlsx"
+                      className="form-input"
+                      style={{ width: '100%', fontSize: '12px', fontFamily: 'monospace' }}
+                    />
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      File ini yang disinkronkan langsung dari cloud drive Regional 4 ke server PortDash.
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '4px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid var(--border-subtle)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Penyimpanan:</span>
-                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>SQLite integration_settings</span>
+                {/* Card B: Google Sheets API */}
+                <div
+                  style={{
+                    padding: '18px',
+                    backgroundColor: 'var(--bg-surface)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                        color: 'var(--accent-green, #16a34a)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <FileSpreadsheet size={16} />
+                    </div>
+                    <div>
+                      <h5 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                        Google Sheets API (Spreadsheet Online)
+                      </h5>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sinkronisasi data multi-cabang online</span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid var(--border-subtle)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Multi-Tab Sync:</span>
-                    <span style={{ fontWeight: 600, color: 'var(--accent-green, #16a34a)' }}>Aktif (localStorage listener)</span>
+
+                  <div>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                      Spreadsheet ID:
+                    </label>
+                    <input
+                      type="text"
+                      value={googleSheetsIdInput}
+                      onChange={(e) => setGoogleSheetsIdInput(e.target.value)}
+                      placeholder="Contoh: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                      className="form-input"
+                      style={{ width: '100%', fontSize: '12px', fontFamily: 'monospace' }}
+                    />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid var(--border-subtle)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Terakhir Diperbarui:</span>
-                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                      {systemParams?.updated_at ? new Date(systemParams.updated_at).toLocaleString('id-ID') : 'Bawaan Sistem'}
-                    </span>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Nama Sheet / Tab:
+                      </label>
+                      <input
+                        type="text"
+                        value={googleSheetsNameInput}
+                        onChange={(e) => setGoogleSheetsNameInput(e.target.value)}
+                        placeholder="Input_Kinerja_Bulanan"
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '12px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Google API Key:
+                      </label>
+                      <input
+                        type={showSecretCredentials ? 'text' : 'password'}
+                        value={googleApiKeyInput}
+                        onChange={(e) => setGoogleApiKeyInput(e.target.value)}
+                        placeholder="AIzaSy..."
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '12px', fontFamily: 'monospace' }}
+                      />
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Diperbarui Oleh:</span>
-                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                      {systemParams?.updated_by || 'Admin Regional'}
-                    </span>
+                </div>
+
+                {/* Card C: Pelindo Enterprise API Gateway */}
+                <div
+                  style={{
+                    padding: '18px',
+                    backgroundColor: 'var(--bg-surface)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(2, 132, 199, 0.15)',
+                        color: 'var(--blue-primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Globe size={16} />
+                    </div>
+                    <div>
+                      <h5 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                        Pelindo Enterprise API Gateway
+                      </h5>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Integrasi sistem holding & regional</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                      URL Endpoint Gateway:
+                    </label>
+                    <input
+                      type="url"
+                      value={apiGatewayUrlInput}
+                      onChange={(e) => setApiGatewayUrlInput(e.target.value)}
+                      placeholder="https://api.pelindo.co.id/v1/r4"
+                      className="form-input"
+                      style={{ width: '100%', fontSize: '12px', fontFamily: 'monospace' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                      Bearer Token / API Secret:
+                    </label>
+                    <input
+                      type={showSecretCredentials ? 'text' : 'password'}
+                      value={apiGatewayTokenInput}
+                      onChange={(e) => setApiGatewayTokenInput(e.target.value)}
+                      placeholder="Bearer eyJhbGciOi..."
+                      className="form-input"
+                      style={{ width: '100%', fontSize: '12px', fontFamily: 'monospace' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 4: STATUS PENYIMPANAN & RINGKASAN AUDIT */}
+            <div
+              style={{
+                padding: '18px',
+                backgroundColor: 'var(--bg-surface)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Database size={18} color="var(--blue-primary)" />
+                <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                  4. Status Penyimpanan & Ringkasan Audit Sistem
+                </h4>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', fontSize: '12px', marginTop: '4px' }}>
+                <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Engine Database Aktif:</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                    {dbEngineInput === 'sqlite' ? `SQLite (${dbSqlitePathInput})` : `PostgreSQL (${dbPgHostInput}:${dbPgPortInput}/${dbPgDatabaseInput})`}
+                  </div>
+                </div>
+
+                <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Multi-Tab Sync Listener:</div>
+                  <div style={{ fontWeight: 700, color: 'var(--accent-green, #16a34a)' }}>
+                    Aktif (localStorage portsight_last_activity)
+                  </div>
+                </div>
+
+                <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Terakhir Diperbarui:</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                    {systemParams?.updated_at ? new Date(systemParams.updated_at).toLocaleString('id-ID') : 'Bawaan Sistem'}
+                  </div>
+                </div>
+
+                <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Diperbarui Oleh:</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                    {systemParams?.updated_by || 'Admin Regional'}
                   </div>
                 </div>
               </div>
@@ -1459,8 +2189,9 @@ export default function MasterDataView({
                 justifyContent: 'flex-end',
                 alignItems: 'center',
                 gap: '12px',
-                paddingTop: '12px',
+                paddingTop: '16px',
                 borderTop: '1px solid var(--border-subtle)',
+                flexWrap: 'wrap',
               }}
             >
               <button
@@ -1470,11 +2201,17 @@ export default function MasterDataView({
                   setAutoLogoutInput(true);
                   setWarningBeforeInput(2);
                   setDefaultThemeInput('light');
+                  setDbEngineInput('sqlite');
+                  setDbSqlitePathInput('data/ed_dashboard.db');
+                  setGoogleDriveEmailInput('regdashr@gmail.com');
+                  setGoogleDriveFilePathInput('data/input_data.xlsx');
+                  setGoogleSheetsNameInput('Input_Kinerja_Bulanan');
+                  setPathValidationResult(null);
                 }}
                 className="btn btn-secondary"
                 style={{ fontSize: '13px' }}
               >
-                Reset ke Rekomendasi (30 Menit & Terang)
+                Reset ke Parameter Rekomendasi
               </button>
 
               <button

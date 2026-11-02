@@ -11,6 +11,8 @@ export async function GET() {
     const equipment = dbQueries.getEquipmentCatalog();
     const gsheetsConfig = dbQueries.getGoogleSheetsConfig();
     const systemParams = dbQueries.getSystemParameters();
+    const dbConfig = dbQueries.getDbConfig();
+    const credentials = dbQueries.getIntegrationCredentials();
 
     return NextResponse.json({
       success: true,
@@ -22,6 +24,8 @@ export async function GET() {
       templates,
       gsheetsConfig,
       systemParams,
+      dbConfig,
+      credentials,
     });
   } catch (error: any) {
     return NextResponse.json(

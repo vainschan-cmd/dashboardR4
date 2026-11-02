@@ -14,6 +14,8 @@ import {
   AuditLog,
   GoogleSheetsConfig,
   SystemParameters,
+  DatabaseConfig,
+  IntegrationCredentials,
 } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
 
@@ -23,15 +25,87 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, 'ed_dashboard.db');
+// Database location & configuration management
+export function getDbConfig(): DatabaseConfig {
+  const configPath = path.join(process.cwd(), 'data', 'db_config.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      const content = fs.readFileSync(configPath, 'utf8');
+      return JSON.parse(content);
+    } catch (e) {
+      console.error('Error reading db_config.json:', e);
+    }
+  }
+  return {
+    engine: 'sqlite',
+    sqlite_path: 'data/ed_dashboard.db',
+    pg_host: 'localhost',
+    pg_port: 5432,
+    pg_database: 'ed_dashboard',
+    pg_user: 'postgres',
+    pg_password: '',
+    pg_ssl: false,
+    max_connections: 10,
+  };
+}
+
+export function getDbPath(): string {
+  if (process.env.DATABASE_PATH) {
+    return process.env.DATABASE_PATH;
+  }
+  const cfg = getDbConfig();
+  if (cfg.sqlite_path) {
+    return path.isAbsolute(cfg.sqlite_path)
+      ? cfg.sqlite_path
+      : path.join(process.cwd(), cfg.sqlite_path);
+  }
+  return path.join(process.cwd(), 'data', 'ed_dashboard.db');
+}
+
 let dbInstance: DatabaseSync | null = null;
 
 export function getDb(): DatabaseSync {
   if (!dbInstance) {
-    dbInstance = new DatabaseSync(dbPath);
+    const activePath = getDbPath();
+    const dir = path.dirname(activePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    dbInstance = new DatabaseSync(activePath);
     initSchema(dbInstance);
   }
   return dbInstance;
+}
+
+export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): DatabaseConfig {
+  const current = getDbConfig();
+  const updated: DatabaseConfig = {
+    ...current,
+    ...cfg,
+    updated_at: new Date().toISOString(),
+    updated_by: updatedBy || 'Administrator',
+  };
+  const configPath = path.join(process.cwd(), 'data', 'db_config.json');
+  fs.writeFileSync(configPath, JSON.stringify(updated, null, 2), 'utf8');
+
+  try {
+    const db = getDb();
+    db.prepare(`
+      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
+      VALUES ('cfg_database', 'database_config', ?, ?)
+    `).run(JSON.stringify(updated), updated.updated_at!);
+  } catch (e) {}
+
+  if (cfg.sqlite_path && cfg.sqlite_path !== current.sqlite_path) {
+    if (dbInstance) {
+      try {
+        dbInstance.close();
+      } catch (e) {}
+      dbInstance = null;
+    }
+  }
+
+  return updated;
 }
 
 function initSchema(db: DatabaseSync) {
@@ -713,6 +787,63 @@ export const dbQueries = {
       INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
       VALUES ('cfg_system_params', 'system_parameters', ?, ?)
     `).run(JSON.stringify(updated), updated.updated_at!);
+    return updated;
+  },
+
+  // Database Location & Connection Configuration
+  getDbConfig: (): DatabaseConfig => {
+    return getDbConfig();
+  },
+  saveDbConfig: (cfg: Partial<DatabaseConfig>, updatedBy?: string): DatabaseConfig => {
+    return saveDbConfig(cfg, updatedBy);
+  },
+
+  // External Integration Credentials (Google Drive, Sheets, Gateway)
+  getIntegrationCredentials: (): IntegrationCredentials => {
+    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'integration_credentials'").get() as any;
+    if (!row) {
+      return {
+        google_drive_email: 'regdashr@gmail.com',
+        google_drive_file_path: 'data/input_data.xlsx',
+        google_sheets_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
+        google_sheets_name: 'Input_Kinerja_Bulanan',
+        google_api_key: '',
+        api_gateway_url: 'https://api.pelindo.co.id/v1/r4',
+        api_gateway_token: '',
+      };
+    }
+    return {
+      google_drive_email: 'regdashr@gmail.com',
+      google_drive_file_path: 'data/input_data.xlsx',
+      google_sheets_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
+      google_sheets_name: 'Input_Kinerja_Bulanan',
+      ...JSON.parse(row.config_json),
+    };
+  },
+  saveIntegrationCredentials: (creds: Partial<IntegrationCredentials>, updatedBy?: string): IntegrationCredentials => {
+    const db = getDb();
+    const current = dbQueries.getIntegrationCredentials();
+    const updated: IntegrationCredentials = {
+      ...current,
+      ...creds,
+      updated_at: new Date().toISOString(),
+      updated_by: updatedBy || 'Administrator',
+    };
+    db.prepare(`
+      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
+      VALUES ('cfg_credentials', 'integration_credentials', ?, ?)
+    `).run(JSON.stringify(updated), updated.updated_at!);
+
+    try {
+      const currentGSheet = dbQueries.getGoogleSheetsConfig();
+      dbQueries.saveGoogleSheetsConfig({
+        ...currentGSheet,
+        spreadsheet_id: updated.google_sheets_id || currentGSheet.spreadsheet_id,
+        sheet_name: updated.google_sheets_name || currentGSheet.sheet_name,
+        service_account_email: updated.google_drive_email || currentGSheet.service_account_email,
+      });
+    } catch (e) {}
+
     return updated;
   }
 };

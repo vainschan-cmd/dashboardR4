@@ -1,0 +1,13 @@
+{
+  "engine": "sqlite",
+  "sqlite_path": "data/ed_dashboard.db",
+  "pg_host": "localhost",
+  "pg_port": 5432,
+  "pg_database": "ed_dashboard",
+  "pg_user": "postgres",
+  "pg_password": "",
+  "pg_ssl": false,
+  "max_connections": 10,
+  "updated_at": "2026-11-02T23:55:00.037Z",
+  "updated_by": "Admin Regional 4"
+}
