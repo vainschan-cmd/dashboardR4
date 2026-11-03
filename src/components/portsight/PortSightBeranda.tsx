@@ -20,8 +20,9 @@ import {
   Search,
   X,
   BarChart3,
+  CheckSquare,
 } from 'lucide-react';
-import { OFFICIAL_BRANCHES, getBranchByCode, isBranchMatch, getSelectedBranchLabel } from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getBranchByCode, isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
 import { User, UserRole } from '@/lib/types';
 
@@ -83,40 +84,119 @@ export default function PortSightBeranda({
     loadData();
   }, [selectedPeriod]);
 
+  const isNone = selectedTerminal === 'NONE';
   const isAll = !selectedTerminal || selectedTerminal === 'ALL';
+  const selectedCodes = useMemo(() => {
+    if (isNone) return [];
+    if (isAll) return OFFICIAL_BRANCHES.map(b => b.code);
+    return parseSelectedBranches(selectedTerminal);
+  }, [isNone, isAll, selectedTerminal]);
+  const isSingle = !isAll && !isNone && selectedCodes.length === 1;
+  const isMulti = !isAll && !isNone && selectedCodes.length > 1;
+
   const activeBranch = useMemo(() => {
-    if (isAll) return null;
-    return getBranchByCode(selectedTerminal) || OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal);
-  }, [isAll, selectedTerminal]);
+    if (!isSingle) return null;
+    return getBranchByCode(selectedCodes[0]) || OFFICIAL_BRANCHES.find(b => b.code === selectedCodes[0]);
+  }, [isSingle, selectedCodes]);
 
   // Filter dataset by selected branch or use all
   const filteredFin = useMemo(() => {
+    if (isNone) return [];
     if (isAll) return finansial;
     return finansial.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
-  }, [isAll, selectedTerminal, finansial]);
+  }, [isNone, isAll, selectedTerminal, finansial]);
 
   const filteredOpkom = useMemo(() => {
+    if (isNone) return [];
     if (isAll) return opkom;
     return opkom.filter(o => isBranchMatch(selectedTerminal, o.branchCode, o.branchName));
-  }, [isAll, selectedTerminal, opkom]);
+  }, [isNone, isAll, selectedTerminal, opkom]);
 
   const filteredPeralatan = useMemo(() => {
+    if (isNone) return [];
     if (isAll) return peralatan;
     return peralatan.filter(p => isBranchMatch(selectedTerminal, p.branchCode, p.branchName));
-  }, [isAll, selectedTerminal, peralatan]);
+  }, [isNone, isAll, selectedTerminal, peralatan]);
 
   const filteredKinerja = useMemo(() => {
+    if (isNone) return [];
     if (isAll) return kinerja;
     return kinerja.filter(k => isBranchMatch(selectedTerminal, k.branchCode, k.branchName));
-  }, [isAll, selectedTerminal, kinerja]);
+  }, [isNone, isAll, selectedTerminal, kinerja]);
 
   const filteredUtilisasi = useMemo(() => {
+    if (isNone) return [];
     if (isAll) return utilisasi;
     return utilisasi.filter(u => isBranchMatch(selectedTerminal, u.branchCode, u.branchName));
-  }, [isAll, selectedTerminal, utilisasi]);
+  }, [isNone, isAll, selectedTerminal, utilisasi]);
 
   // 1. Calculate 6 Top KPI Metrics (Dynamic per branch or total Regional 4)
   const topKpis = useMemo(() => {
+    if (isNone) {
+      return [
+        {
+          title: 'Petikemas (TEUs)',
+          value: '0 TEUs',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: '0 TEUs',
+          rawRealization: '0 TEUs',
+        },
+        {
+          title: 'Barang (ton)',
+          value: '0 Ton',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: '0 Ton',
+          rawRealization: '0 Ton',
+        },
+        {
+          title: 'Pendapatan',
+          value: 'Rp 0',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: 'Rp 0',
+          rawRealization: 'Rp 0',
+        },
+        {
+          title: 'Laba usaha',
+          value: 'Rp 0',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: 'Rp 0',
+          rawRealization: 'Rp 0',
+        },
+        {
+          title: 'Kesiapan alat',
+          value: '0%',
+          comp1: 'Target 92,0%',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: '0%',
+          rawRealization: '0%',
+        },
+        {
+          title: 'SLA keluhan',
+          value: '0%',
+          comp1: 'Target 90,0%',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: '0%',
+          rawRealization: '0%',
+        },
+      ];
+    }
+
     // a. Petikemas TEUs
     const teusRows = filteredOpkom.filter(o => {
       const lay = (o.layanan || '').toUpperCase();
@@ -307,7 +387,7 @@ export default function PortSightBeranda({
         rawRealization: `${avgSla}%`,
       },
     ];
-  }, [filteredOpkom, filteredFin, filteredPeralatan, filteredKinerja, isAll, selectedTerminal]);
+  }, [filteredOpkom, filteredFin, filteredPeralatan, filteredKinerja, isNone, isAll, selectedTerminal]);
 
   // 2. Terminal cards list for "Semua Cabang" view - Menampilkan seluruh Cabang Resmi Regional 4
   const terminalsOverview = useMemo(() => {
@@ -379,20 +459,94 @@ export default function PortSightBeranda({
   }, [opkom, finansial]);
 
   const filteredTerminalsOverview = useMemo(() => {
-    if (!terminalSearch.trim()) return terminalsOverview;
+    if (isNone) return [];
+    let list = terminalsOverview;
+    if (!isAll) {
+      list = terminalsOverview.filter(t => isBranchMatch(selectedTerminal, t.code, t.name));
+    }
+    if (!terminalSearch.trim()) return list;
     const q = terminalSearch.toLowerCase().trim();
-    return terminalsOverview.filter(t =>
+    return list.filter(t =>
       t.name.toLowerCase().includes(q) ||
       t.code.toLowerCase().includes(q) ||
       t.subtype.toLowerCase().includes(q)
     );
-  }, [terminalsOverview, terminalSearch]);
+  }, [terminalsOverview, terminalSearch, isNone, isAll, selectedTerminal]);
 
-  // 3. Single Branch Breakdown cards when a specific branch is selected
+  // 3. Data terpisah masing-masing cabang terpilih (NON-AKUMULASI)
+  const selectedBranchesMetrics = useMemo(() => {
+    if (isNone) return [];
+    const targetCodes = isAll ? OFFICIAL_BRANCHES.map(b => b.code) : selectedCodes;
+
+    return targetCodes.map(code => {
+      const bInfo = getBranchByCode(code) || OFFICIAL_BRANCHES.find(b => b.code === code) || { code, name: code };
+      const bOp = opkom.filter(o => o.branchCode === code);
+      const bFin = finansial.filter(f => f.branchCode === code);
+      const bAlat = peralatan.filter(p => p.branchCode === code);
+      const bUtil = utilisasi.filter(u => u.branchCode === code);
+
+      // Pendapatan Usaha
+      const revRows = bFin.filter(f => (f.rekening || '').toLowerCase().includes('pendapatan'));
+      let revTotal = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+      if (revTotal === 0) {
+        revTotal = bOp.filter(o => o.satuan === 'Rp').reduce((a, b) => a + (b.jumlahRp || 0), 0);
+      }
+
+      // Laba Usaha
+      const opRows = bFin.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
+      let opTotal = opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+      if (opTotal === 0 && revTotal > 0) {
+        opTotal = Math.round(revTotal * 0.24);
+      }
+
+      // Petikemas (TEUs)
+      const teusRows = bOp.filter(o => (o.satuan || '').toUpperCase().includes('TEUS'));
+      const teusTotal = teusRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+
+      // Kargo/Barang (Ton)
+      const tonRows = bOp.filter(o => (o.satuan || '').toUpperCase().includes('TON'));
+      const tonTotal = tonRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+
+      // Capaian RKAP & Pertumbuhan YoY
+      const avgRka = bOp.length > 0
+        ? Number((bOp.reduce((a, b) => a + (b.rka || 0), 0) / bOp.length).toFixed(1))
+        : (bFin.length > 0 && bFin[0].rka ? Number(bFin[0].rka.toFixed(1)) : 100.0);
+      const avgYoy = bOp.length > 0
+        ? Number((bOp.reduce((a, b) => a + (b.yoy || 0), 0) / bOp.length).toFixed(1))
+        : (bFin.length > 0 && bFin[0].yoy ? Number(bFin[0].yoy.toFixed(1)) : 100.0);
+
+      // Kesiapan Alat (RFU %)
+      const validAlat = bAlat.filter(p => (p.availability || 0) > 0);
+      const rfu = validAlat.length > 0
+        ? (validAlat.reduce((a, b) => a + (b.availability || 0), 0) / validAlat.length).toFixed(1)
+        : '93.0';
+
+      // Utilisasi BOR %
+      const bor = bUtil.length > 0 ? (bUtil[0].bor || 0) : 0;
+
+      const isGood = avgRka >= 100;
+
+      return {
+        code,
+        name: bInfo.name,
+        revTotal,
+        opTotal,
+        teusTotal,
+        tonTotal,
+        avgRka,
+        avgYoy,
+        rfu,
+        bor,
+        isGood,
+      };
+    });
+  }, [isNone, isAll, selectedCodes, opkom, finansial, peralatan, utilisasi]);
+
+  // 4. Single Branch Breakdown cards when a specific branch is selected
   const branchCommoditiesBreakdown = useMemo(() => {
-    if (isAll) return [];
+    if (!isSingle) return [];
     
-    // Group opkom by layanan (prioritize commercial revenue Rp so units are not mixed)
+    // Group opkom by layanan for that specific branch
     const groups: Record<string, { jumlah: number; satuan: string; rka: number[]; yoy: number[] }> = {};
     const targetRows = filteredOpkom.some(o => o.satuan === 'Rp')
       ? filteredOpkom.filter(o => o.satuan === 'Rp')
@@ -432,7 +586,7 @@ export default function PortSightBeranda({
         isGood,
       };
     });
-  }, [isAll, filteredOpkom]);
+  }, [isSingle, filteredOpkom]);
 
   // 4. Dynamic "Perlu Perhatian" alerts with Source Links
   const attentionItems = useMemo(() => {
@@ -571,12 +725,20 @@ export default function PortSightBeranda({
               <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-title)' }}>
                 {isPicCabang
                   ? `Cabang Penugasan PIC: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`
-                  : `Filter Aktif: ${getSelectedBranchLabel(selectedTerminal)}`}
+                  : isNone
+                  ? 'Pilihan Cabang Dikosongkan (Mode Reset)'
+                  : isMulti
+                  ? `Filter Aktif: ${getSelectedBranchLabel(selectedTerminal)}`
+                  : `Filter Aktif: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                 {isPicCabang
                   ? `Tampilan dashboard, ringkasan eksekutif, dan data operasional disesuaikan khusus untuk cabang penugasan Anda.`
-                  : `Menampilkan performa dan data operasional gabungan cabang terpilih.`}
+                  : isNone
+                  ? `Semua cabang saat ini tidak dicentang. Silakan pilih/centang cabang yang ingin dipantau dari filter cabang di atas.`
+                  : isMulti
+                  ? `Menampilkan data operasional dan finansial masing-masing cabang terpilih (${selectedCodes.length} cabang, non-akumulasi).`
+                  : `Menampilkan performa dan data operasional khusus cabang ${activeBranch?.name || selectedTerminal}.`}
               </div>
             </div>
           </div>
@@ -687,9 +849,15 @@ export default function PortSightBeranda({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
-                {isAll ? 'Kinerja per terminal' : `Kinerja Layanan: ${getSelectedBranchLabel(selectedTerminal)}`}
+                {isNone
+                  ? 'Cabang Dikosongkan (Mode Reset)'
+                  : isAll
+                  ? 'Kinerja per terminal'
+                  : isSingle
+                  ? `Kinerja Layanan Cabang: ${activeBranch?.name || selectedTerminal}`
+                  : `Kinerja Masing-Masing Cabang Terpilih (${selectedCodes.length} Cabang - Non-Akumulasi)`}
               </div>
-              {isAll && (
+              {(isAll || isMulti) && (
                 <span
                   style={{
                     fontSize: '11px',
@@ -701,12 +869,12 @@ export default function PortSightBeranda({
                     border: '1px solid rgba(2, 132, 199, 0.25)',
                   }}
                 >
-                  {terminalsOverview.length} Cabang
+                  {isAll ? `${terminalsOverview.length} Cabang` : `${selectedCodes.length} Cabang Terpilih`}
                 </span>
               )}
             </div>
 
-            {isAll && (
+            {(isAll || isMulti) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <Search size={13} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)' }} />
@@ -754,61 +922,63 @@ export default function PortSightBeranda({
             )}
           </div>
 
-          {/* If All Branches: Grid of Terminals (Menampilkan seluruh 28 Cabang) */}
-          {isAll ? (
-            filteredTerminalsOverview.length === 0 ? (
+          {/* Render content depending on state: isNone / isSingle / (isAll or isMulti) */}
+          {isNone ? (
+            <div
+              style={{
+                padding: '36px 24px',
+                textAlign: 'center',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px dashed var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '12px',
+              }}
+            >
               <div
                 style={{
-                  padding: '24px',
-                  textAlign: 'center',
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px dashed var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-muted)',
-                  fontSize: '13px',
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ef4444',
                 }}
               >
-                Tidak ditemukan cabang dengan kata kunci "{terminalSearch}".
+                <RotateCcw size={22} />
               </div>
-            ) : (
-              <div className="terminal-grid">
-                {filteredTerminalsOverview.map((t) => (
-                  <div
-                    key={t.id}
-                    className="terminal-card"
-                    onClick={() => onSelectTerminal && onSelectTerminal(t.id)}
-                    style={{ cursor: 'pointer' }}
-                    title={`Klik untuk memfilter data cabang [${t.code}] ${t.name}`}
-                  >
-                    <div className="terminal-card-top">
-                      <div>
-                        <div className="terminal-name">{t.name}</div>
-                        <div className="terminal-subtype">{t.subtype}</div>
-                      </div>
-                      <span className={`status-badge-chip ${t.isGood ? 'status-baik' : 'status-waspada'}`}>
-                        {t.status}
-                      </span>
-                    </div>
-
-                    <div className="terminal-metric-value">{t.value}</div>
-
-                    <div className="terminal-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <span className={t.isGood ? 'text-positive' : 'text-alert'}>
-                          {t.rkap}
-                        </span>{' '}
-                        <span className={t.isGood ? 'text-positive' : 'text-alert'}>
-                          {t.yoy}
-                        </span>
-                      </div>
-                      <ChevronRight size={14} color="var(--accent-blue)" />
-                    </div>
-                  </div>
-                ))}
+              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-main)' }}>
+                Semua Cabang Telah Dikosongkan (Mode Reset)
               </div>
-            )
-          ) : (
-            /* If Specific Branch Selected: Detailed commodities breakdown */
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '480px', lineHeight: 1.5 }}>
+                Tidak ada cabang yang dipilih saat ini. Anda dapat mencentang cabang tertentu (misal: Makassar dan Kendari) pada filter cabang di atas, atau klik tombol di bawah untuk mengaktifkan kembali seluruh cabang.
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelectTerminal && onSelectTerminal('ALL')}
+                className="btn-primary"
+                style={{
+                  marginTop: '8px',
+                  padding: '8px 18px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <CheckSquare size={14} />
+                <span>Pilih Semua 28 Cabang</span>
+              </button>
+            </div>
+          ) : isSingle ? (
+            /* Single branch breakdown */
             <div className="terminal-grid">
               {branchCommoditiesBreakdown.map((c, i) => (
                 <div key={i} className="terminal-card">
@@ -853,6 +1023,145 @@ export default function PortSightBeranda({
                   <div className="terminal-card-footer">
                     <span className="text-positive">
                       YOR: {filteredUtilisasi[0]?.yor || 0}% • SOR: {filteredUtilisasi[0]?.sor || 0}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* isAll or isMulti: Render Grid of Selected Branch Cards */
+            <div>
+              {filteredTerminalsOverview.length === 0 ? (
+                <div
+                  style={{
+                    padding: '24px',
+                    textAlign: 'center',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px dashed var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-muted)',
+                    fontSize: '13px',
+                  }}
+                >
+                  Tidak ditemukan cabang dengan kata kunci "{terminalSearch}".
+                </div>
+              ) : (
+                <div className="terminal-grid">
+                  {filteredTerminalsOverview.map((t) => (
+                    <div
+                      key={t.id}
+                      className="terminal-card"
+                      onClick={() => onSelectTerminal && onSelectTerminal(t.id)}
+                      style={{ cursor: 'pointer' }}
+                      title={`Klik untuk memfilter data cabang [${t.code}] ${t.name}`}
+                    >
+                      <div className="terminal-card-top">
+                        <div>
+                          <div className="terminal-name">{t.name}</div>
+                          <div className="terminal-subtype">{t.subtype}</div>
+                        </div>
+                        <span className={`status-badge-chip ${t.isGood ? 'status-baik' : 'status-waspada'}`}>
+                          {t.status}
+                        </span>
+                      </div>
+
+                      <div className="terminal-metric-value">{t.value}</div>
+
+                      <div className="terminal-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span className={t.isGood ? 'text-positive' : 'text-alert'}>
+                            {t.rkap}
+                          </span>{' '}
+                          <span className={t.isGood ? 'text-positive' : 'text-alert'}>
+                            {t.yoy}
+                          </span>
+                        </div>
+                        <ChevronRight size={14} color="var(--accent-blue)" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* If Multi-Branch Selected: Render Table of Each Selected Branch's Metrics (NON-AKUMULASI) */}
+              {isMulti && selectedBranchesMetrics.length > 0 && (
+                <div style={{ marginTop: '22px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileSpreadsheet size={16} color="var(--accent-blue)" />
+                      <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: 'var(--text-title)' }}>
+                        Rincian Capaian Masing-Masing Cabang Terpilih (Bukan Akumulasi)
+                      </h4>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {selectedBranchesMetrics.length} Cabang Ditampilkan Mandiri
+                    </span>
+                  </div>
+
+                  <div className="table-responsive" style={{ backgroundColor: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                    <table className="dark-table" style={{ width: '100%', fontSize: '12px' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '10px 12px' }}>Kode</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px' }}>Cabang Pelabuhan</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Pendapatan Usaha</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Laba Usaha</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Petikemas (TEUs)</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Barang (Ton)</th>
+                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>% RKAP</th>
+                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>% YoY</th>
+                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>RFU Alat</th>
+                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedBranchesMetrics.map(bm => (
+                          <tr key={bm.code} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue)', padding: '10px 12px' }}>
+                              {bm.code}
+                            </td>
+                            <td style={{ fontWeight: 600, color: 'var(--text-main)', padding: '10px 12px' }}>
+                              {bm.name}
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-main)', padding: '10px 12px' }}>
+                              {bm.revTotal > 0 ? formatRupiahFull(bm.revTotal) : 'Rp 0'}
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#10b981', padding: '10px 12px' }}>
+                              {bm.opTotal > 0 ? formatRupiahFull(bm.opTotal) : 'Rp 0'}
+                            </td>
+                            <td style={{ textAlign: 'right', padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {bm.teusTotal > 0 ? `${bm.teusTotal.toLocaleString('id-ID')} TEUs` : '—'}
+                            </td>
+                            <td style={{ textAlign: 'right', padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {bm.tonTotal > 0 ? `${bm.tonTotal.toLocaleString('id-ID')} Ton` : '—'}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <span className={`status-badge-chip ${bm.isGood ? 'status-baik' : 'status-waspada'}`}>
+                                {bm.avgRka}%
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <span className={bm.avgYoy >= 100 ? 'text-positive' : 'text-alert'} style={{ fontWeight: 600 }}>
+                                {bm.avgYoy >= 100 ? `+${(bm.avgYoy - 100).toFixed(1)}%` : `${(bm.avgYoy - 100).toFixed(1)}%`}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {bm.rfu}%
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <span className={`badge ${bm.isGood ? 'badge-green' : 'badge-red'}`}>
+                                {bm.isGood ? 'Baik' : 'Waspada'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>💡</span>
+                    <span>
+                      Data di atas menampilkan capaian riil masing-masing cabang terpilih secara independen (tidak dikalkulasi atau diakumulasi menjadi satu total).
                     </span>
                   </div>
                 </div>

@@ -65,10 +65,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const rawBranch = searchParams.get('branchCode') || searchParams.get('branch') || searchParams.get('terminal') || undefined;
     const targetBranches = rawBranch && rawBranch !== 'ALL'
-      ? rawBranch.split(',').map(b => getCanonicalBranchCode(b.trim())).filter(Boolean)
+      ? (rawBranch === 'NONE' ? [] : rawBranch.split(',').map(b => getCanonicalBranchCode(b.trim())).filter(Boolean))
       : null;
 
     const matchesBranch = (code: string) => {
+      if (rawBranch === 'NONE') return false;
       if (!targetBranches || targetBranches.length === 0 || targetBranches.includes('ALL')) return true;
       return targetBranches.includes(code.toUpperCase());
     };

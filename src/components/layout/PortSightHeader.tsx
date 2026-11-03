@@ -128,18 +128,21 @@ export default function PortSightHeader({
     : getSelectedBranchLabel(selectedTerminal);
 
   const selectedBranchCodes = useMemo(() => {
+    if (selectedTerminal === 'NONE') return [];
     if (!selectedTerminal || selectedTerminal === 'ALL') {
       return OFFICIAL_BRANCHES.map(b => b.code);
     }
     return parseSelectedBranches(selectedTerminal);
   }, [selectedTerminal]);
 
-  const isAllSelected = selectedTerminal === 'ALL' || selectedBranchCodes.length === OFFICIAL_BRANCHES.length;
+  const isAllSelected = selectedTerminal === 'ALL' || (selectedBranchCodes.length === OFFICIAL_BRANCHES.length && selectedTerminal !== 'NONE');
 
   const handleToggleBranch = (code: string) => {
     if (isPicCabang) return;
     let nextCodes: string[];
-    if (isAllSelected) {
+    if (selectedTerminal === 'NONE') {
+      nextCodes = [code];
+    } else if (isAllSelected) {
       nextCodes = OFFICIAL_BRANCHES.map(b => b.code).filter(c => c !== code);
     } else if (selectedBranchCodes.includes(code)) {
       nextCodes = selectedBranchCodes.filter(c => c !== code);
@@ -147,7 +150,9 @@ export default function PortSightHeader({
       nextCodes = [...selectedBranchCodes, code];
     }
 
-    if (nextCodes.length === 0 || nextCodes.length === OFFICIAL_BRANCHES.length) {
+    if (nextCodes.length === 0) {
+      setSelectedTerminal('NONE');
+    } else if (nextCodes.length === OFFICIAL_BRANCHES.length) {
       setSelectedTerminal('ALL');
     } else {
       setSelectedTerminal(nextCodes.join(','));
@@ -167,7 +172,7 @@ export default function PortSightHeader({
 
   const handleResetBranches = () => {
     if (isPicCabang) return;
-    setSelectedTerminal('ALL');
+    setSelectedTerminal('NONE');
     setBranchSearchQuery('');
   };
 
@@ -920,14 +925,20 @@ export default function PortSightHeader({
                     fontWeight: 700,
                     background: isAllSelected
                       ? (theme === 'dark' ? 'rgba(148, 163, 184, 0.2)' : 'rgba(100, 116, 139, 0.15)')
-                      : 'var(--accent-cyan)',
-                    color: isAllSelected ? 'inherit' : '#041727',
+                      : (selectedBranchCodes.length === 0 ? 'rgba(239, 68, 68, 0.2)' : 'var(--accent-cyan)'),
+                    color: isAllSelected
+                      ? 'inherit'
+                      : (selectedBranchCodes.length === 0 ? '#ef4444' : '#041727'),
                     padding: '1px 5px',
                     borderRadius: '8px',
                     lineHeight: 1.2,
                     flexShrink: 0,
                   }}
-                  title={isAllSelected ? 'Semua 28 Cabang terpilih' : `${selectedBranchCodes.length} dari 28 cabang terpilih`}
+                  title={
+                    isAllSelected
+                      ? 'Semua 28 Cabang terpilih'
+                      : (selectedBranchCodes.length === 0 ? 'Belum ada cabang terpilih' : `${selectedBranchCodes.length} dari 28 cabang terpilih`)
+                  }
                 >
                   {isAllSelected ? '28' : `${selectedBranchCodes.length}/28`}
                 </span>
@@ -1104,10 +1115,10 @@ export default function PortSightHeader({
                         alignItems: 'center',
                         gap: '4px',
                       }}
-                      title="Reset ke Semua Cabang"
+                      title="Kosongkan semua centang agar bisa pilih per cabang"
                     >
                       <RotateCcw size={10} />
-                      <span>Reset</span>
+                      <span>Reset (Kosongkan)</span>
                     </button>
                   </div>
                 </div>
@@ -1306,8 +1317,10 @@ export default function PortSightHeader({
                 >
                   <span style={{ fontSize: '10.5px', color: '#94a3b8' }}>
                     {isAllSelected
-                      ? 'Semua 28 cabang aktif'
-                      : `${selectedBranchCodes.length} cabang aktif`}
+                      ? 'Semua 28 cabang aktif (Konsolidasi Regional 4)'
+                      : (selectedBranchCodes.length === 0
+                        ? '0 cabang terpilih (Centang cabang yang diinginkan)'
+                        : `${selectedBranchCodes.length} cabang aktif`)}
                   </span>
                   <button
                     type="button"

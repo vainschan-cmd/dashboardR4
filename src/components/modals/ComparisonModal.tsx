@@ -29,7 +29,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { formatRupiahFull } from '@/lib/formatters';
-import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode, isBranchMatch, getSelectedBranchLabel } from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode, isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
 
 interface ComparisonModalProps {
   isOpen: boolean;
@@ -74,6 +74,16 @@ export default function ComparisonModal({
     async function loadComparisonData() {
       try {
         setLoading(true);
+        if (selectedTerminal === 'NONE') {
+          setDataItems([]);
+          setLoading(false);
+          return;
+        }
+
+        const selectedCodes = parseSelectedBranches(selectedTerminal);
+        const isAll = !selectedTerminal || selectedTerminal === 'ALL' || selectedCodes.includes('ALL');
+        const isMultiBranch = !isAll && selectedCodes.length > 1;
+
         const params = new URLSearchParams();
         if (selectedPeriod) params.append('period', selectedPeriod);
         if (selectedTerminal && selectedTerminal !== 'ALL') {
@@ -90,27 +100,29 @@ export default function ComparisonModal({
           const finRows: any[] = json.finansial || [];
           const targetFinRows = finRows.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
 
-          // If no R99 row exists, aggregate all branches
-          const finMap: Record<string, { real: number; rkaArr: number[]; yoyArr: number[] }> = {};
+          // If multi-branch, keep branches separate; if ALL, aggregate
+          const finMap: Record<string, { real: number; rkaArr: number[]; yoyArr: number[]; rekName: string; branchName: string }> = {};
           targetFinRows.forEach(f => {
             const rek = f.rekening || 'Lainnya';
-            if (!finMap[rek]) finMap[rek] = { real: 0, rkaArr: [], yoyArr: [] };
-            finMap[rek].real += (f.konsolidasiRp || 0);
-            if (f.rka) finMap[rek].rkaArr.push(f.rka);
-            if (f.yoy) finMap[rek].yoyArr.push(f.yoy);
+            const bName = f.branchName || f.branchCode || 'Cabang';
+            const key = isMultiBranch ? `[${bName}] ${rek}` : rek;
+            if (!finMap[key]) finMap[key] = { real: 0, rkaArr: [], yoyArr: [], rekName: rek, branchName: bName };
+            finMap[key].real += (f.konsolidasiRp || 0);
+            if (f.rka) finMap[key].rkaArr.push(f.rka);
+            if (f.yoy) finMap[key].yoyArr.push(f.yoy);
           });
 
-          Object.entries(finMap).forEach(([rek, val], idx) => {
+          Object.entries(finMap).forEach(([key, val], idx) => {
             const avgRka = val.rkaArr.length > 0 ? (val.rkaArr.reduce((a, b) => a + b, 0) / val.rkaArr.length) : 100;
             const avgYoy = val.yoyArr.length > 0 ? (val.yoyArr.reduce((a, b) => a + b, 0) / val.yoyArr.length) : 100;
             const targetRkap = avgRka > 0 ? Math.round(val.real / (avgRka / 100)) : val.real;
             const real2025 = avgYoy > 0 ? Math.round(val.real / (avgYoy / 100)) : val.real;
-            const isCost = rek.toLowerCase().includes('beban') || val.real < 0;
+            const isCost = val.rekName.toLowerCase().includes('beban') || val.real < 0;
 
             items.push({
               id: `fin_${idx}`,
               category: 'finansial',
-              name: `Keuangan: ${rek}`,
+              name: isMultiBranch ? key : `Keuangan: ${key}`,
               satuan: 'Rp',
               real2025,
               targetRkap,
@@ -127,10 +139,13 @@ export default function ComparisonModal({
           const opRows: any[] = json.opkom || [];
           const targetOpRows = opRows.filter(o => isBranchMatch(selectedTerminal, o.branchCode, o.branchName));
 
-          const opMap: Record<string, { real: number; satuan: string; rkaArr: number[]; yoyArr: number[] }> = {};
+          const opMap: Record<string, { real: number; satuan: string; rkaArr: number[]; yoyArr: number[]; layName: string; branchName: string }> = {};
           targetOpRows.forEach(o => {
-            const key = `${o.layanan || 'LAYANAN'} (${o.satuan || 'Rp'})`;
-            if (!opMap[key]) opMap[key] = { real: 0, satuan: o.satuan || 'Rp', rkaArr: [], yoyArr: [] };
+            const bName = o.branchName || o.branchCode || 'Cabang';
+            const lay = o.layanan || 'LAYANAN';
+            const sat = o.satuan || 'Rp';
+            const key = isMultiBranch ? `[${bName}] ${lay} (${sat})` : `${lay} (${sat})`;
+            if (!opMap[key]) opMap[key] = { real: 0, satuan: sat, rkaArr: [], yoyArr: [], layName: lay, branchName: bName };
             opMap[key].real += (o.jumlahRp || 0);
             if (o.rka) opMap[key].rkaArr.push(o.rka);
             if (o.yoy) opMap[key].yoyArr.push(o.yoy);
@@ -146,7 +161,7 @@ export default function ComparisonModal({
             items.push({
               id: `op_${idx}`,
               category: isRp ? 'opkom' : 'operasional',
-              name: `Layanan ${key}`,
+              name: isMultiBranch ? `Layanan: ${key}` : `Layanan ${key}`,
               satuan: val.satuan,
               real2025,
               targetRkap,

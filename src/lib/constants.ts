@@ -88,6 +88,7 @@ export function getBranchNameByCode(code: string): string {
  */
 export function parseSelectedBranches(filterValue: string | undefined | null): string[] {
   if (!filterValue || filterValue === 'ALL') return ['ALL'];
+  if (filterValue === 'NONE') return [];
   return filterValue
     .split(',')
     .map(c => c.trim().toUpperCase())
@@ -98,35 +99,47 @@ export function parseSelectedBranches(filterValue: string | undefined | null): s
  * Check if a branch matches the filter string.
  * filter can be:
  * - 'ALL' or empty: matches all branches
+ * - 'NONE': matches no branches (all unchecked)
  * - Single code e.g. 'R01' or id 'term_makassar'
  * - Comma-separated list of branch codes e.g. 'R01,R02,R04'
  */
 export function isBranchMatch(filterValue: string | undefined | null, branchCode?: string, branchName?: string): boolean {
   if (!filterValue || filterValue === 'ALL') return true;
+  if (filterValue === 'NONE') return false;
   const canonicalBranch = getCanonicalBranchCode(branchCode, branchName);
   const selectedCodes = parseSelectedBranches(filterValue);
 
   if (selectedCodes.includes('ALL')) return true;
+  if (selectedCodes.length === 0) return false;
   if (!canonicalBranch) return false;
   return selectedCodes.includes(canonicalBranch.toUpperCase());
 }
 
 /**
- * Get readable label for selectedTerminal (e.g. 'ALL' -> 'Semua Cabang', 'R01' -> '[R01] Makassar', 'R01,R02' -> '2 Cabang: Makassar, TPK Makassar')
+ * Get readable label for selectedTerminal (e.g. 'ALL' -> 'Semua Cabang', 'R01' -> '[R01] Makassar', 'R01,R02' -> 'Makassar & Bitung (2 Cabang)')
  */
 export function getSelectedBranchLabel(filterValue: string | undefined | null): string {
   if (!filterValue || filterValue === 'ALL') return 'Semua Cabang (28 Cabang)';
+  if (filterValue === 'NONE') return 'Pilih Cabang (0 Terpilih)';
   const codes = parseSelectedBranches(filterValue);
+  if (codes.length === 0) return 'Pilih Cabang (0 Terpilih)';
   if (codes.length === 1) {
     const b = OFFICIAL_BRANCHES.find(ob => ob.code === codes[0]);
     return b ? `[${b.code}] ${b.name}` : `[${codes[0]}]`;
   }
-  if (codes.length <= 2) {
+  if (codes.length === 2) {
+    const b1 = OFFICIAL_BRANCHES.find(ob => ob.code === codes[0]);
+    const b2 = OFFICIAL_BRANCHES.find(ob => ob.code === codes[1]);
+    const n1 = b1 ? b1.name : codes[0];
+    const n2 = b2 ? b2.name : codes[1];
+    return `${n1} & ${n2} (2 Cabang)`;
+  }
+  if (codes.length <= 3) {
     const names = codes.map(c => {
       const b = OFFICIAL_BRANCHES.find(ob => ob.code === c);
       return b ? b.name : c;
     });
-    return `${codes.length} Cabang (${names.join(', ')})`;
+    return `${names.join(', ')} (${codes.length} Cabang)`;
   }
   return `${codes.length} Cabang Dipilih (${codes.slice(0, 2).join(', ')}...)`;
 }
@@ -136,6 +149,7 @@ export function getSelectedBranchLabel(filterValue: string | undefined | null): 
  */
 export function getSelectedBranches(filterValue: string | undefined | null): OfficialBranch[] {
   if (!filterValue || filterValue === 'ALL') return OFFICIAL_BRANCHES;
+  if (filterValue === 'NONE') return [];
   const codes = parseSelectedBranches(filterValue);
   return OFFICIAL_BRANCHES.filter(b => codes.includes(b.code));
 }

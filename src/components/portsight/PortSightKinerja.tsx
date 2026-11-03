@@ -94,9 +94,11 @@ export default function PortSightKinerja({
     loadData();
   }, [selectedPeriod]);
 
-  const selectedCodes = useMemo(() => parseSelectedBranches(selectedTerminal), [selectedTerminal]);
-  const isAll = !selectedTerminal || selectedTerminal === 'ALL' || selectedCodes.includes('ALL');
-  const isSingle = !isAll && selectedCodes.length === 1;
+  const isNone = selectedTerminal === 'NONE';
+  const selectedCodes = useMemo(() => isNone ? [] : parseSelectedBranches(selectedTerminal), [isNone, selectedTerminal]);
+  const isAll = !isNone && (!selectedTerminal || selectedTerminal === 'ALL' || selectedCodes.includes('ALL'));
+  const isSingle = !isAll && !isNone && selectedCodes.length === 1;
+  const isMulti = !isAll && !isNone && selectedCodes.length > 1;
 
   // Resolusi cabang aktif dari filter header
   const activeBranch = useMemo(() => {
@@ -106,14 +108,16 @@ export default function PortSightKinerja({
   }, [isSingle, selectedCodes]);
 
   const branchTitle = useMemo(() => {
+    if (isNone) return 'Cabang Dikosongkan (0 Terpilih)';
     return isAll ? 'Konsolidasi Seluruh 28 Cabang Regional 4' : getSelectedBranchLabel(selectedTerminal);
-  }, [isAll, selectedTerminal]);
+  }, [isNone, isAll, selectedTerminal]);
 
   // 1. Data difilter menurut cabang yang dipilih
   const branchFilteredData = useMemo(() => {
+    if (isNone) return [];
     if (isAll) return data;
     return data.filter(d => isBranchMatch(selectedTerminal, d.branchCode, d.branchName));
-  }, [data, isAll, selectedTerminal]);
+  }, [data, isNone, isAll, selectedTerminal]);
 
   // 2. Kalkulasi Ringkasan Kinerja untuk 4 Kartu Eksekutif
   const metrics = useMemo(() => {
@@ -215,7 +219,43 @@ export default function PortSightKinerja({
 
   // 3. Data Grafik Kinerja Sesuai Jenis Operasi & Parameter / Satuan
   const chartGroupedData = useMemo(() => {
-    if (!isAll) {
+    if (isNone) return [];
+
+    if (isMulti) {
+      // MODE MULTI-CABANG: Tampilkan komparasi parameter riil antar cabang terpilih (misal: Makassar vs Kendari)
+      const branchMap: Record<string, { code: string; name: string; TSD: number; TGH: number; WTP: number; BSH: number; BCH: number }> = {};
+
+      branchFilteredData.forEach(d => {
+        if (!branchMap[d.branchCode]) {
+          branchMap[d.branchCode] = { code: d.branchCode, name: d.branchName, TSD: 0, TGH: 0, WTP: 0, BSH: 0, BCH: 0 };
+        }
+        if (d.satuan === 'TSD' && d.nilai > 0) {
+          branchMap[d.branchCode].TSD = Math.max(branchMap[d.branchCode].TSD, d.nilai);
+        }
+        if (d.satuan === 'TGH' && d.nilai > 0) {
+          branchMap[d.branchCode].TGH = Math.max(branchMap[d.branchCode].TGH, d.nilai);
+        }
+        if (d.satuan === 'WTP' && d.nilai > 0) {
+          branchMap[d.branchCode].WTP = d.nilai;
+        }
+        if (d.satuan === 'BSH' && d.nilai > 0) {
+          branchMap[d.branchCode].BSH = Math.max(branchMap[d.branchCode].BSH, d.nilai);
+        }
+        if (d.satuan === 'BCH' && d.nilai > 0) {
+          branchMap[d.branchCode].BCH = Math.max(branchMap[d.branchCode].BCH, d.nilai);
+        }
+      });
+
+      return Object.values(branchMap).map(b => ({
+        jenisOperasi: `[${b.code}] ${b.name}`,
+        shortName: b.name.length > 12 ? b.name.slice(0, 10) + '..' : b.name,
+        TSD: b.TSD,
+        TGH: b.TGH,
+        WTP: b.WTP,
+        BSH: b.BSH,
+        BCH: b.BCH,
+      }));
+    } else if (isSingle) {
       // MODE 1: SATU CABANG TERPILIH
       // Tampilkan komparasi nilai parameter riil per Jenis Operasi (CURAH KERING, CURAH CAIR, GENERAL CARGO, dll.)
       const operations = ['CURAH KERING', 'CURAH CAIR', 'GENERAL CARGO', 'PETIKEMAS', 'KAPAL'];
@@ -292,7 +332,7 @@ export default function PortSightKinerja({
           BCH: b.BCH,
         }));
     }
-  }, [branchFilteredData, data, isAll, selectedTerminal, chartJenisOperasi, chartMetricView]);
+  }, [branchFilteredData, data, isNone, isMulti, isSingle, isAll, selectedTerminal, chartJenisOperasi, chartMetricView]);
 
   // 4. Data Tabel Parameter Kinerja (dengan filter jenis operasi, satuan, dan pencarian)
   const displayTableData = useMemo(() => {
