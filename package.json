@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
-    "tunnel": "npx -y localtunnel --port 3000 --subdomain portdash-r4",
+    "tunnel": "./scripts/tunnel.sh",
     "tunnel:cloudflare": "./cloudflared tunnel run --token eyJhIjoiOWI1YmIwYjY5NWY4YzMxODlmNjkzZDZiMTgzMjc1OGQiLCJ0IjoiNmYwZDE5ZWYtYTQ3ZC00MDEwLWE3ZWItOTA3YWExYjg3OTg3IiwicyI6Ik0yVmpPREZqTm1JdFl6UXdZaTAwTVRnMkxXRTJaV1V0TlRWbU4yWTRNbVF6TXpNMiJ9",
     "tunnel:quick": "./cloudflared tunnel --url http://localhost:3000",
     "build": "next build",
