@@ -29,7 +29,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { formatRupiahFull } from '@/lib/formatters';
-import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode, isBranchMatch, getSelectedBranchLabel } from '@/lib/constants';
 
 interface ComparisonModalProps {
   isOpen: boolean;
@@ -64,13 +64,8 @@ export default function ComparisonModal({
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'opkom' | 'finansial' | 'operasional'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const activeBranch = useMemo(() => {
-    if (!selectedTerminal || selectedTerminal === 'ALL') {
-      return { code: 'R99', name: 'Regional 4 (Semua Cabang)' };
-    }
-    const code = getCanonicalBranchCode(selectedTerminal);
-    const branch = OFFICIAL_BRANCHES.find(b => b.code === code);
-    return branch ? { code: branch.code, name: branch.name } : { code: selectedTerminal, name: selectedTerminal };
+  const branchLabel = useMemo(() => {
+    return getSelectedBranchLabel(selectedTerminal);
   }, [selectedTerminal]);
 
   useEffect(() => {
@@ -93,9 +88,7 @@ export default function ComparisonModal({
 
           // 1. Process Finansial
           const finRows: any[] = json.finansial || [];
-          const targetFinRows = selectedTerminal && selectedTerminal !== 'ALL'
-            ? finRows.filter(f => f.branchCode === activeBranch.code)
-            : finRows.filter(f => f.branchCode === 'R99' || !selectedTerminal || selectedTerminal === 'ALL');
+          const targetFinRows = finRows.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
 
           // If no R99 row exists, aggregate all branches
           const finMap: Record<string, { real: number; rkaArr: number[]; yoyArr: number[] }> = {};
@@ -132,9 +125,7 @@ export default function ComparisonModal({
 
           // 2. Process Opkom
           const opRows: any[] = json.opkom || [];
-          const targetOpRows = selectedTerminal && selectedTerminal !== 'ALL'
-            ? opRows.filter(o => o.branchCode === activeBranch.code)
-            : opRows.filter(o => o.branchCode === 'R99' || !selectedTerminal || selectedTerminal === 'ALL');
+          const targetOpRows = opRows.filter(o => isBranchMatch(selectedTerminal, o.branchCode, o.branchName));
 
           const opMap: Record<string, { real: number; satuan: string; rkaArr: number[]; yoyArr: number[] }> = {};
           targetOpRows.forEach(o => {
@@ -178,7 +169,7 @@ export default function ComparisonModal({
     }
 
     loadComparisonData();
-  }, [isOpen, selectedPeriod, selectedTerminal, activeBranch]);
+  }, [isOpen, selectedPeriod, selectedTerminal]);
 
   // Filtered Items for Table and Charts
   const filteredItems = useMemo(() => {
@@ -283,7 +274,7 @@ export default function ComparisonModal({
                   fontWeight: 700,
                 }}
               >
-                Cabang: [{activeBranch.code}] {activeBranch.name}
+                Cabang: {branchLabel}
               </span>
             </div>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', margin: 0 }}>

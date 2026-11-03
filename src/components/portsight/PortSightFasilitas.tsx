@@ -11,6 +11,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { Building2, Compass, Layers, Warehouse, Search, Waves, PlusCircle } from 'lucide-react';
+import { isBranchMatch } from '@/lib/constants';
 
 interface FasilitasItem {
   year: number;
@@ -57,11 +58,8 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
   }, []);
 
   const filteredData = data.filter(d => {
-    if (selectedTerminal !== 'ALL') {
-      const matchTerminal =
-        d.branchCode === selectedTerminal ||
-        `term_${d.branchName.toLowerCase().replace(/[^a-z0-9]/g, '_')}` === selectedTerminal;
-      if (!matchTerminal) return false;
+    if (!isBranchMatch(selectedTerminal, d.branchCode, d.branchName)) {
+      return false;
     }
     if (selectedJenis !== 'ALL') {
       if (selectedJenis === 'Dermaga' && !d.jenisFasilitas.toLowerCase().includes('dermaga')) return false;

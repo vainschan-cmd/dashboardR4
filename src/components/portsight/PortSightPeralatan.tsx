@@ -11,6 +11,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { Wrench, CheckCircle2, Gauge, Cpu, Search, Layers, PlusCircle } from 'lucide-react';
+import { isBranchMatch } from '@/lib/constants';
 
 interface EquipmentRecord {
   year: number;
@@ -66,11 +67,8 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
   }, []);
 
   const filteredData = data.filter(d => {
-    if (selectedTerminal !== 'ALL') {
-      const matchTerminal =
-        d.branchCode === selectedTerminal ||
-        `term_${d.branchName.toLowerCase().replace(/[^a-z0-9]/g, '_')}` === selectedTerminal;
-      if (!matchTerminal) return false;
+    if (!isBranchMatch(selectedTerminal, d.branchCode, d.branchName)) {
+      return false;
     }
     if (selectedKategori !== 'ALL' && d.jnsAlat !== selectedKategori) return false;
     if (search.trim()) {

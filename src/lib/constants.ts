@@ -82,3 +82,60 @@ export function getBranchNameByCode(code: string): string {
   const found = getBranchByCode(code);
   return found ? found.name : code;
 }
+
+/**
+ * Parse selected terminal filter into array of branch codes
+ */
+export function parseSelectedBranches(filterValue: string | undefined | null): string[] {
+  if (!filterValue || filterValue === 'ALL') return ['ALL'];
+  return filterValue
+    .split(',')
+    .map(c => c.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+/**
+ * Check if a branch matches the filter string.
+ * filter can be:
+ * - 'ALL' or empty: matches all branches
+ * - Single code e.g. 'R01' or id 'term_makassar'
+ * - Comma-separated list of branch codes e.g. 'R01,R02,R04'
+ */
+export function isBranchMatch(filterValue: string | undefined | null, branchCode?: string, branchName?: string): boolean {
+  if (!filterValue || filterValue === 'ALL') return true;
+  const canonicalBranch = getCanonicalBranchCode(branchCode, branchName);
+  const selectedCodes = parseSelectedBranches(filterValue);
+
+  if (selectedCodes.includes('ALL')) return true;
+  if (!canonicalBranch) return false;
+  return selectedCodes.includes(canonicalBranch.toUpperCase());
+}
+
+/**
+ * Get readable label for selectedTerminal (e.g. 'ALL' -> 'Semua Cabang', 'R01' -> '[R01] Makassar', 'R01,R02' -> '2 Cabang: Makassar, TPK Makassar')
+ */
+export function getSelectedBranchLabel(filterValue: string | undefined | null): string {
+  if (!filterValue || filterValue === 'ALL') return 'Semua Cabang (28 Cabang)';
+  const codes = parseSelectedBranches(filterValue);
+  if (codes.length === 1) {
+    const b = OFFICIAL_BRANCHES.find(ob => ob.code === codes[0]);
+    return b ? `[${b.code}] ${b.name}` : `[${codes[0]}]`;
+  }
+  if (codes.length <= 2) {
+    const names = codes.map(c => {
+      const b = OFFICIAL_BRANCHES.find(ob => ob.code === c);
+      return b ? b.name : c;
+    });
+    return `${codes.length} Cabang (${names.join(', ')})`;
+  }
+  return `${codes.length} Cabang Dipilih (${codes.slice(0, 2).join(', ')}...)`;
+}
+
+/**
+ * Get list of selected OfficialBranch objects
+ */
+export function getSelectedBranches(filterValue: string | undefined | null): OfficialBranch[] {
+  if (!filterValue || filterValue === 'ALL') return OFFICIAL_BRANCHES;
+  const codes = parseSelectedBranches(filterValue);
+  return OFFICIAL_BRANCHES.filter(b => codes.includes(b.code));
+}

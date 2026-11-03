@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { DollarSign, TrendingUp, Search, Building2, Layers, PlusCircle } from 'lucide-react';
 import { formatRupiahFull } from '@/lib/formatters';
+import { isBranchMatch } from '@/lib/constants';
 
 interface FinItem {
   year: number;
@@ -66,12 +67,7 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
   }, []);
 
   const filteredData = data.filter(d => {
-    if (selectedTerminal !== 'ALL') {
-      const matchTerminal =
-        d.branchCode === selectedTerminal ||
-        `term_${d.branchName.toLowerCase().replace(/[^a-z0-9]/g, '_')}` === selectedTerminal;
-      if (!matchTerminal) return false;
-    }
+    if (!isBranchMatch(selectedTerminal, d.branchCode, d.branchName)) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!d.branchName.toLowerCase().includes(q) && !d.branchCode.toLowerCase().includes(q)) {

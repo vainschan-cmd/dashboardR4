@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import * as xlsx from 'xlsx';
-import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode, isBranchMatch, parseSelectedBranches } from '@/lib/constants';
 
 
 function cleanKey(k: string): string {
@@ -64,7 +64,14 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const rawBranch = searchParams.get('branchCode') || searchParams.get('branch') || searchParams.get('terminal') || undefined;
-    const branchCode = rawBranch && rawBranch !== 'ALL' ? getCanonicalBranchCode(rawBranch) : undefined;
+    const targetBranches = rawBranch && rawBranch !== 'ALL'
+      ? rawBranch.split(',').map(b => getCanonicalBranchCode(b.trim())).filter(Boolean)
+      : null;
+
+    const matchesBranch = (code: string) => {
+      if (!targetBranches || targetBranches.length === 0 || targetBranches.includes('ALL')) return true;
+      return targetBranches.includes(code.toUpperCase());
+    };
 
     // Period filters
     const exactYearParam = searchParams.get('year') ? Number(searchParams.get('year')) : undefined;
@@ -157,7 +164,7 @@ export async function GET(req: NextRequest) {
 
     const finansial: typeof allFinMapped = [];
     finByBranch.forEach((rows, code) => {
-      if (branchCode && branchCode !== 'ALL' && code !== branchCode) return;
+      if (!matchesBranch(code)) return;
       const matchingRows = rows.filter(r => matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth));
       if (matchingRows.length > 0 && matchingRows.some(r => r.konsolidasiRp > 0)) {
         finansial.push(...matchingRows);
@@ -196,7 +203,7 @@ export async function GET(req: NextRequest) {
         rka: Number(rka.toFixed(1)),
       };
     }).filter(r => {
-      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      if (!matchesBranch(r.branchCode)) return false;
       return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
     });
 
@@ -218,7 +225,7 @@ export async function GET(req: NextRequest) {
         nilai: parseNumeric(getVal(r, 'NILAI'), 0),
       };
     }).filter(r => {
-      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      if (!matchesBranch(r.branchCode)) return false;
       return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
     });
 
@@ -240,7 +247,7 @@ export async function GET(req: NextRequest) {
         sor: parseNumeric(getVal(r, 'SOR'), 0),
       };
     }).filter(r => {
-      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      if (!matchesBranch(r.branchCode)) return false;
       return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
     });
 
@@ -265,7 +272,7 @@ export async function GET(req: NextRequest) {
         utilisasi: parseNumeric(getVal(r, 'UTILISASI'), 0),
       };
     }).filter(r => {
-      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      if (!matchesBranch(r.branchCode)) return false;
       return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
     });
 
@@ -293,7 +300,7 @@ export async function GET(req: NextRequest) {
         keterangan: getVal(r, 'ket') ? String(getVal(r, 'ket')).trim() : '',
       };
     }).filter(r => {
-      if (branchCode && branchCode !== 'ALL' && r.branchCode !== branchCode) return false;
+      if (!matchesBranch(r.branchCode)) return false;
       return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
     });
 

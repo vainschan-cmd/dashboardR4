@@ -21,7 +21,7 @@ import {
   X,
   BarChart3,
 } from 'lucide-react';
-import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getBranchByCode, isBranchMatch, getSelectedBranchLabel } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
 import { User, UserRole } from '@/lib/types';
 
@@ -92,38 +92,28 @@ export default function PortSightBeranda({
   // Filter dataset by selected branch or use all
   const filteredFin = useMemo(() => {
     if (isAll) return finansial;
-    const termCode = selectedTerminal.toUpperCase();
-    const branchName = activeBranch?.name?.toLowerCase();
-    return finansial.filter(f => f.branchCode === termCode || (branchName && f.branchName && f.branchName.toLowerCase() === branchName));
-  }, [isAll, selectedTerminal, activeBranch, finansial]);
+    return finansial.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
+  }, [isAll, selectedTerminal, finansial]);
 
   const filteredOpkom = useMemo(() => {
     if (isAll) return opkom;
-    const termCode = selectedTerminal.toUpperCase();
-    const branchName = activeBranch?.name?.toLowerCase();
-    return opkom.filter(o => o.branchCode === termCode || (branchName && o.branchName && o.branchName.toLowerCase() === branchName));
-  }, [isAll, selectedTerminal, activeBranch, opkom]);
+    return opkom.filter(o => isBranchMatch(selectedTerminal, o.branchCode, o.branchName));
+  }, [isAll, selectedTerminal, opkom]);
 
   const filteredPeralatan = useMemo(() => {
     if (isAll) return peralatan;
-    const termCode = selectedTerminal.toUpperCase();
-    const branchName = activeBranch?.name?.toLowerCase();
-    return peralatan.filter(p => p.branchCode === termCode || (branchName && p.branchName && p.branchName.toLowerCase() === branchName));
-  }, [isAll, selectedTerminal, activeBranch, peralatan]);
+    return peralatan.filter(p => isBranchMatch(selectedTerminal, p.branchCode, p.branchName));
+  }, [isAll, selectedTerminal, peralatan]);
 
   const filteredKinerja = useMemo(() => {
     if (isAll) return kinerja;
-    const termCode = selectedTerminal.toUpperCase();
-    const branchName = activeBranch?.name?.toLowerCase();
-    return kinerja.filter(k => k.branchCode === termCode || (branchName && k.branchName && k.branchName.toLowerCase() === branchName));
-  }, [isAll, selectedTerminal, activeBranch, kinerja]);
+    return kinerja.filter(k => isBranchMatch(selectedTerminal, k.branchCode, k.branchName));
+  }, [isAll, selectedTerminal, kinerja]);
 
   const filteredUtilisasi = useMemo(() => {
     if (isAll) return utilisasi;
-    const termCode = selectedTerminal.toUpperCase();
-    const branchName = activeBranch?.name?.toLowerCase();
-    return utilisasi.filter(u => u.branchCode === termCode || (branchName && u.branchName && u.branchName.toLowerCase() === branchName));
-  }, [isAll, selectedTerminal, activeBranch, utilisasi]);
+    return utilisasi.filter(u => isBranchMatch(selectedTerminal, u.branchCode, u.branchName));
+  }, [isAll, selectedTerminal, utilisasi]);
 
   // 1. Calculate 6 Top KPI Metrics (Dynamic per branch or total Regional 4)
   const topKpis = useMemo(() => {
@@ -581,12 +571,12 @@ export default function PortSightBeranda({
               <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-title)' }}>
                 {isPicCabang
                   ? `Cabang Penugasan PIC: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`
-                  : `Filter Aktif: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`}
+                  : `Filter Aktif: ${getSelectedBranchLabel(selectedTerminal)}`}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                 {isPicCabang
                   ? `Tampilan dashboard, ringkasan eksekutif, dan data operasional disesuaikan khusus untuk cabang penugasan Anda.`
-                  : `Menampilkan performa dan data operasional khusus cabang terpilih.`}
+                  : `Menampilkan performa dan data operasional gabungan cabang terpilih.`}
               </div>
             </div>
           </div>
@@ -697,7 +687,7 @@ export default function PortSightBeranda({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
-                {isAll ? 'Kinerja per terminal' : `Kinerja Layanan Cabang: ${activeBranch?.name || selectedTerminal}`}
+                {isAll ? 'Kinerja per terminal' : `Kinerja Layanan: ${getSelectedBranchLabel(selectedTerminal)}`}
               </div>
               {isAll && (
                 <span
