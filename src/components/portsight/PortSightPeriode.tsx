@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
+import { User, UserRole } from '@/lib/types';
 
 interface FinRecord {
   year: number;
@@ -117,13 +118,20 @@ interface PortSightPeriodeProps {
   selectedTerminal?: string;
   selectedPeriod?: string;
   onOpenManualInput?: (module?: string) => void;
+  currentUser?: User | null;
+  userRole?: UserRole;
 }
 
 export default function PortSightPeriode({
   selectedTerminal = 'ALL',
   selectedPeriod = 'YTD Sep 2026',
   onOpenManualInput,
+  currentUser,
+  userRole,
 }: PortSightPeriodeProps) {
+  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
+  const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
+
   // Filter states
   const [filterMode, setFilterMode] = useState<'preset' | 'month_range' | 'date_range' | 'single'>('preset');
   const [presetPeriod, setPresetPeriod] = useState<string>(selectedPeriod || 'YTD Sep 2026');
@@ -142,8 +150,10 @@ export default function PortSightPeriode({
   const [startDate, setStartDate] = useState<string>('2026-01-01');
   const [endDate, setEndDate] = useState<string>('2026-09-30');
 
-  // Branch Filter
-  const [branchFilter, setBranchFilter] = useState<string>(selectedTerminal || 'ALL');
+  // Branch Filter (locked to currentUser.branch_id if PIC Cabang)
+  const [branchFilter, setBranchFilter] = useState<string>(
+    (isPicCabang && currentUser?.branch_id) ? currentUser.branch_id : (selectedTerminal || 'ALL')
+  );
 
   // Active module tab
   const [activeModule, setActiveModule] = useState<string>('all');
@@ -158,12 +168,14 @@ export default function PortSightPeriode({
   const [peralatan, setPeralatan] = useState<PeralatanRecord[]>([]);
   const [fasilitas, setFasilitas] = useState<FasilitasRecord[]>([]);
 
-  // Synchronize branch filter if parent changes
+  // Synchronize branch filter if parent changes (unless PIC Cabang)
   useEffect(() => {
-    if (selectedTerminal) {
+    if (isPicCabang && currentUser?.branch_id) {
+      setBranchFilter(currentUser.branch_id);
+    } else if (selectedTerminal) {
       setBranchFilter(selectedTerminal);
     }
-  }, [selectedTerminal]);
+  }, [selectedTerminal, isPicCabang, currentUser?.branch_id]);
 
   // Build query string based on active filterMode
   const buildQueryString = () => {
@@ -614,21 +626,41 @@ export default function PortSightPeriode({
 
           {/* Cabang Filter */}
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
-              Filter Cabang Pelabuhan
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+              <span>Filter Cabang Pelabuhan</span>
+              {isPicCabang && (
+                <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>🔒 Khusus Cabang PIC</span>
+              )}
             </label>
             <select
               className="filter-select"
-              style={{ width: '100%', padding: '7px 10px', fontSize: '12px' }}
+              style={{
+                width: '100%',
+                padding: '7px 10px',
+                fontSize: '12px',
+                cursor: isPicCabang ? 'not-allowed' : 'pointer',
+                opacity: isPicCabang ? 0.9 : 1,
+              }}
               value={branchFilter}
-              onChange={e => setBranchFilter(e.target.value)}
+              onChange={e => {
+                if (!isPicCabang) setBranchFilter(e.target.value);
+              }}
+              disabled={isPicCabang}
             >
-              <option value="ALL">Semua Cabang (28 Cabang Regional 4)</option>
-              {OFFICIAL_BRANCHES.map(b => (
-                <option key={b.code} value={b.code}>
-                  [{b.code}] {b.name}
+              {isPicCabang ? (
+                <option value={currentUser?.branch_id || ''}>
+                  [{currentUser?.branch_id}] {assignedBranch?.name || currentUser?.branch_id} (Cabang Anda)
                 </option>
-              ))}
+              ) : (
+                <>
+                  <option value="ALL">Semua Cabang (28 Cabang Regional 4)</option>
+                  {OFFICIAL_BRANCHES.map(b => (
+                    <option key={b.code} value={b.code}>
+                      [{b.code}] {b.name}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
         </div>
@@ -652,7 +684,9 @@ export default function PortSightPeriode({
             <span style={{ fontWeight: 800, color: 'var(--text-title)' }}>{activePeriodLabel}</span>
             <span style={{ color: 'var(--text-secondary)' }}>• Cabang:</span>
             <span style={{ fontWeight: 700, color: 'var(--text-title)' }}>
-              {branchFilter === 'ALL' ? 'Semua Cabang (ALL)' : `[${branchFilter}] ${OFFICIAL_BRANCHES.find(b => b.code === branchFilter)?.name || ''}`}
+              {isPicCabang
+                ? `[${currentUser?.branch_id}] ${assignedBranch?.name || currentUser?.branch_id}`
+                : (branchFilter === 'ALL' ? 'Semua Cabang (ALL)' : `[${branchFilter}] ${OFFICIAL_BRANCHES.find(b => b.code === branchFilter)?.name || ''}`)}
             </span>
           </div>
 

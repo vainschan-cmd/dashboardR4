@@ -438,7 +438,10 @@ export default function ManualDataInputModal({
                   }}
                   required
                 >
-                  {OFFICIAL_BRANCHES.map((b) => (
+                  {(isBranchLocked && currentUser?.branch_id && currentUser.branch_id !== 'R99'
+                    ? OFFICIAL_BRANCHES.filter((b) => b.code === currentUser.branch_id)
+                    : OFFICIAL_BRANCHES
+                  ).map((b) => (
                     <option key={b.code} value={b.code}>
                       [{b.code}] {b.name}
                     </option>

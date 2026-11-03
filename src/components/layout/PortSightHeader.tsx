@@ -30,6 +30,7 @@ import {
   Search,
   Check,
   RotateCcw,
+  Lock,
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
 import {
@@ -122,20 +123,25 @@ export default function PortSightHeader({
   const canManageUsers = userRole === 'super_admin' || userRole === 'admin_regional';
   const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
   const currentBranchName = OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal)?.name;
-  const isAll = !selectedTerminal || selectedTerminal === 'ALL';
-  const selectedBranchTitle = isAll
-    ? 'Regional 4 (Konsolidasi 28 Cabang)'
-    : getSelectedBranchLabel(selectedTerminal);
+  const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
+  const selectedBranchTitle = isPicCabang
+    ? `[${currentUser?.branch_id}] ${assignedBranch?.name || currentUser?.branch_id}`
+    : isAll
+      ? 'Regional 4 (Konsolidasi 28 Cabang)'
+      : getSelectedBranchLabel(selectedTerminal);
 
   const selectedBranchCodes = useMemo(() => {
+    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      return [currentUser.branch_id];
+    }
     if (selectedTerminal === 'NONE') return [];
     if (!selectedTerminal || selectedTerminal === 'ALL') {
       return OFFICIAL_BRANCHES.map(b => b.code);
     }
     return parseSelectedBranches(selectedTerminal);
-  }, [selectedTerminal]);
+  }, [isPicCabang, currentUser?.branch_id, selectedTerminal]);
 
-  const isAllSelected = selectedTerminal === 'ALL' || (selectedBranchCodes.length === OFFICIAL_BRANCHES.length && selectedTerminal !== 'NONE');
+  const isAllSelected = !isPicCabang && (selectedTerminal === 'ALL' || (selectedBranchCodes.length === OFFICIAL_BRANCHES.length && selectedTerminal !== 'NONE'));
 
   const handleToggleBranch = (code: string) => {
     if (isPicCabang) return;
@@ -177,12 +183,16 @@ export default function PortSightHeader({
   };
 
   const filteredBranchesForPicker = useMemo(() => {
+    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      const b = OFFICIAL_BRANCHES.find(x => x.code === currentUser.branch_id);
+      return b ? [b] : (assignedBranch ? [assignedBranch] : []);
+    }
     if (!branchSearchQuery.trim()) return OFFICIAL_BRANCHES;
     const q = branchSearchQuery.toLowerCase();
     return OFFICIAL_BRANCHES.filter(
       b => b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q)
     );
-  }, [branchSearchQuery]);
+  }, [isPicCabang, currentUser?.branch_id, assignedBranch, branchSearchQuery]);
 
   const getRoleLabel = () => {
     if (userRole === 'super_admin') return 'Super Admin';
@@ -879,17 +889,14 @@ export default function PortSightHeader({
             <div
               className="filter-chip"
               onClick={() => {
-                if (!isPicCabang) {
-                  setBranchDropdownOpen(prev => !prev);
-                }
+                setBranchDropdownOpen(prev => !prev);
               }}
               style={{
                 maxWidth: '100%',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                cursor: isPicCabang ? 'default' : 'pointer',
-                opacity: isPicCabang ? 0.95 : 1,
+                cursor: 'pointer',
                 background: branchDropdownOpen
                   ? (theme === 'dark' ? 'rgba(56, 189, 248, 0.18)' : 'rgba(2, 132, 199, 0.12)')
                   : undefined,
@@ -898,7 +905,7 @@ export default function PortSightHeader({
               }}
               title={
                 isPicCabang
-                  ? `Terkunci: Akun PIC Cabang [${currentUser?.branch_id}] ${assignedBranch?.name || ''}`
+                  ? `Filter Terkunci: Akun PIC Cabang [${currentUser?.branch_id}] ${assignedBranch?.name || ''} (Klik untuk detail filter)`
                   : 'Klik untuk memilih satu atau beberapa cabang (multi-select centang)'
               }
             >
@@ -918,7 +925,23 @@ export default function PortSightHeader({
                   : getSelectedBranchLabel(selectedTerminal)}
               </span>
 
-              {!isPicCabang && (
+              {isPicCabang ? (
+                <span
+                  style={{
+                    fontSize: '9.5px',
+                    fontWeight: 700,
+                    background: 'rgba(56, 189, 248, 0.2)',
+                    color: 'var(--accent-cyan)',
+                    padding: '1px 5px',
+                    borderRadius: '8px',
+                    lineHeight: 1.2,
+                    flexShrink: 0,
+                  }}
+                  title="Filter cabang penugasan aktif (1/1)"
+                >
+                  1/1
+                </span>
+              ) : (
                 <span
                   style={{
                     fontSize: '9.5px',
@@ -944,39 +967,19 @@ export default function PortSightHeader({
                 </span>
               )}
 
-              {!isPicCabang && (
-                <ChevronDown
-                  size={12}
-                  style={{
-                    transform: branchDropdownOpen ? 'rotate(180deg)' : 'none',
-                    transition: 'transform 0.2s ease',
-                    opacity: 0.7,
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-
-              {isPicCabang && (
-                <span
-                  style={{
-                    fontSize: '9.5px',
-                    fontWeight: 800,
-                    backgroundColor: 'rgba(2, 132, 199, 0.2)',
-                    color: 'var(--accent-cyan)',
-                    padding: '1px 5px',
-                    borderRadius: '10px',
-                    border: '1px solid rgba(2, 132, 199, 0.35)',
-                    letterSpacing: '0.02em',
-                  }}
-                  title="Filter cabang terkunci sesuai penugasan PIC"
-                >
-                  🔒 Cabang PIC
-                </span>
-              )}
+              <ChevronDown
+                size={12}
+                style={{
+                  transform: branchDropdownOpen ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s ease',
+                  opacity: 0.7,
+                  flexShrink: 0,
+                }}
+              />
             </div>
 
             {/* Dropdown Popover with Checkboxes */}
-            {branchDropdownOpen && !isPicCabang && (
+            {branchDropdownOpen && (
               <div
                 style={{
                   position: 'absolute',
@@ -1004,10 +1007,12 @@ export default function PortSightHeader({
                     background: theme === 'dark' ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isPicCabang ? '6px' : '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Building2 size={13} style={{ color: 'var(--accent-cyan)' }} />
-                      <span style={{ fontSize: '12px', fontWeight: 700 }}>Filter Multi-Cabang</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700 }}>
+                        {isPicCabang ? 'Filter Cabang PIC' : 'Filter Multi-Cabang'}
+                      </span>
                     </div>
                     <span
                       style={{
@@ -1020,107 +1025,131 @@ export default function PortSightHeader({
                         border: '1px solid rgba(56, 189, 248, 0.25)',
                       }}
                     >
-                      {isAllSelected ? 'Semua (28)' : `${selectedBranchCodes.length} Terpilih`}
+                      {isPicCabang ? '1 Cabang (Terkunci)' : (isAllSelected ? 'Semua (28)' : `${selectedBranchCodes.length} Terpilih`)}
                     </span>
                   </div>
 
-                  {/* Search input */}
-                  <div
-                    style={{
-                      position: 'relative',
-                      display: 'flex',
-                      alignItems: 'center',
-                      background: theme === 'dark' ? 'rgba(0, 0, 0, 0.35)' : '#ffffff',
-                      border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      padding: '4px 8px',
-                      marginBottom: '8px',
-                      gap: '6px',
-                    }}
-                  >
-                    <Search size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
-                    <input
-                      type="text"
-                      value={branchSearchQuery}
-                      onChange={(e) => setBranchSearchQuery(e.target.value)}
-                      placeholder="Cari cabang / kode (cth: Makassar, R01)..."
+                  {isPicCabang ? (
+                    <div
                       style={{
-                        background: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        color: 'inherit',
+                        padding: '7px 9px',
+                        borderRadius: '6px',
+                        background: theme === 'dark' ? 'rgba(56, 189, 248, 0.08)' : '#f0f9ff',
+                        border: '1px solid rgba(56, 189, 248, 0.25)',
                         fontSize: '11px',
-                        width: '100%',
+                        lineHeight: 1.4,
+                        color: theme === 'dark' ? '#bae6fd' : '#0369a1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '7px',
                       }}
-                      autoFocus
-                    />
-                    {branchSearchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setBranchSearchQuery('')}
+                    >
+                      <Lock size={13} style={{ flexShrink: 0, color: 'var(--accent-cyan)' }} />
+                      <span>
+                        Akses filter terkunci khusus cabang penugasan Anda: <strong>[{currentUser?.branch_id}] {assignedBranch?.name}</strong>.
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Search input */}
+                      <div
                         style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#94a3b8',
-                          cursor: 'pointer',
-                          padding: '0 2px',
+                          position: 'relative',
                           display: 'flex',
                           alignItems: 'center',
+                          background: theme === 'dark' ? 'rgba(0, 0, 0, 0.35)' : '#ffffff',
+                          border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          padding: '4px 8px',
+                          marginBottom: '8px',
+                          gap: '6px',
                         }}
                       >
-                        <X size={11} />
-                      </button>
-                    )}
-                  </div>
+                        <Search size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                        <input
+                          type="text"
+                          value={branchSearchQuery}
+                          onChange={(e) => setBranchSearchQuery(e.target.value)}
+                          placeholder="Cari cabang / kode (cth: Makassar, R01)..."
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none',
+                            color: 'inherit',
+                            fontSize: '11px',
+                            width: '100%',
+                          }}
+                          autoFocus
+                        />
+                        {branchSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setBranchSearchQuery('')}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              padding: '0 2px',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <X size={11} />
+                          </button>
+                        )}
+                      </div>
 
-                  {/* Quick Action buttons */}
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button
-                      type="button"
-                      onClick={handleSelectAll}
-                      style={{
-                        flex: 1,
-                        padding: '4px 8px',
-                        fontSize: '10.5px',
-                        fontWeight: 600,
-                        borderRadius: '5px',
-                        border: theme === 'dark' ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid #bae6fd',
-                        background: isAllSelected
-                          ? 'rgba(56, 189, 248, 0.2)'
-                          : (theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'),
-                        color: theme === 'dark' ? '#f0f9ff' : '#0369a1',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Check size={11} />
-                      <span>Pilih Semua (28)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleResetBranches}
-                      style={{
-                        padding: '4px 8px',
-                        fontSize: '10.5px',
-                        fontWeight: 600,
-                        borderRadius: '5px',
-                        border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0',
-                        background: theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff',
-                        color: theme === 'dark' ? '#94a3b8' : '#64748b',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
-                      title="Kosongkan semua centang agar bisa pilih per cabang"
-                    >
-                      <RotateCcw size={10} />
-                      <span>Reset (Kosongkan)</span>
-                    </button>
-                  </div>
+                      {/* Quick Action buttons */}
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={handleSelectAll}
+                          style={{
+                            flex: 1,
+                            padding: '4px 8px',
+                            fontSize: '10.5px',
+                            fontWeight: 600,
+                            borderRadius: '5px',
+                            border: theme === 'dark' ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid #bae6fd',
+                            background: isAllSelected
+                              ? 'rgba(56, 189, 248, 0.2)'
+                              : (theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'),
+                            color: theme === 'dark' ? '#f0f9ff' : '#0369a1',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <Check size={11} />
+                          <span>Pilih Semua (28)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResetBranches}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '10.5px',
+                            fontWeight: 600,
+                            borderRadius: '5px',
+                            border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0',
+                            background: theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff',
+                            color: theme === 'dark' ? '#94a3b8' : '#64748b',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                          title="Kosongkan semua centang agar bisa pilih per cabang"
+                        >
+                          <RotateCcw size={10} />
+                          <span>Reset (Kosongkan)</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Branch items list */}
@@ -1131,8 +1160,8 @@ export default function PortSightHeader({
                     padding: '4px',
                   }}
                 >
-                  {/* Option 0: Semua Cabang */}
-                  {!branchSearchQuery && (
+                  {/* Option 0: Semua Cabang (Hanya untuk Admin / Regional) */}
+                  {!isPicCabang && !branchSearchQuery && (
                     <>
                       <div
                         onClick={handleSelectAll}
@@ -1195,41 +1224,45 @@ export default function PortSightHeader({
                     </>
                   )}
 
-                  {/* 28 Official Branches */}
+                  {/* Branches List: For PIC Cabang only their assigned branch is included */}
                   {filteredBranchesForPicker.length === 0 ? (
                     <div style={{ padding: '16px 12px', textAlign: 'center', fontSize: '11px', color: '#94a3b8' }}>
                       Tidak ada cabang yang cocok dengan pencarian
                     </div>
                   ) : (
                     filteredBranchesForPicker.map((b) => {
-                      const isChecked = isAllSelected || selectedBranchCodes.includes(b.code);
+                      const isChecked = isPicCabang || isAllSelected || selectedBranchCodes.includes(b.code);
                       return (
                         <div
                           key={b.code}
-                          onClick={() => handleToggleBranch(b.code)}
+                          onClick={() => {
+                            if (!isPicCabang) handleToggleBranch(b.code);
+                          }}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             padding: '5.5px 8px',
                             borderRadius: '6px',
-                            cursor: 'pointer',
-                            background: isChecked && !isAllSelected
+                            cursor: isPicCabang ? 'default' : 'pointer',
+                            background: isChecked && (!isAllSelected || isPicCabang)
                               ? (theme === 'dark' ? 'rgba(56, 189, 248, 0.1)' : '#f0f9ff')
                               : 'transparent',
                             transition: 'background 0.12s ease',
                           }}
                           onMouseEnter={(e) => {
-                            if (!isChecked || isAllSelected) {
+                            if (!isPicCabang && (!isChecked || isAllSelected)) {
                               e.currentTarget.style.background =
                                 theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc';
                             }
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background =
-                              isChecked && !isAllSelected
-                                ? (theme === 'dark' ? 'rgba(56, 189, 248, 0.1)' : '#f0f9ff')
-                                : 'transparent';
+                            if (!isPicCabang) {
+                              e.currentTarget.style.background =
+                                isChecked && !isAllSelected
+                                  ? (theme === 'dark' ? 'rgba(56, 189, 248, 0.1)' : '#f0f9ff')
+                                  : 'transparent';
+                            }
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
@@ -1279,25 +1312,43 @@ export default function PortSightHeader({
                             </span>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={(e) => handleSelectOnly(b.code, e)}
-                            style={{
-                              padding: '1px 6px',
-                              fontSize: '9.5px',
-                              fontWeight: 700,
-                              borderRadius: '4px',
-                              border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #cbd5e1',
-                              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                              color: theme === 'dark' ? '#94a3b8' : '#64748b',
-                              cursor: 'pointer',
-                              flexShrink: 0,
-                              marginLeft: '6px',
-                            }}
-                            title={`Pilih hanya cabang [${b.code}] ${b.name}`}
-                          >
-                            Hanya
-                          </button>
+                          {isPicCabang ? (
+                            <span
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: '9.5px',
+                                fontWeight: 700,
+                                borderRadius: '4px',
+                                background: 'rgba(56, 189, 248, 0.15)',
+                                color: 'var(--accent-cyan)',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                                flexShrink: 0,
+                                marginLeft: '6px',
+                              }}
+                            >
+                              Cabang Anda (Aktif)
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => handleSelectOnly(b.code, e)}
+                              style={{
+                                padding: '1px 6px',
+                                fontSize: '9.5px',
+                                fontWeight: 700,
+                                borderRadius: '4px',
+                                border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #cbd5e1',
+                                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                                color: theme === 'dark' ? '#94a3b8' : '#64748b',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                marginLeft: '6px',
+                              }}
+                              title={`Pilih hanya cabang [${b.code}] ${b.name}`}
+                            >
+                              Hanya
+                            </button>
+                          )}
                         </div>
                       );
                     })
@@ -1316,11 +1367,13 @@ export default function PortSightHeader({
                   }}
                 >
                   <span style={{ fontSize: '10.5px', color: '#94a3b8' }}>
-                    {isAllSelected
-                      ? 'Semua 28 cabang aktif (Konsolidasi Regional 4)'
-                      : (selectedBranchCodes.length === 0
-                        ? '0 cabang terpilih (Centang cabang yang diinginkan)'
-                        : `${selectedBranchCodes.length} cabang aktif`)}
+                    {isPicCabang
+                      ? `1 cabang penugasan PIC aktif [${currentUser?.branch_id}]`
+                      : (isAllSelected
+                        ? 'Semua 28 cabang aktif (Konsolidasi Regional 4)'
+                        : (selectedBranchCodes.length === 0
+                          ? '0 cabang terpilih (Centang cabang yang diinginkan)'
+                          : `${selectedBranchCodes.length} cabang aktif`))}
                   </span>
                   <button
                     type="button"

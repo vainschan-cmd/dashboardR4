@@ -209,7 +209,7 @@ export default function DataRecordsView({
             title={isPicCabang ? `Terkunci: Data khusus cabang ${userBranchObj?.name || currentUser?.branch_id}` : 'Pilih Terminal'}
           >
             {!isPicCabang && <option value="ALL">🏢 Semua Terminal</option>}
-            {branches.map((b) => (
+            {(isPicCabang && userBranchObj ? [userBranchObj] : branches).map((b) => (
               <option key={b.id} value={b.id} style={{ background: '#122137' }}>
                 {b.name}
               </option>

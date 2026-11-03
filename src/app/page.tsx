@@ -273,8 +273,24 @@ export default function DashboardHome() {
   };
 
   const canManageUsers = userRole === 'super_admin' || userRole === 'admin_regional';
+  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
   const isGovernanceView = ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
 
+  const handleSelectTerminal = (t: string) => {
+    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      setSelectedTerminal(currentUser.branch_id);
+      return;
+    }
+    setSelectedTerminal(t);
+  };
+
+  useEffect(() => {
+    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      if (selectedTerminal !== currentUser.branch_id) {
+        setSelectedTerminal(currentUser.branch_id);
+      }
+    }
+  }, [isPicCabang, currentUser?.branch_id, selectedTerminal]);
 
   // 2. Jika belum login (currentUser === null), tampilkan LoginScreen di awal
   if (!currentUser) {
@@ -295,7 +311,7 @@ export default function DashboardHome() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         selectedTerminal={selectedTerminal}
-        setSelectedTerminal={setSelectedTerminal}
+        setSelectedTerminal={handleSelectTerminal}
         selectedPeriod={selectedPeriod}
         setSelectedPeriod={setSelectedPeriod}
         userRole={userRole}
@@ -409,6 +425,8 @@ export default function DashboardHome() {
           <PortSightPeriode
             selectedTerminal={selectedTerminal}
             selectedPeriod={selectedPeriod}
+            currentUser={currentUser}
+            userRole={userRole}
           />
         )}
 

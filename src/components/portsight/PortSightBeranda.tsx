@@ -84,20 +84,28 @@ export default function PortSightBeranda({
     loadData();
   }, [selectedPeriod]);
 
-  const isNone = selectedTerminal === 'NONE';
-  const isAll = !selectedTerminal || selectedTerminal === 'ALL';
+  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
+  const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
+  const isNone = !isPicCabang && selectedTerminal === 'NONE';
+  const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
   const selectedCodes = useMemo(() => {
+    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      return [currentUser.branch_id];
+    }
     if (isNone) return [];
     if (isAll) return OFFICIAL_BRANCHES.map(b => b.code);
     return parseSelectedBranches(selectedTerminal);
-  }, [isNone, isAll, selectedTerminal]);
-  const isSingle = !isAll && !isNone && selectedCodes.length === 1;
-  const isMulti = !isAll && !isNone && selectedCodes.length > 1;
+  }, [isPicCabang, currentUser?.branch_id, isNone, isAll, selectedTerminal]);
+  const isSingle = isPicCabang || (!isAll && !isNone && selectedCodes.length === 1);
+  const isMulti = !isPicCabang && !isAll && !isNone && selectedCodes.length > 1;
 
   const activeBranch = useMemo(() => {
+    if (isPicCabang && currentUser?.branch_id) {
+      return assignedBranch || getBranchByCode(currentUser.branch_id) || null;
+    }
     if (!isSingle) return null;
     return getBranchByCode(selectedCodes[0]) || OFFICIAL_BRANCHES.find(b => b.code === selectedCodes[0]);
-  }, [isSingle, selectedCodes]);
+  }, [isPicCabang, currentUser?.branch_id, assignedBranch, isSingle, selectedCodes]);
 
   // Filter dataset by selected branch or use all
   const filteredFin = useMemo(() => {
@@ -389,9 +397,13 @@ export default function PortSightBeranda({
     ];
   }, [filteredOpkom, filteredFin, filteredPeralatan, filteredKinerja, isNone, isAll, selectedTerminal]);
 
-  // 2. Terminal cards list for "Semua Cabang" view - Menampilkan seluruh Cabang Resmi Regional 4
+  // 2. Terminal cards list for "Semua Cabang" view - Menampilkan seluruh Cabang Resmi Regional 4 (atau khusus cabang penugasan PIC)
   const terminalsOverview = useMemo(() => {
-    return OFFICIAL_BRANCHES.map(branchInfo => {
+    const branchesSource = (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99')
+      ? OFFICIAL_BRANCHES.filter(b => b.code === currentUser.branch_id)
+      : OFFICIAL_BRANCHES;
+
+    return branchesSource.map(branchInfo => {
       const code = branchInfo.code;
       const bOp = opkom.filter(o => o.branchCode === code);
       const bFin = finansial.filter(f => f.branchCode === code);
@@ -456,9 +468,12 @@ export default function PortSightBeranda({
         isGood,
       };
     });
-  }, [opkom, finansial]);
+  }, [opkom, finansial, isPicCabang, currentUser?.branch_id]);
 
   const filteredTerminalsOverview = useMemo(() => {
+    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+      return terminalsOverview.filter(t => t.code === currentUser.branch_id);
+    }
     if (isNone) return [];
     let list = terminalsOverview;
     if (!isAll) {
@@ -471,12 +486,14 @@ export default function PortSightBeranda({
       t.code.toLowerCase().includes(q) ||
       t.subtype.toLowerCase().includes(q)
     );
-  }, [terminalsOverview, terminalSearch, isNone, isAll, selectedTerminal]);
+  }, [terminalsOverview, terminalSearch, isNone, isAll, selectedTerminal, isPicCabang, currentUser?.branch_id]);
 
   // 3. Data terpisah masing-masing cabang terpilih (NON-AKUMULASI)
   const selectedBranchesMetrics = useMemo(() => {
     if (isNone) return [];
-    const targetCodes = isAll ? OFFICIAL_BRANCHES.map(b => b.code) : selectedCodes;
+    const targetCodes = (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99')
+      ? [currentUser.branch_id]
+      : (isAll ? OFFICIAL_BRANCHES.map(b => b.code) : selectedCodes);
 
     return targetCodes.map(code => {
       const bInfo = getBranchByCode(code) || OFFICIAL_BRANCHES.find(b => b.code === code) || { code, name: code };
@@ -684,8 +701,6 @@ export default function PortSightBeranda({
     ];
   }, [isAll, activeBranch, selectedTerminal, filteredOpkom, filteredPeralatan]);
 
-  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       {/* Active Branch Filter Banner (When a specific branch is selected) */}
@@ -849,7 +864,9 @@ export default function PortSightBeranda({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
-                {isNone
+                {isPicCabang
+                  ? `Kinerja Cabang: [${currentUser?.branch_id}] ${activeBranch?.name || currentUser?.branch_id}`
+                  : isNone
                   ? 'Cabang Dikosongkan (Mode Reset)'
                   : isAll
                   ? 'Kinerja per terminal'
@@ -857,7 +874,21 @@ export default function PortSightBeranda({
                   ? `Kinerja Layanan Cabang: ${activeBranch?.name || selectedTerminal}`
                   : `Kinerja Masing-Masing Cabang Terpilih (${selectedCodes.length} Cabang - Non-Akumulasi)`}
               </div>
-              {(isAll || isMulti) && (
+              {isPicCabang ? (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                    color: 'var(--accent-cyan)',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-pill)',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                  }}
+                >
+                  🔒 Cabang PIC Terkunci
+                </span>
+              ) : (isAll || isMulti) && (
                 <span
                   style={{
                     fontSize: '11px',
