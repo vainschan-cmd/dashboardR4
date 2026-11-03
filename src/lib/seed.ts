@@ -219,11 +219,12 @@ export function runSeed(force = false) {
 
   // 3. Users (RBAC & PIC Master)
   const users: User[] = [
-    { id: 'usr_super', username: '10001', nipp: '10001', name: 'Budi Santoso, S.T., M.M.', email: 'superadmin@pelindo.co.id', divisi: 'Divisi Teknologi Informasi & Digitalisasi', departemen: 'Departemen Tata Kelola & Solusi TI', password: 'password123', role: 'super_admin', branch_id: 'R99', active: true },
-    { id: 'usr_adminreg', username: '10002', nipp: '10002', name: 'Hendra Wijaya, S.E., M.B.A.', email: 'admin.r4@pelindo.co.id', divisi: 'Divisi Strategi & Manajemen Kinerja Regional', departemen: 'Departemen Monitoring & Evaluasi Regional 4', password: 'password123', role: 'admin_regional', branch_id: 'R99', active: true },
-    { id: 'usr_pic_ops', username: '10003', nipp: '10003', name: 'Capt. Rudi Hartono, M.Mar.', email: 'rudi.ops@pelindo.co.id', divisi: 'Divisi Operasi & Pelayanan Kapal', departemen: 'Departemen Pelayanan Kapal & Barang', password: 'password123', role: 'pic_dept_regional', department_id: 'dept_ops', branch_id: 'R99', active: true },
-    { id: 'usr_pic_mks', username: '10004', nipp: '10004', name: 'Ahmad Dahlan, S.T.', email: 'ahmad.mks@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Makassar', password: 'password123', role: 'pic_cabang', branch_id: 'R01', active: true },
-    { id: 'usr_viewer', username: '10000', nipp: '10000', name: 'Board of Directors Regional 4', email: 'bod.r4@pelindo.co.id', divisi: 'Direksi Pelindo Regional 4', departemen: 'Kantor Regional 4', password: 'password123', role: 'viewer', branch_id: 'R99', active: true },
+    { id: 'usr_viewer', username: '10000', nipp: '10000', name: 'Akhirman (BOD)', email: 'bod.r4@pelindo.co.id', divisi: 'Direksi Pelindo Regional 4', departemen: 'Kantor Regional 4', password: 'password123', role: 'viewer', branch_id: 'R99', active: true },
+    { id: 'usr_super', username: '10001', nipp: '10001', name: 'M Mansyur', email: 'superadmin@pelindo.co.id', divisi: 'Divisi Teknologi Informasi & Digitalisasi', departemen: 'Departemen Tata Kelola & Solusi TI', password: 'password123', role: 'super_admin', branch_id: 'R99', active: true },
+    { id: 'usr_adminreg', username: '10002', nipp: '10002', name: 'Asqar', email: 'admin.r4@pelindo.co.id', divisi: 'Divisi Strategi & Manajemen Kinerja Regional', departemen: 'Departemen Monitoring & Evaluasi Regional 4', password: 'password123', role: 'admin_regional', branch_id: 'R99', active: true },
+    { id: 'usr_pic_ops', username: '10003', nipp: '10003', name: 'Heiruddin', email: 'rudi.ops@pelindo.co.id', divisi: 'Divisi Operasi & Pelayanan Kapal', departemen: 'Departemen Pelayanan Kapal & Barang', password: 'password123', role: 'pic_dept_regional', department_id: 'dept_ops', branch_id: 'R99', active: true },
+    { id: 'usr_pic_mks', username: '10004', nipp: '10004', name: 'Nuka', email: 'ahmad.mks@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Makassar', password: 'password123', role: 'pic_cabang', branch_id: 'R01', active: true },
+    { id: 'usr_pic_bpn', username: '10008', nipp: '10008', name: 'Fachruddin', email: 'faisal.bpn@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Balikpapan', password: 'password123', role: 'pic_cabang', branch_id: 'R04', active: true },
   ];
 
   const stmtUser = db.prepare(`
@@ -504,7 +505,7 @@ export function runSeed(force = false) {
   `).run(
     'aud_init_r4',
     'usr_adminreg',
-    'Hendra Wijaya',
+    'Asqar',
     'admin_regional',
     'CONFIG_UPDATE',
     'R4_PORTSIGHT',

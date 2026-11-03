@@ -10,9 +10,23 @@ export const DRIVE_ACCOUNT = 'regdashr@gmail.com';
 
 export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
+    username: '10000',
+    nipp: '10000',
+    name: 'Akhirman (BOD)',
+    email: 'bod.r4@pelindo.co.id',
+    divisi: 'Direksi Pelindo Regional 4',
+    departemen: 'Kantor Regional 4',
+    role: 'viewer',
+    branch_id: 'R99',
+    department_id: null,
+    password: 'password123',
+    active: true,
+    created_at: '2026-01-10T08:00:00Z',
+  },
+  {
     username: '10001',
     nipp: '10001',
-    name: 'Budi Santoso, S.T., M.M.',
+    name: 'M Mansyur',
     email: 'budi.santoso@pelindo.co.id',
     divisi: 'Divisi Teknologi Informasi & Digitalisasi',
     departemen: 'Departemen Tata Kelola & Solusi TI',
@@ -26,7 +40,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10002',
     nipp: '10002',
-    name: 'Hendra Wijaya, S.E., M.B.A.',
+    name: 'Asqar',
     email: 'hendra.wijaya@pelindo.co.id',
     divisi: 'Divisi Strategi & Manajemen Kinerja Regional',
     departemen: 'Departemen Monitoring & Evaluasi Regional 4',
@@ -40,7 +54,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10003',
     nipp: '10003',
-    name: 'Capt. Rudi Hartono, M.Mar.',
+    name: 'Heiruddin',
     email: 'rudi.hartono@pelindo.co.id',
     divisi: 'Divisi Operasi & Pelayanan Kapal',
     departemen: 'Departemen Pelayanan Kapal & Barang',
@@ -54,7 +68,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10004',
     nipp: '10004',
-    name: 'Ahmad Dahlan, S.T.',
+    name: 'Nuka',
     email: 'ahmad.dahlan@pelindo.co.id',
     divisi: 'Divisi Operasional Terminal Cabang',
     departemen: 'Departemen Operasi Cabang Makassar',
@@ -68,7 +82,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10005',
     nipp: '10005',
-    name: 'Siti Rahma, S.E., Ak., CA.',
+    name: 'Rahmat Syukur',
     email: 'siti.rahma@pelindo.co.id',
     divisi: 'Divisi Keuangan & Manajemen Risiko',
     departemen: 'Departemen Akuntansi & Perpajakan',
@@ -82,7 +96,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10006',
     nipp: '10006',
-    name: 'Dewi Kartika, S.Psi., M.M.',
+    name: 'Arkam',
     email: 'dewi.kartika@pelindo.co.id',
     divisi: 'Divisi Sumber Daya Manusia & Umum',
     departemen: 'Departemen SDM & Organisasi',
@@ -96,7 +110,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10007',
     nipp: '10007',
-    name: 'Ir. Agus Santoso, M.T.',
+    name: 'Abri',
     email: 'agus.santoso@pelindo.co.id',
     divisi: 'Divisi Fasilitas & Peralatan Pelabuhan',
     departemen: 'Departemen Pemeliharaan & Teknik',
@@ -110,7 +124,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10008',
     nipp: '10008',
-    name: 'Faisal Ramadhan, S.Tr.Pel.',
+    name: 'Fachruddin',
     email: 'faisal.ramadhan@pelindo.co.id',
     divisi: 'Divisi Operasional Terminal Cabang',
     departemen: 'Departemen Operasi Cabang Balikpapan',
@@ -124,7 +138,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   {
     username: '10009',
     nipp: '10009',
-    name: 'Nur Aini, S.Kom.',
+    name: 'Angga',
     email: 'nur.aini@pelindo.co.id',
     divisi: 'Divisi Operasional Terminal Cabang',
     departemen: 'Departemen Operasi Cabang Bitung',
@@ -134,20 +148,6 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
     password: 'password123',
     active: true,
     created_at: '2026-01-12T08:00:00Z',
-  },
-  {
-    username: '10000',
-    nipp: '10000',
-    name: 'Board of Directors (BOD)',
-    email: 'bod.r4@pelindo.co.id',
-    divisi: 'Direksi Pelindo Regional 4',
-    departemen: 'Kantor Regional 4',
-    role: 'viewer',
-    branch_id: 'R99',
-    department_id: null,
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
   },
 ];
 

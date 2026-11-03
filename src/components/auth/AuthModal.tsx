@@ -427,6 +427,7 @@ export default function AuthModal({
                   <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Password: password123</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+                  {/* PIC Cabang Makassar [R01] */}
                   <button
                     type="button"
                     onClick={() => {
@@ -436,10 +437,13 @@ export default function AuthModal({
                     }}
                     className="btn-dark"
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                    title="Login sebagai PIC Cabang Makassar - Nuka (10004)"
                   >
                     <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R01]</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Makassar • 10004</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Nuka (Makassar) • 10004</span>
                   </button>
+
+                  {/* PIC Cabang Balikpapan [R04] */}
                   <button
                     type="button"
                     onClick={() => {
@@ -449,10 +453,13 @@ export default function AuthModal({
                     }}
                     className="btn-dark"
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                    title="Login sebagai PIC Cabang Balikpapan - Fachruddin (10008)"
                   >
                     <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R04]</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Balikpapan • 10008</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Fachruddin (Balikpapan) • 10008</span>
                   </button>
+
+                  {/* Super Admin */}
                   <button
                     type="button"
                     onClick={() => {
@@ -462,10 +469,13 @@ export default function AuthModal({
                     }}
                     className="btn-dark"
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                    title="Login sebagai Super Admin - M Mansyur (10001)"
                   >
                     <span style={{ fontWeight: 800, color: '#38bdf8' }}>Super Admin</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Budi S. • 10001</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M Mansyur • 10001</span>
                   </button>
+
+                  {/* Admin Regional 4 */}
                   <button
                     type="button"
                     onClick={() => {
@@ -475,9 +485,42 @@ export default function AuthModal({
                     }}
                     className="btn-dark"
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                    title="Login sebagai Admin Regional 4 - Asqar (10002)"
                   >
                     <span style={{ fontWeight: 800, color: '#a78bfa' }}>Admin Regional 4</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Hendra W. • 10002</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Asqar • 10002</span>
+                  </button>
+
+                  {/* PIC Dept Operasi */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginNipp('10003');
+                      setLoginPassword('password123');
+                      submitLogin('10003', 'password123');
+                    }}
+                    className="btn-dark"
+                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                    title="Login sebagai PIC Dept Operasi Regional - Heiruddin (10003)"
+                  >
+                    <span style={{ fontWeight: 800, color: '#10b981' }}>PIC Dept Operasi</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Heiruddin • 10003</span>
+                  </button>
+
+                  {/* BOD Regional 4 (Viewer) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginNipp('10000');
+                      setLoginPassword('password123');
+                      submitLogin('10000', 'password123');
+                    }}
+                    className="btn-dark"
+                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
+                    title="Login sebagai BOD Regional 4 (Viewer) - Akhirman (10000)"
+                  >
+                    <span style={{ fontWeight: 800, color: '#f59e0b' }}>BOD Regional 4</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Akhirman (BOD) • 10000</span>
                   </button>
                 </div>
               </div>
