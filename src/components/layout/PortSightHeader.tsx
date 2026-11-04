@@ -119,8 +119,17 @@ export default function PortSightHeader({
 
   const mainTabs = MAIN_NAVIGATION_TABS;
 
-  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
-  const canManageUsers = userRole === 'super_admin' || userRole === 'admin_regional';
+  const isBod =
+    userRole === 'viewer' ||
+    currentUser?.role === 'viewer' ||
+    String(userRole).toLowerCase().includes('bod') ||
+    String(currentUser?.role).toLowerCase().includes('bod') ||
+    currentUser?.nipp === '10000' ||
+    currentUser?.username === '10000' ||
+    String(currentUser?.name).toLowerCase().includes('bod');
+
+  const isPicCabang = !isBod && (userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99'));
+  const canManageUsers = !isBod && (userRole === 'super_admin' || userRole === 'admin_regional');
   const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
   const currentBranchName = OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal)?.name;
   const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
@@ -401,7 +410,7 @@ export default function PortSightHeader({
 
           {/* Desktop Only Tools (Hidden on Mobile/Tablet) */}
           <div className="header-desktop-tools">
-            {onOpenManualInput && (
+            {onOpenManualInput && !isBod && (
               <button
                 type="button"
                 onClick={onOpenManualInput}
@@ -528,84 +537,86 @@ export default function PortSightHeader({
             );
           })}
 
-          {/* Governance & Admin Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => {
-                if (!['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab)) {
-                  handleSelectTab('data_records');
-                }
-                setAdminMenuOpen(!adminMenuOpen);
-              }}
-              className={`nav-tab-btn ${['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab) ? 'active' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <Layers size={13} />
-              <span>Tata Kelola Data</span>
-              {pendingCount > 0 && (
-                <span
-                  style={{
-                    backgroundColor: '#fbbf24',
-                    color: '#0e1b2e',
-                    fontSize: '10px',
-                    fontWeight: 800,
-                    padding: '1px 5px',
-                    borderRadius: '10px',
-                    marginLeft: '2px',
-                  }}
-                >
-                  {pendingCount}
-                </span>
-              )}
-              <ChevronDown size={12} />
-            </button>
-
-            {adminMenuOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: '6px',
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '6px',
-                  minWidth: '220px',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.35)',
-                  zIndex: 60,
+          {/* Governance & Admin Dropdown (Hidden for BOD) */}
+          {!isBod && (
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => {
+                  if (!['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab)) {
+                    handleSelectTab('data_records');
+                  }
+                  setAdminMenuOpen(!adminMenuOpen);
                 }}
-                onClick={() => setAdminMenuOpen(false)}
+                className={`nav-tab-btn ${['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab) ? 'active' : ''}`}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
               >
-                {adminTabs.map((adm) => {
-                  const Icon = adm.icon;
-                  return (
-                    <button
-                      key={adm.id}
-                      onClick={() => handleSelectTab(adm.id)}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: activeTab === adm.id ? 'var(--accent-blue)' : 'none',
-                        border: 'none',
-                        padding: '8px 12px',
-                        color: activeTab === adm.id ? '#ffffff' : 'var(--text-main)',
-                        fontSize: '12px',
-                        borderRadius: 'var(--radius-sm)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Icon size={13} color={activeTab === adm.id ? '#ffffff' : 'var(--accent-cyan)'} />
-                      <span>{adm.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                <Layers size={13} />
+                <span>Tata Kelola Data</span>
+                {pendingCount > 0 && (
+                  <span
+                    style={{
+                      backgroundColor: '#fbbf24',
+                      color: '#0e1b2e',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      padding: '1px 5px',
+                      borderRadius: '10px',
+                      marginLeft: '2px',
+                    }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
+                <ChevronDown size={12} />
+              </button>
+
+              {adminMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: '6px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '6px',
+                    minWidth: '220px',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.35)',
+                    zIndex: 60,
+                  }}
+                  onClick={() => setAdminMenuOpen(false)}
+                >
+                  {adminTabs.map((adm) => {
+                    const Icon = adm.icon;
+                    return (
+                      <button
+                        key={adm.id}
+                        onClick={() => handleSelectTab(adm.id)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          background: activeTab === adm.id ? 'var(--accent-blue)' : 'none',
+                          border: 'none',
+                          padding: '8px 12px',
+                          color: activeTab === adm.id ? '#ffffff' : 'var(--text-main)',
+                          fontSize: '12px',
+                          borderRadius: 'var(--radius-sm)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Icon size={13} color={activeTab === adm.id ? '#ffffff' : 'var(--accent-cyan)'} />
+                        <span>{adm.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </nav>
 
@@ -751,49 +762,51 @@ export default function PortSightHeader({
               </div>
             </div>
 
-            {/* Tata Kelola Data Submenu */}
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Layers size={12} color="var(--accent-cyan)" />
-                <span>Tata Kelola Data & Administrasi:</span>
-                {pendingCount > 0 && (
-                  <span style={{ backgroundColor: '#fbbf24', color: '#000', fontSize: '10px', padding: '1px 5px', borderRadius: '8px', fontWeight: 800 }}>
-                    {pendingCount}
-                  </span>
-                )}
+            {/* Tata Kelola Data Submenu (Hidden for BOD) */}
+            {!isBod && (
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Layers size={12} color="var(--accent-cyan)" />
+                  <span>Tata Kelola Data & Administrasi:</span>
+                  {pendingCount > 0 && (
+                    <span style={{ backgroundColor: '#fbbf24', color: '#000', fontSize: '10px', padding: '1px 5px', borderRadius: '8px', fontWeight: 800 }}>
+                      {pendingCount}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '4px' }}>
+                  {adminTabs.map((adm) => {
+                    const Icon = adm.icon;
+                    const isActive = activeTab === adm.id;
+                    return (
+                      <button
+                        key={adm.id}
+                        onClick={() => handleSelectTab(adm.id)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 'var(--radius-sm)',
+                          textAlign: 'left',
+                          border: 'none',
+                          background: isActive ? 'var(--accent-blue)' : 'var(--bg-inner)',
+                          color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Icon size={13} color={isActive ? '#ffffff' : 'var(--accent-cyan)'} />
+                        <span>{adm.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '4px' }}>
-                {adminTabs.map((adm) => {
-                  const Icon = adm.icon;
-                  const isActive = activeTab === adm.id;
-                  return (
-                    <button
-                      key={adm.id}
-                      onClick={() => handleSelectTab(adm.id)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        textAlign: 'left',
-                        border: 'none',
-                        background: isActive ? 'var(--accent-blue)' : 'var(--bg-inner)',
-                        color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                        fontSize: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Icon size={13} color={isActive ? '#ffffff' : 'var(--accent-cyan)'} />
-                      <span>{adm.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            )}
 
-            {/* Quick Utilities */}
-            {onOpenManualInput && (
+            {/* Quick Utilities (Hidden for BOD) */}
+            {onOpenManualInput && !isBod && (
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
                 <button
                   type="button"

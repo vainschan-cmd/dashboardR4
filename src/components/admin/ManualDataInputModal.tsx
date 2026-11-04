@@ -66,6 +66,11 @@ export default function ManualDataInputModal({
   currentUser,
   onSuccess,
 }: ManualDataInputModalProps) {
+  // BOD / Viewer role is prohibited from manual input
+  if (!isOpen || currentUser?.role === 'viewer' || currentUser?.nipp === '10000' || String(currentUser?.name).toLowerCase().includes('bod')) {
+    return null;
+  }
+
   const [activeModule, setActiveModule] = useState<ModuleType>(defaultModule);
 
   // Common fields

@@ -76,6 +76,7 @@ export default function DashboardHome() {
   const [isComparisonModalOpen, setIsComparisonModalOpen] = useState<boolean>(false);
 
   const handleOpenManualInput = (moduleName?: string) => {
+    if (isBod) return;
     if (moduleName && ['finansial', 'opkom', 'kinerja', 'utilisasi', 'peralatan', 'fasilitas'].includes(moduleName)) {
       setManualInputDefaultModule(moduleName as ModuleType);
     }
@@ -272,9 +273,24 @@ export default function DashboardHome() {
     window.print();
   };
 
-  const canManageUsers = userRole === 'super_admin' || userRole === 'admin_regional';
-  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
-  const isGovernanceView = ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
+  const isBod =
+    userRole === 'viewer' ||
+    currentUser?.role === 'viewer' ||
+    String(userRole).toLowerCase().includes('bod') ||
+    String(currentUser?.role).toLowerCase().includes('bod') ||
+    currentUser?.nipp === '10000' ||
+    currentUser?.username === '10000' ||
+    String(currentUser?.name).toLowerCase().includes('bod');
+
+  const canManageUsers = !isBod && (userRole === 'super_admin' || userRole === 'admin_regional');
+  const isPicCabang = !isBod && (userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99'));
+  const isGovernanceView = !isBod && ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
+
+  useEffect(() => {
+    if (isBod && ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab)) {
+      setActiveTab('beranda');
+    }
+  }, [isBod, activeTab]);
 
   const handleSelectTerminal = (t: string) => {
     if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
@@ -324,7 +340,7 @@ export default function DashboardHome() {
         onLogout={handleLogout}
         onExportExcel={handleExportExcel}
         onPrint={handlePrint}
-        onOpenManualInput={() => handleOpenManualInput()}
+        onOpenManualInput={isBod ? undefined : () => handleOpenManualInput()}
         pendingCount={pendingCount}
         theme={theme}
         onThemeChange={handleThemeChange}
@@ -434,7 +450,7 @@ export default function DashboardHome() {
         {activeTab === 'keuangan' && (
           <PortSightKeuangan
             selectedTerminal={selectedTerminal}
-            onOpenManualInput={() => handleOpenManualInput('finansial')}
+            onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('finansial')}
           />
         )}
 
@@ -442,7 +458,7 @@ export default function DashboardHome() {
         {activeTab === 'opkom' && (
           <PortSightOpkom
             selectedTerminal={selectedTerminal}
-            onOpenManualInput={() => handleOpenManualInput('opkom')}
+            onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('opkom')}
           />
         )}
 
@@ -451,7 +467,7 @@ export default function DashboardHome() {
           <PortSightKinerja
             selectedTerminal={selectedTerminal}
             selectedPeriod={selectedPeriod}
-            onOpenManualInput={() => handleOpenManualInput('kinerja')}
+            onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('kinerja')}
             onSelectTerminal={(tId) => setSelectedTerminal(tId)}
           />
         )}
@@ -460,7 +476,7 @@ export default function DashboardHome() {
         {activeTab === 'utilisasi' && (
           <PortSightUtilisasi
             selectedTerminal={selectedTerminal}
-            onOpenManualInput={() => handleOpenManualInput('utilisasi')}
+            onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('utilisasi')}
           />
         )}
 
@@ -468,7 +484,7 @@ export default function DashboardHome() {
         {activeTab === 'peralatan' && (
           <PortSightPeralatan
             selectedTerminal={selectedTerminal}
-            onOpenManualInput={() => handleOpenManualInput('peralatan')}
+            onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('peralatan')}
           />
         )}
 
@@ -476,7 +492,7 @@ export default function DashboardHome() {
         {activeTab === 'fasilitas' && (
           <PortSightFasilitas
             selectedTerminal={selectedTerminal}
-            onOpenManualInput={() => handleOpenManualInput('fasilitas')}
+            onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('fasilitas')}
           />
         )}
 
@@ -639,18 +655,20 @@ export default function DashboardHome() {
         onLoginSuccess={handleLoginSuccess}
       />
 
-      {/* Manual Data Input Modal (Finance, Opkom, Kinerja, Utilisasi, Peralatan, Fasilitas) */}
-      <ManualDataInputModal
-        isOpen={manualInputModalOpen}
-        onClose={() => setManualInputModalOpen(false)}
-        defaultModule={manualInputDefaultModule}
-        selectedTerminal={selectedTerminal}
-        isBranchLocked={currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99'}
-        currentUser={currentUser}
-        onSuccess={() => {
-          loadMasterData();
-        }}
-      />
+      {/* Manual Data Input Modal (Finance, Opkom, Kinerja, Utilisasi, Peralatan, Fasilitas) - Hidden for BOD */}
+      {manualInputModalOpen && !isBod && (
+        <ManualDataInputModal
+          isOpen={manualInputModalOpen}
+          onClose={() => setManualInputModalOpen(false)}
+          defaultModule={manualInputDefaultModule}
+          selectedTerminal={selectedTerminal}
+          isBranchLocked={currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99'}
+          currentUser={currentUser}
+          onSuccess={() => {
+            loadMasterData();
+          }}
+        />
+      )}
 
       {/* Executive Comparison Matrix Modal (vs RKAP & 2025) */}
       <ComparisonModal
