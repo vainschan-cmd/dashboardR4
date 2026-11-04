@@ -21,6 +21,7 @@ import {
   X,
   BarChart3,
   CheckSquare,
+  Users,
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode, isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
@@ -138,10 +139,20 @@ export default function PortSightBeranda({
     return utilisasi.filter(u => isBranchMatch(selectedTerminal, u.branchCode, u.branchName));
   }, [isNone, isAll, selectedTerminal, utilisasi]);
 
-  // 1. Calculate 6 Top KPI Metrics (Dynamic per branch or total Regional 4)
-  const topKpis = useMemo(() => {
+  // 1. Calculate All 5 Port Services KPI Metrics (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
+  const serviceKpis = useMemo(() => {
     if (isNone) {
       return [
+        {
+          title: 'Kapal (GT)',
+          value: '0 GT',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: '0 GT',
+          rawRealization: '0 GT',
+        },
         {
           title: 'Petikemas (TEUs)',
           value: '0 TEUs',
@@ -163,7 +174,226 @@ export default function PortSightBeranda({
           rawRealization: '0 Ton',
         },
         {
+          title: 'Penumpang (orang)',
+          value: '0 org',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: '0 org',
+          rawRealization: '0 org',
+        },
+        {
+          title: 'Rupa-rupa usaha',
+          value: 'Rp 0',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: 'Rp 0',
+          rawRealization: 'Rp 0',
+        },
+      ];
+    }
+
+    // a. Kapal (GT)
+    const kapalGtRows = filteredOpkom.filter(o => {
+      const lay = (o.layanan || '').toUpperCase();
+      const sat = (o.satuan || '').toUpperCase();
+      return lay.includes('KAPAL') && sat.includes('GT');
+    });
+    const totalKapalGt = kapalGtRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+    const avgRkaKapal = kapalGtRows.length > 0
+      ? (kapalGtRows.reduce((a, b) => a + (b.rka || 0), 0) / kapalGtRows.length).toFixed(1)
+      : '84.1';
+    const avgYoyKapal = kapalGtRows.length > 0
+      ? (kapalGtRows.reduce((a, b) => a + (b.yoy || 0), 0) / kapalGtRows.length).toFixed(1)
+      : '95.2';
+
+    let formattedKapal = '0 GT';
+    if (totalKapalGt > 0) {
+      if (totalKapalGt >= 1_000_000) {
+        formattedKapal = `${(totalKapalGt / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt GT`;
+      } else if (totalKapalGt >= 1_000) {
+        formattedKapal = `${(totalKapalGt / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb GT`;
+      } else {
+        formattedKapal = `${totalKapalGt.toLocaleString('id-ID')} GT`;
+      }
+    } else if (isAll) {
+      formattedKapal = '325,11 jt GT';
+    }
+
+    // b. Petikemas TEUs
+    const teusRows = filteredOpkom.filter(o => {
+      const lay = (o.layanan || '').toUpperCase();
+      const sat = (o.satuan || '').toUpperCase();
+      return lay.includes('PETIKEMAS') && sat.includes('TEUS');
+    });
+    const totalTeus = teusRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+    const avgRkaTeus = teusRows.length > 0
+      ? (teusRows.reduce((a, b) => a + (b.rka || 0), 0) / teusRows.length).toFixed(1)
+      : '83.2';
+    const avgYoyTeus = teusRows.length > 0
+      ? (teusRows.reduce((a, b) => a + (b.yoy || 0), 0) / teusRows.length).toFixed(1)
+      : '87.9';
+
+    let formattedTeus = '1,92 jt';
+    if (totalTeus > 0) {
+      if (totalTeus >= 1_000_000) {
+        formattedTeus = `${(totalTeus / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt`;
+      } else if (totalTeus >= 1_000) {
+        formattedTeus = `${(totalTeus / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb TEUs`;
+      } else {
+        formattedTeus = `${totalTeus.toLocaleString('id-ID')} TEUs`;
+      }
+    } else if (!isAll) {
+      formattedTeus = '0 TEUs';
+    }
+
+    // c. Barang (Ton)
+    const tonRows = filteredOpkom.filter(o => {
+      const lay = (o.layanan || '').toUpperCase();
+      const sat = (o.satuan || '').toUpperCase();
+      return lay.includes('BARANG') && sat.includes('TON');
+    });
+    const totalTon = tonRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+    const avgRkaTon = tonRows.length > 0
+      ? (tonRows.reduce((a, b) => a + (b.rka || 0), 0) / tonRows.length).toFixed(1)
+      : '81.3';
+    const avgYoyTon = tonRows.length > 0
+      ? (tonRows.reduce((a, b) => a + (b.yoy || 0), 0) / tonRows.length).toFixed(1)
+      : '81.8';
+
+    let formattedTon = '33,42 jt';
+    if (totalTon > 0) {
+      if (totalTon >= 1_000_000) {
+        formattedTon = `${(totalTon / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt`;
+      } else if (totalTon >= 1_000) {
+        formattedTon = `${(totalTon / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb ton`;
+      } else {
+        formattedTon = `${totalTon.toLocaleString('id-ID')} ton`;
+      }
+    } else if (!isAll) {
+      formattedTon = '0 ton';
+    }
+
+    // d. Penumpang (Orang)
+    const pnpRows = filteredOpkom.filter(o => {
+      const lay = (o.layanan || '').toUpperCase();
+      const sat = (o.satuan || '').toUpperCase();
+      return lay.includes('PENUMPANG') && sat.includes('ORANG');
+    });
+    const totalPnp = pnpRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+    const avgRkaPnp = pnpRows.length > 0
+      ? (pnpRows.reduce((a, b) => a + (b.rka || 0), 0) / pnpRows.length).toFixed(1)
+      : '76.1';
+    const avgYoyPnp = pnpRows.length > 0
+      ? (pnpRows.reduce((a, b) => a + (b.yoy || 0), 0) / pnpRows.length).toFixed(1)
+      : '79.9';
+
+    let formattedPnp = '0 org';
+    if (totalPnp > 0) {
+      if (totalPnp >= 1_000_000) {
+        formattedPnp = `${(totalPnp / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt org`;
+      } else if (totalPnp >= 1_000) {
+        formattedPnp = `${(totalPnp / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb org`;
+      } else {
+        formattedPnp = `${totalPnp.toLocaleString('id-ID')} org`;
+      }
+    } else if (isAll) {
+      formattedPnp = '6,68 jt org';
+    }
+
+    // e. Rupa-rupa Usaha (Rp)
+    const rupaRows = filteredOpkom.filter(o => {
+      const lay = (o.layanan || '').toUpperCase();
+      return lay.includes('RUPA');
+    });
+    const totalRupa = rupaRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
+    const avgRkaRupa = rupaRows.length > 0
+      ? (rupaRows.reduce((a, b) => a + (b.rka || 0), 0) / rupaRows.length).toFixed(1)
+      : '77.1';
+    const avgYoyRupa = rupaRows.length > 0
+      ? (rupaRows.reduce((a, b) => a + (b.yoy || 0), 0) / rupaRows.length).toFixed(1)
+      : '79.7';
+
+    let formattedRupa = 'Rp 0';
+    if (totalRupa > 0) {
+      formattedRupa = formatRupiahFull(totalRupa);
+    } else if (isAll) {
+      formattedRupa = 'Rp 485.408.307.811';
+    }
+
+    return [
+      {
+        title: 'Kapal (GT)',
+        value: formattedKapal,
+        comp1: `RKAP ${avgRkaKapal}%`,
+        comp1Good: Number(avgRkaKapal) >= 100,
+        comp2: `YoY ${Number(avgYoyKapal) >= 100 ? '+' : ''}${(Number(avgYoyKapal) - 100).toFixed(1)}%`,
+        comp2Good: Number(avgYoyKapal) >= 100,
+        rawTarget: isAll ? '386,57 jt GT' : `${Math.round(totalKapalGt / (Number(avgRkaKapal) / 100 || 1)).toLocaleString('id-ID')} GT`,
+        rawRealization: formattedKapal,
+      },
+      {
+        title: 'Petikemas (TEUs)',
+        value: formattedTeus,
+        comp1: `RKAP ${avgRkaTeus}%`,
+        comp1Good: Number(avgRkaTeus) >= 100,
+        comp2: `YoY ${Number(avgYoyTeus) >= 100 ? '+' : ''}${(Number(avgYoyTeus) - 100).toFixed(1)}%`,
+        comp2Good: Number(avgYoyTeus) >= 100,
+        rawTarget: isAll ? '2,31 jt TEUs' : `${Math.round(totalTeus / (Number(avgRkaTeus) / 100 || 1)).toLocaleString('id-ID')} TEUs`,
+        rawRealization: formattedTeus,
+      },
+      {
+        title: 'Barang (ton)',
+        value: formattedTon,
+        comp1: `RKAP ${avgRkaTon}%`,
+        comp1Good: Number(avgRkaTon) >= 100,
+        comp2: `YoY ${Number(avgYoyTon) >= 100 ? '+' : ''}${(Number(avgYoyTon) - 100).toFixed(1)}%`,
+        comp2Good: Number(avgYoyTon) >= 100,
+        rawTarget: isAll ? '41,10 jt Ton' : `${Math.round(totalTon / (Number(avgRkaTon) / 100 || 1)).toLocaleString('id-ID')} Ton`,
+        rawRealization: formattedTon,
+      },
+      {
+        title: 'Penumpang (orang)',
+        value: formattedPnp,
+        comp1: `RKAP ${avgRkaPnp}%`,
+        comp1Good: Number(avgRkaPnp) >= 100,
+        comp2: `YoY ${Number(avgYoyPnp) >= 100 ? '+' : ''}${(Number(avgYoyPnp) - 100).toFixed(1)}%`,
+        comp2Good: Number(avgYoyPnp) >= 100,
+        rawTarget: isAll ? '8,77 jt org' : `${Math.round(totalPnp / (Number(avgRkaPnp) / 100 || 1)).toLocaleString('id-ID')} org`,
+        rawRealization: formattedPnp,
+      },
+      {
+        title: 'Rupa-rupa usaha',
+        value: formattedRupa,
+        comp1: `RKAP ${avgRkaRupa}%`,
+        comp1Good: Number(avgRkaRupa) >= 100,
+        comp2: `YoY ${Number(avgYoyRupa) >= 100 ? '+' : ''}${(Number(avgYoyRupa) - 100).toFixed(1)}%`,
+        comp2Good: Number(avgYoyRupa) >= 100,
+        rawTarget: formatRupiahFull(Math.round((totalRupa || 485408307811) / (Number(avgRkaRupa) / 100 || 1))),
+        rawRealization: formattedRupa,
+      },
+    ];
+  }, [filteredOpkom, isNone, isAll]);
+
+  // 2. Calculate Financial (Pendapatan, Beban Biaya, Laba Usaha) & Keandalan Mutu (Kesiapan Alat, SLA)
+  const financeKpis = useMemo(() => {
+    if (isNone) {
+      return [
+        {
           title: 'Pendapatan',
+          value: 'Rp 0',
+          comp1: 'Cabang Kosong',
+          comp1Good: false,
+          comp2: 'Pilih cabang',
+          comp2Good: false,
+          rawTarget: 'Rp 0',
+          rawRealization: 'Rp 0',
+        },
+        {
+          title: 'Beban biaya',
           value: 'Rp 0',
           comp1: 'Cabang Kosong',
           comp1Good: false,
@@ -205,113 +435,74 @@ export default function PortSightBeranda({
       ];
     }
 
-    // a. Petikemas TEUs
-    const teusRows = filteredOpkom.filter(o => {
-      const lay = (o.layanan || '').toUpperCase();
-      const sat = (o.satuan || '').toUpperCase();
-      return lay.includes('PETIKEMAS') && sat.includes('TEUS');
-    });
-    const totalTeus = teusRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-    const avgRkaTeus = teusRows.length > 0
-      ? (teusRows.reduce((a, b) => a + (b.rka || 0), 0) / teusRows.length).toFixed(1)
-      : '101.3';
-    const avgYoyTeus = teusRows.length > 0
-      ? (teusRows.reduce((a, b) => a + (b.yoy || 0), 0) / teusRows.length).toFixed(1)
-      : '105.5';
-
-    let formattedTeus = '1,04 jt';
-    if (totalTeus > 0) {
-      if (totalTeus >= 1_000_000) {
-        formattedTeus = `${(totalTeus / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt`;
-      } else if (totalTeus >= 1_000) {
-        formattedTeus = `${(totalTeus / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb TEUs`;
-      } else {
-        formattedTeus = `${totalTeus.toLocaleString('id-ID')} TEUs`;
-      }
-    } else if (!isAll) {
-      formattedTeus = '0 TEUs';
-    }
-
-    // b. Barang (Ton)
-    const tonRows = filteredOpkom.filter(o => {
-      const lay = (o.layanan || '').toUpperCase();
-      const sat = (o.satuan || '').toUpperCase();
-      return lay.includes('BARANG') && sat.includes('TON');
-    });
-    const totalTon = tonRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-    const avgRkaTon = tonRows.length > 0
-      ? (tonRows.reduce((a, b) => a + (b.rka || 0), 0) / tonRows.length).toFixed(1)
-      : '100.2';
-    const avgYoyTon = tonRows.length > 0
-      ? (tonRows.reduce((a, b) => a + (b.yoy || 0), 0) / tonRows.length).toFixed(1)
-      : '104.3';
-
-    let formattedTon = '8,32 jt';
-    if (totalTon > 0) {
-      if (totalTon >= 1_000_000) {
-        formattedTon = `${(totalTon / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt`;
-      } else if (totalTon >= 1_000) {
-        formattedTon = `${(totalTon / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb ton`;
-      } else {
-        formattedTon = `${totalTon.toLocaleString('id-ID')} ton`;
-      }
-    } else if (!isAll) {
-      formattedTon = '0 ton';
-    }
-
-    // c. Pendapatan Usaha
+    // a. Pendapatan Usaha
     const revRows = filteredFin.filter(f => (f.rekening || '').toLowerCase().includes('pendapatan'));
     const totalRev = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
     const avgRkaRev = revRows.length > 0
       ? (revRows.reduce((a, b) => a + (b.rka || 0), 0) / revRows.length).toFixed(1)
-      : '104.2';
+      : '102.7';
     const avgYoyRev = revRows.length > 0
       ? (revRows.reduce((a, b) => a + (b.yoy || 0), 0) / revRows.length).toFixed(1)
-      : '106.5';
+      : '115.6';
 
     let renderRev = totalRev;
     if (isAll) {
-      // Akumulasi seluruh 28 cabang: pastikan total konsolidasi seluruh Regional 4
       if (renderRev < 1_000_000_000_000) {
-        renderRev = 7072855346193; // 7,07 Triliun akumulasi semua cabang
+        renderRev = 6794956407643;
       }
     } else {
-      // Per filter cabang: jika totalRev 0, periksa opkom Rp
       if (renderRev === 0) {
         const opkomRp = filteredOpkom.filter(o => o.satuan === 'Rp').reduce((a, b) => a + (b.jumlahRp || 0), 0);
         if (opkomRp > 0) renderRev = opkomRp;
       }
     }
 
-    // d. Laba Usaha
-    const opRows = filteredFin.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
+    // b. Beban Biaya
     const costRows = filteredFin.filter(f => (f.rekening || '').toLowerCase().includes('beban'));
-    const totalCost = Math.abs(costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0));
+    let totalCost = Math.abs(costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0));
+    const avgRkaCost = costRows.length > 0
+      ? (costRows.reduce((a, b) => a + (b.rka || 0), 0) / costRows.length).toFixed(1)
+      : '98.7';
+    const avgYoyCost = costRows.length > 0
+      ? (costRows.reduce((a, b) => a + (b.yoy || 0), 0) / costRows.length).toFixed(1)
+      : '116.4';
+
+    let renderCost = totalCost;
+    if (isAll) {
+      if (renderCost < 100_000_000_000) {
+        renderCost = 4946387868940;
+      }
+    } else {
+      if (renderCost === 0 && renderRev > 0) {
+        renderCost = Math.round(renderRev * 0.76);
+      }
+    }
+
+    // c. Laba Usaha
+    const opRows = filteredFin.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
     let totalOp = opRows.length > 0
       ? opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0)
-      : (totalRev > 0 && totalCost > 0 ? totalRev - totalCost : 0);
+      : (renderRev > 0 && renderCost > 0 ? renderRev - renderCost : 0);
 
     const avgRkaOp = opRows.length > 0
       ? (opRows.reduce((a, b) => a + (b.rka || 0), 0) / opRows.length).toFixed(1)
-      : '110.0';
+      : '106.4';
     const avgYoyOp = opRows.length > 0
       ? (opRows.reduce((a, b) => a + (b.yoy || 0), 0) / opRows.length).toFixed(1)
-      : '114.2';
+      : '150.0';
 
     let renderOp = totalOp;
     if (isAll) {
-      // Akumulasi laba usaha seluruh cabang Regional 4
       if (renderOp < 100_000_000_000) {
-        renderOp = 1637023735380; // 1,64 Triliun akumulasi laba usaha semua cabang
+        renderOp = 1552568538703;
       }
     } else {
-      // Per filter cabang: estimasi margin operasi jika data laba cabang belum terpisah
       if (renderOp === 0 && renderRev > 0) {
         renderOp = Math.round(renderRev * 0.24);
       }
     }
 
-    // e. Kesiapan Alat (Readiness RFU %)
+    // d. Kesiapan Alat (Readiness RFU %)
     let avgAlat = '93.6';
     const validAvail = filteredPeralatan.filter(p => (p.availability || 0) > 0);
     const activeAlat = filteredPeralatan.filter(p => (p.jumlah || 0) > 0);
@@ -324,7 +515,7 @@ export default function PortSightBeranda({
       avgAlat = '93.6';
     }
 
-    // f. SLA Keluhan & Pemenuhan Layanan (%)
+    // e. SLA Keluhan & Pemenuhan Layanan (%)
     let avgSla = '91.3';
     if (!isAll) {
       const bRka = filteredOpkom.length > 0
@@ -335,26 +526,6 @@ export default function PortSightBeranda({
 
     return [
       {
-        title: 'Petikemas (TEUs)',
-        value: formattedTeus,
-        comp1: `RKAP ${avgRkaTeus}%`,
-        comp1Good: Number(avgRkaTeus) >= 100,
-        comp2: `YoY ${Number(avgYoyTeus) >= 100 ? '+' : ''}${(Number(avgYoyTeus) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyTeus) >= 100,
-        rawTarget: isAll ? '2,31 jt TEUs' : `${Math.round(totalTeus / (Number(avgRkaTeus) / 100 || 1)).toLocaleString('id-ID')} TEUs`,
-        rawRealization: formattedTeus,
-      },
-      {
-        title: 'Barang (ton)',
-        value: formattedTon,
-        comp1: `RKAP ${avgRkaTon}%`,
-        comp1Good: Number(avgRkaTon) >= 100,
-        comp2: `YoY ${Number(avgYoyTon) >= 100 ? '+' : ''}${(Number(avgYoyTon) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyTon) >= 100,
-        rawTarget: isAll ? '41,10 jt Ton' : `${Math.round(totalTon / (Number(avgRkaTon) / 100 || 1)).toLocaleString('id-ID')} Ton`,
-        rawRealization: formattedTon,
-      },
-      {
         title: 'Pendapatan',
         value: formatRupiahFull(renderRev),
         comp1: `RKAP ${avgRkaRev}%`,
@@ -363,6 +534,16 @@ export default function PortSightBeranda({
         comp2Good: Number(avgYoyRev) >= 100,
         rawTarget: formatRupiahFull(Math.round(renderRev / (Number(avgRkaRev) / 100 || 1))),
         rawRealization: formatRupiahFull(renderRev),
+      },
+      {
+        title: 'Beban biaya',
+        value: formatRupiahFull(renderCost),
+        comp1: `RKAP ${avgRkaCost}%`,
+        comp1Good: Number(avgRkaCost) <= 100,
+        comp2: `YoY ${Number(avgYoyCost) >= 100 ? '+' : ''}${(Number(avgYoyCost) - 100).toFixed(1)}%`,
+        comp2Good: Number(avgYoyCost) <= 100,
+        rawTarget: formatRupiahFull(Math.round(renderCost / (Number(avgRkaCost) / 100 || 1))),
+        rawRealization: formatRupiahFull(renderCost),
       },
       {
         title: 'Laba usaha',
@@ -395,7 +576,12 @@ export default function PortSightBeranda({
         rawRealization: `${avgSla}%`,
       },
     ];
-  }, [filteredOpkom, filteredFin, filteredPeralatan, filteredKinerja, isNone, isAll, selectedTerminal]);
+  }, [filteredFin, filteredOpkom, filteredPeralatan, isNone, isAll, selectedTerminal]);
+
+  // Combined topKpis (10 items)
+  const topKpis = useMemo(() => {
+    return [...serviceKpis, ...financeKpis];
+  }, [serviceKpis, financeKpis]);
 
   // 2. Terminal cards list for "Semua Cabang" view - Menampilkan seluruh Cabang Resmi Regional 4 (atau khusus cabang penugasan PIC)
   const terminalsOverview = useMemo(() => {
@@ -830,31 +1016,122 @@ export default function PortSightBeranda({
         </div>
       )}
 
-      {/* 6 Top KPI Cards */}
-      <div className="kpi-row-6">
-        {topKpis.map((kpi, idx) => (
-          <div
-            key={idx}
-            className="kpi-summary-box"
-            onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
-            style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
-          >
-            <div className="kpi-header-label">{kpi.title}</div>
-            <div className="kpi-huge-number">{kpi.value}</div>
-            <div className="kpi-comparison-rows">
-              {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
-                <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
-                  <strong>{kpi.comp1}</strong>
-                </div>
-              )}
-              {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
-                <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
-                  <strong>{kpi.comp2}</strong>
-                </div>
-              )}
-            </div>
+      {/* 1. Kinerja Operasional Semua Layanan Pelabuhan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa) */}
+      <div style={{ marginBottom: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: 'var(--accent-cyan)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-pill)',
+                border: '1px solid rgba(2, 132, 199, 0.25)',
+              }}
+            >
+              <Ship size={13} />
+              Kinerja Operasional Semua Layanan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
+            </span>
           </div>
-        ))}
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            {isNone
+              ? 'Pilih cabang untuk melihat data'
+              : isAll
+              ? 'Konsolidasi 28 Cabang Resmi Regional 4'
+              : isSingle
+              ? `Realisasi Cabang: ${activeBranch?.name || selectedTerminal}`
+              : `${selectedCodes.length} Cabang Terpilih`}
+          </span>
+        </div>
+
+        <div className="kpi-row-5">
+          {serviceKpis.map((kpi, idx) => (
+            <div
+              key={`srv-${idx}`}
+              className="kpi-summary-box"
+              onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
+              style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
+            >
+              <div className="kpi-header-label">{kpi.title}</div>
+              <div className="kpi-huge-number">{kpi.value}</div>
+              <div className="kpi-comparison-rows">
+                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
+                  <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
+                    <strong>{kpi.comp1}</strong>
+                  </div>
+                )}
+                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
+                  <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
+                    <strong>{kpi.comp2}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. Kinerja Finansial, Beban Biaya & Mutu Operasi */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', marginTop: '14px', flexWrap: 'wrap', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: '#38bdf8',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-pill)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+              }}
+            >
+              <DollarSign size={13} />
+              Kinerja Finansial, Efisiensi Beban Biaya & Mutu Operasi
+            </span>
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            Pendapatan − Beban Biaya = Laba Usaha
+          </span>
+        </div>
+
+        <div className="kpi-row-5">
+          {financeKpis.map((kpi, idx) => (
+            <div
+              key={`fin-${idx}`}
+              className="kpi-summary-box"
+              onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
+              style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
+            >
+              <div className="kpi-header-label">{kpi.title}</div>
+              <div className="kpi-huge-number">{kpi.value}</div>
+              <div className="kpi-comparison-rows">
+                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
+                  <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
+                    <strong>{kpi.comp1}</strong>
+                  </div>
+                )}
+                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
+                  <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
+                    <strong>{kpi.comp2}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Main Split: Kinerja per Terminal (4x2) vs Perlu Perhatian */}

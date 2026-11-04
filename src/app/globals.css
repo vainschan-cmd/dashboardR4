@@ -440,6 +440,29 @@ select option {
   }
 }
 
+/* Top 5 KPI Cards Grid for Services and Financial Rows */
+.kpi-row-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1300px) {
+  .kpi-row-5 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 860px) {
+  .kpi-row-5 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .kpi-row-5 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .kpi-summary-box {
   background-color: var(--bg-card);
   border: 1px solid var(--border-subtle);
