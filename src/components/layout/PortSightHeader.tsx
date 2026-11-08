@@ -62,6 +62,8 @@ interface PortSightHeaderProps {
   comparisonMode?: string;
   setComparisonMode?: (mode: string) => void;
   onOpenComparisonModal?: () => void;
+  onToggleMobileMenu?: () => void;
+  isMobileMenuOpen?: boolean;
 }
 
 export default function PortSightHeader({
@@ -85,6 +87,8 @@ export default function PortSightHeader({
   comparisonMode = 'all',
   setComparisonMode,
   onOpenComparisonModal,
+  onToggleMobileMenu,
+  isMobileMenuOpen = false,
 }: PortSightHeaderProps) {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -487,16 +491,22 @@ export default function PortSightHeader({
             </button>
           </div>
 
-          {/* Mobile Menu Hamburger Button */}
+          {/* Mobile Menu Hamburger Button to Toggle Sidebar */}
           <button
             type="button"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onClick={() => {
+              if (onToggleMobileMenu) {
+                onToggleMobileMenu();
+              } else {
+                setMobileMenuOpen(!mobileMenuOpen);
+              }
+            }}
             className="mobile-menu-btn"
             style={{
               padding: '6px 8px',
               borderRadius: 'var(--radius-sm)',
-              background: mobileMenuOpen ? 'var(--accent-blue)' : 'var(--bg-inner)',
-              color: mobileMenuOpen ? '#ffffff' : 'var(--text-main)',
+              background: (isMobileMenuOpen || mobileMenuOpen) ? 'var(--accent-blue)' : 'var(--bg-inner)',
+              color: (isMobileMenuOpen || mobileMenuOpen) ? '#ffffff' : 'var(--text-main)',
               border: '1px solid var(--border-subtle)',
               cursor: 'pointer',
               display: 'flex',
@@ -506,8 +516,8 @@ export default function PortSightHeader({
             }}
             aria-label="Menu Navigasi Mobile"
           >
-            {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
-            {pendingCount > 0 && !mobileMenuOpen && (
+            {(isMobileMenuOpen || mobileMenuOpen) ? <X size={16} /> : <Menu size={16} />}
+            {pendingCount > 0 && !(isMobileMenuOpen || mobileMenuOpen) && (
               <span
                 style={{
                   width: '6px',
@@ -521,353 +531,7 @@ export default function PortSightHeader({
         </div>
       </header>
 
-      {/* 2. DEDICATED NAVIGATION STRIP (Horizontally swipeable on mobile/tablet) */}
-      <nav className="portsight-nav-strip">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 'max-content' }}>
-          {mainTabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleSelectTab(tab.id)}
-                className={`nav-tab-btn ${isActive ? 'active' : ''}`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-
-          {/* Governance & Admin Dropdown (Hidden for BOD) */}
-          {!isBod && (
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => {
-                  if (!['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab)) {
-                    handleSelectTab('data_records');
-                  }
-                  setAdminMenuOpen(!adminMenuOpen);
-                }}
-                className={`nav-tab-btn ${['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab) ? 'active' : ''}`}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <Layers size={13} />
-                <span>Tata Kelola Data</span>
-                {pendingCount > 0 && (
-                  <span
-                    style={{
-                      backgroundColor: '#fbbf24',
-                      color: '#0e1b2e',
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      padding: '1px 5px',
-                      borderRadius: '10px',
-                      marginLeft: '2px',
-                    }}
-                  >
-                    {pendingCount}
-                  </span>
-                )}
-                <ChevronDown size={12} />
-              </button>
-
-              {adminMenuOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    marginTop: '6px',
-                    backgroundColor: 'var(--bg-card)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '6px',
-                    minWidth: '220px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.35)',
-                    zIndex: 60,
-                  }}
-                  onClick={() => setAdminMenuOpen(false)}
-                >
-                  {adminTabs.map((adm) => {
-                    const Icon = adm.icon;
-                    return (
-                      <button
-                        key={adm.id}
-                        onClick={() => handleSelectTab(adm.id)}
-                        style={{
-                          width: '100%',
-                          textAlign: 'left',
-                          background: activeTab === adm.id ? 'var(--accent-blue)' : 'none',
-                          border: 'none',
-                          padding: '8px 12px',
-                          color: activeTab === adm.id ? '#ffffff' : 'var(--text-main)',
-                          fontSize: '12px',
-                          borderRadius: 'var(--radius-sm)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Icon size={13} color={activeTab === adm.id ? '#ffffff' : 'var(--accent-cyan)'} />
-                        <span>{adm.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </nav>
-
-      {/* 3. MOBILE DRAWER OVERLAY (Full responsiveness on HP) */}
-      {mobileMenuOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '52px',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 90,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--bg-surface)',
-              borderBottom: '2px solid var(--accent-blue)',
-              padding: '16px',
-              maxHeight: 'calc(100vh - 52px)',
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-              boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* User Profile Card Mobile */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-inner)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <UserCheck size={16} color="var(--accent-blue)" />
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-title)' }}>
-                    {currentUser ? currentUser.name : 'Pengguna Tamu'}
-                  </span>
-                </div>
-                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
-                  [{currentUser?.nipp || '-'}]
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
-                <span>Role: <strong style={{ color: 'var(--text-main)' }}>{getRoleLabel()}</strong></span>
-                <span>Cabang: <strong style={{ color: 'var(--text-main)' }}>{currentUser?.branch_id || 'R99'} {assignedBranch ? `(${assignedBranch.name})` : ''}</strong></span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                {canManageUsers && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onOpenAuth('register');
-                    }}
-                    className="btn-primary"
-                    style={{ flex: 1, padding: '7px 10px', fontSize: '11.5px', justifyContent: 'center' }}
-                  >
-                    <UserPlus size={12} />
-                    <span>Daftar Akun PIC</span>
-                  </button>
-                )}
-                {onLogout && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onLogout();
-                    }}
-                    className="btn-dark"
-                    style={{
-                      padding: '7px 12px',
-                      fontSize: '11.5px',
-                      color: '#f87171',
-                      borderColor: 'rgba(239, 68, 68, 0.3)',
-                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    }}
-                  >
-                    <LogOut size={12} color="#f87171" />
-                    <span>Keluar</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Informasi Hak Akses (Role) Pengguna */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Hak Akses (Role):</span>
-              <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Shield size={12} color="var(--accent-cyan)" />
-                {getRoleLabel()}
-              </span>
-            </div>
-
-            {/* Menu Navigasi Utama */}
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
-                Menu Utama Dashboard:
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '4px' }}>
-                {mainTabs.map((tab) => {
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleSelectTab(tab.id)}
-                      style={{
-                        padding: '9px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        textAlign: 'left',
-                        border: 'none',
-                        background: isActive ? 'var(--accent-orange)' : 'var(--bg-inner)',
-                        color: isActive ? '#ffffff' : 'var(--text-main)',
-                        fontWeight: isActive ? 700 : 500,
-                        fontSize: '12.5px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span>{tab.label}</span>
-                      <ChevronRight size={13} opacity={0.6} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Tata Kelola Data Submenu (Hidden for BOD) */}
-            {!isBod && (
-              <div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Layers size={12} color="var(--accent-cyan)" />
-                  <span>Tata Kelola Data & Administrasi:</span>
-                  {pendingCount > 0 && (
-                    <span style={{ backgroundColor: '#fbbf24', color: '#000', fontSize: '10px', padding: '1px 5px', borderRadius: '8px', fontWeight: 800 }}>
-                      {pendingCount}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '4px' }}>
-                  {adminTabs.map((adm) => {
-                    const Icon = adm.icon;
-                    const isActive = activeTab === adm.id;
-                    return (
-                      <button
-                        key={adm.id}
-                        onClick={() => handleSelectTab(adm.id)}
-                        style={{
-                          padding: '8px 12px',
-                          borderRadius: 'var(--radius-sm)',
-                          textAlign: 'left',
-                          border: 'none',
-                          background: isActive ? 'var(--accent-blue)' : 'var(--bg-inner)',
-                          color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                          fontSize: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Icon size={13} color={isActive ? '#ffffff' : 'var(--accent-cyan)'} />
-                        <span>{adm.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Quick Utilities (Hidden for BOD) */}
-            {onOpenManualInput && !isBod && (
-              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenManualInput();
-                  }}
-                  className="btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    borderRadius: 'var(--radius-sm)',
-                    fontWeight: 700,
-                    backgroundColor: 'var(--accent-orange, #f97316)',
-                    borderColor: 'var(--accent-orange, #f97316)',
-                    color: '#ffffff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <PlusCircle size={13} />
-                  <span>+ Input Data Manual</span>
-                </button>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '8px', borderTop: onOpenManualInput ? 'none' : '1px solid var(--border-subtle)', paddingTop: onOpenManualInput ? '0' : '10px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onExportExcel();
-                }}
-                className="btn-dark"
-                style={{ flex: 1, padding: '7px 8px', fontSize: '11px', justifyContent: 'center' }}
-              >
-                <Download size={12} />
-                <span>Ekspor Excel</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onPrint();
-                }}
-                className="btn-dark"
-                style={{ flex: 1, padding: '7px 8px', fontSize: '11px', justifyContent: 'center' }}
-              >
-                <Printer size={12} />
-                <span>Cetak</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. PAGE SUBHEADER: Heading & Responsive Filter Chips */}
+      {/* PAGE SUBHEADER: Heading & Responsive Filter Chips */}
       <div className="portsight-subheader">
         <h1 className="page-heading">
           {pageHeadings[activeTab] || 'Dashboard Regional 4'}

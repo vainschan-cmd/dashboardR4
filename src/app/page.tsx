@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import PortSightHeader from '@/components/layout/PortSightHeader';
+import Sidebar from '@/components/layout/Sidebar';
 import PortSightBeranda from '@/components/portsight/PortSightBeranda';
 import PortSightKeuangan from '@/components/portsight/PortSightKeuangan';
 import PortSightOpkom from '@/components/portsight/PortSightOpkom';
@@ -26,6 +27,7 @@ import { X, CheckCircle2, Database, Layers, FileSpreadsheet, Sliders, History, A
 export default function DashboardHome() {
   // Navigation active tab
   const [activeTab, setActiveTab] = useState<string>('beranda');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Theme: 'light' (Mode Terang - Default Resmi) | 'dark' (Mode Gelap)
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
@@ -321,36 +323,75 @@ export default function DashboardHome() {
   }
 
   return (
-    <div style={{ backgroundColor: 'var(--bg-app)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* R4 PortSight Top Navigation & Subheader */}
-      <PortSightHeader
+    <div
+      className="portsight-layout-container"
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        minHeight: '100vh',
+        width: '100%',
+        backgroundColor: 'var(--bg-app)',
+      }}
+    >
+      {/* 1. Sidebar Komponen Navigasi Vertikal di Sebelah Kiri */}
+      <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        selectedTerminal={selectedTerminal}
-        setSelectedTerminal={handleSelectTerminal}
-        selectedPeriod={selectedPeriod}
-        setSelectedPeriod={setSelectedPeriod}
         userRole={userRole}
-        setUserRole={setUserRole}
         currentUser={currentUser}
-        onOpenAuth={(m) => {
-          setAuthModalMode(m || 'login');
-          setAuthModalOpen(true);
-        }}
-        onLogout={handleLogout}
-        onExportExcel={handleExportExcel}
-        onPrint={handlePrint}
-        onOpenManualInput={isBod ? undefined : () => handleOpenManualInput()}
         pendingCount={pendingCount}
+        isBod={isBod}
+        canManageUsers={canManageUsers}
+        isOpenMobile={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
         theme={theme}
-        onThemeChange={handleThemeChange}
-        comparisonMode={comparisonMode}
-        setComparisonMode={setComparisonMode}
-        onOpenComparisonModal={() => setIsComparisonModalOpen(true)}
+        onLogout={handleLogout}
+        onOpenManualInput={isBod ? undefined : () => handleOpenManualInput()}
       />
 
-      {/* Main View Body */}
-      <main className="portsight-main">
+      {/* 2. Layout Halaman Utama (CSS Flexbox bergeser ke kanan) */}
+      <div
+        className="portsight-content-area"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minWidth: 0,
+          minHeight: '100vh',
+          overflowX: 'hidden',
+        }}
+      >
+        {/* R4 PortSight Top Navigation & Subheader */}
+        <PortSightHeader
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          selectedTerminal={selectedTerminal}
+          setSelectedTerminal={handleSelectTerminal}
+          selectedPeriod={selectedPeriod}
+          setSelectedPeriod={setSelectedPeriod}
+          userRole={userRole}
+          setUserRole={setUserRole}
+          currentUser={currentUser}
+          onOpenAuth={(m) => {
+            setAuthModalMode(m || 'login');
+            setAuthModalOpen(true);
+          }}
+          onLogout={handleLogout}
+          onExportExcel={handleExportExcel}
+          onPrint={handlePrint}
+          onOpenManualInput={isBod ? undefined : () => handleOpenManualInput()}
+          pendingCount={pendingCount}
+          theme={theme}
+          onThemeChange={handleThemeChange}
+          comparisonMode={comparisonMode}
+          setComparisonMode={setComparisonMode}
+          onOpenComparisonModal={() => setIsComparisonModalOpen(true)}
+          onToggleMobileMenu={() => setIsMobileMenuOpen(prev => !prev)}
+          isMobileMenuOpen={isMobileMenuOpen}
+        />
+
+        {/* Main View Body */}
+        <main className="portsight-main">
         {/* Sub-navigation bar for Data Governance */}
         {isGovernanceView && (
           <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '4px' }}>
@@ -579,6 +620,7 @@ export default function DashboardHome() {
           <AuditTrailView />
         )}
       </main>
+      </div>
 
       {/* Drilldown Modal */}
       {drilldownItem && (
