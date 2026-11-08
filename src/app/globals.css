@@ -179,9 +179,77 @@ html, body {
   display: flex;
   flex-direction: column;
   z-index: 95;
-  transition: transform 0.25s ease, background-color 0.2s ease, border-color 0.2s ease;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease, background-color 0.2s ease, border-color 0.2s ease;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
   flex-shrink: 0;
+}
+
+/* Collapsed Mode (Tampilan Kecil & Hemat Tempat) */
+.portsight-sidebar.collapsed {
+  width: 68px;
+  min-width: 68px;
+  max-width: 68px;
+}
+
+.portsight-sidebar.collapsed .sidebar-brand-header {
+  padding: 0 8px;
+  justify-content: space-between;
+}
+
+.portsight-sidebar.collapsed .sidebar-nav-scroll {
+  padding: 8px 6px;
+  overflow-x: hidden;
+}
+
+.portsight-sidebar.collapsed .sidebar-nav-btn {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.portsight-sidebar.collapsed .sidebar-footer {
+  padding: 8px 6px;
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-toggle-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-inner);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background-color: var(--bg-card);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-collapsed-divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 6px 4px;
+  opacity: 0.6;
+}
+
+@keyframes sidebarTooltipIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
 }
 
 .sidebar-brand-header {
