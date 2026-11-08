@@ -25,6 +25,7 @@
 *.pem
 cloudflared
 scratch/
+TUNNEL_URL.txt
 ~$*.xlsx
 ~$*.xls
 
