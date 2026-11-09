@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "tunnel": "node scripts/keep_portdash.js",
-    "tunnel:cloudflare": "./cloudflared tunnel run --token eyJhIjoiOWI1YmIwYjY5NWY4YzMxODlmNjkzZDZiMTgzMjc1OGQiLCJ0IjoiNmYwZDE5ZWYtYTQ3ZC00MDEwLWE3ZWItOTA3YWExYjg3OTg3IiwicyI6Ik0yVmpPREZqTm1JdFl6UXdZaTAwTVRnMkxXRTJaV1V0TlRWbU4yWTRNbVF6TXpNMiJ9",
+    "tunnel:cloudflare": "sh -c './cloudflared tunnel run --token \"${CLOUDFLARE_TUNNEL_TOKEN:-}\"'",
     "tunnel:quick": "./cloudflared tunnel --url http://localhost:3000",
     "build": "next build",
     "start": "next start -H 0.0.0.0",

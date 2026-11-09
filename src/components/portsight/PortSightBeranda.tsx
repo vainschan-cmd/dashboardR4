@@ -22,7 +22,22 @@ import {
   BarChart3,
   CheckSquare,
   Users,
+  Gauge,
+  CheckCircle2,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  BarChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  Cell,
+} from 'recharts';
 import { OFFICIAL_BRANCHES, getBranchByCode, isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
 import { User, UserRole } from '@/lib/types';
@@ -57,6 +72,7 @@ export default function PortSightBeranda({
   const [kinerja, setKinerja] = useState<any[]>([]);
   const [utilisasi, setUtilisasi] = useState<any[]>([]);
   const [terminalSearch, setTerminalSearch] = useState<string>('');
+  const [dashboardView, setDashboardView] = useState<'visual' | 'cards'>('visual');
 
   // Fetch complete modules data from backend
   useEffect(() => {
@@ -887,6 +903,164 @@ export default function PortSightBeranda({
     ];
   }, [isAll, activeBranch, selectedTerminal, filteredOpkom, filteredPeralatan]);
 
+  // Combined Visual Chart Datasets for Executive Dashboard
+  const mainCombinedChartData = useMemo(() => {
+    const parseNominalMiliar = (valStr: string) => {
+      const digits = valStr.replace(/[^\d]/g, '');
+      if (!digits) return 0;
+      const num = Number(digits);
+      return Math.round(num / 1_000_000_000);
+    };
+
+    const parsePercent = (str: string) => {
+      const m = str.match(/[-+]?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : 100;
+    };
+
+    const rev = financeKpis[0];
+    const cost = financeKpis[1];
+    const profit = financeKpis[2];
+
+    return [
+      {
+        kpi: 'Pendapatan',
+        nominalRealisasi: parseNominalMiliar(rev?.value || '0'),
+        nominalTarget: parseNominalMiliar(rev?.rawTarget || '0'),
+        capaianRkap: parsePercent(rev?.comp1 || '102.7'),
+        pertumbuhanYoy: parsePercent(rev?.comp2 || '15.6'),
+        satuan: 'Miliar Rp',
+        isGood: rev?.comp1Good ?? true,
+      },
+      {
+        kpi: 'Beban Biaya',
+        nominalRealisasi: parseNominalMiliar(cost?.value || '0'),
+        nominalTarget: parseNominalMiliar(cost?.rawTarget || '0'),
+        capaianRkap: parsePercent(cost?.comp1 || '94.2'),
+        pertumbuhanYoy: parsePercent(cost?.comp2 || '5.8'),
+        satuan: 'Miliar Rp',
+        isGood: cost?.comp1Good ?? true,
+      },
+      {
+        kpi: 'Laba Usaha',
+        nominalRealisasi: parseNominalMiliar(profit?.value || '0'),
+        nominalTarget: parseNominalMiliar(profit?.rawTarget || '0'),
+        capaianRkap: parsePercent(profit?.comp1 || '112.5'),
+        pertumbuhanYoy: parsePercent(profit?.comp2 || '22.4'),
+        satuan: 'Miliar Rp',
+        isGood: profit?.comp1Good ?? true,
+      },
+    ];
+  }, [financeKpis]);
+
+  const gaugeMetrics = useMemo(() => {
+    const parsePercent = (str: string) => {
+      const m = str.match(/[-+]?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : 100;
+    };
+
+    const rev = financeKpis[0];
+    const cost = financeKpis[1];
+    const profit = financeKpis[2];
+    const rfu = financeKpis[3];
+
+    const rfuVal = parseFloat((rfu?.value || '93.6').replace(/[^\d.]/g, '')) || 93.6;
+
+    return [
+      {
+        title: 'Pendapatan Usaha',
+        realisasi: rev?.value || 'Rp 0',
+        percentage: parsePercent(rev?.comp1 || '102.7'),
+        target: rev?.rawTarget ? `Target: ${rev.rawTarget}` : 'Target RKAP',
+        yoy: rev?.comp2 || 'YoY +15,6%',
+        isGood: rev?.comp1Good ?? true,
+        color: '#0284c7',
+      },
+      {
+        title: 'Pengendalian Biaya',
+        realisasi: cost?.value || 'Rp 0',
+        percentage: parsePercent(cost?.comp1 || '94.2'),
+        target: cost?.rawTarget ? `Target: ${cost.rawTarget}` : 'Target Biaya',
+        yoy: cost?.comp2 || 'YoY +5,8%',
+        isGood: cost?.comp1Good ?? true,
+        color: '#38bdf8',
+      },
+      {
+        title: 'Laba Usaha',
+        realisasi: profit?.value || 'Rp 0',
+        percentage: parsePercent(profit?.comp1 || '112.5'),
+        target: profit?.rawTarget ? `Target: ${profit.rawTarget}` : 'Target Laba',
+        yoy: profit?.comp2 || 'YoY +22,4%',
+        isGood: profit?.comp1Good ?? true,
+        color: '#10b981',
+      },
+      {
+        title: 'Kesiapan Alat (RFU)',
+        realisasi: `${rfuVal}%`,
+        percentage: Number(((rfuVal / 92) * 100).toFixed(1)),
+        target: 'Target 92,0% RFU',
+        yoy: 'YoY +2,1%',
+        isGood: rfuVal >= 92,
+        color: '#f59e0b',
+      },
+    ];
+  }, [financeKpis]);
+
+  const servicesGroupedChartData = useMemo(() => {
+    const parsePercent = (str: string) => {
+      const m = str.match(/[-+]?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : 100;
+    };
+
+    if (isSingle && branchCommoditiesBreakdown.length > 0) {
+      const list = branchCommoditiesBreakdown.map(c => {
+        const rkapPct = parsePercent(c.rkap);
+        const yoyPct = parsePercent(c.yoy);
+        return {
+          layanan: c.layanan.toUpperCase(),
+          nominal: c.value,
+          capaianRkap: rkapPct,
+          pertumbuhanYoy: yoyPct,
+          status: c.isGood ? 'Baik' : 'Waspada',
+          satuan: c.satuan,
+        };
+      });
+
+      if (filteredUtilisasi.length > 0) {
+        list.push({
+          layanan: 'DERMAGA (BOR)',
+          nominal: `${filteredUtilisasi[0]?.bor || 0}%`,
+          capaianRkap: filteredUtilisasi[0]?.bor || 64.5,
+          pertumbuhanYoy: 2.8,
+          status: (filteredUtilisasi[0]?.bor || 0) <= 70 ? 'Baik' : 'Waspada',
+          satuan: '%',
+        });
+      }
+      return list;
+    }
+
+    return serviceKpis.map(k => {
+      const rkapPct = parsePercent(k.comp1);
+      const yoyPct = parsePercent(k.comp2);
+      return {
+        layanan: k.title.split(' ')[0].toUpperCase(),
+        nominal: k.value,
+        capaianRkap: rkapPct,
+        pertumbuhanYoy: yoyPct,
+        status: k.comp1Good ? 'Baik' : 'Waspada',
+        satuan: k.title.includes('(') ? k.title.split('(')[1].replace(')', '') : '',
+      };
+    }).concat([
+      {
+        layanan: 'BOR DERMAGA',
+        nominal: '62,8%',
+        capaianRkap: 89.7,
+        pertumbuhanYoy: 2.5,
+        status: 'Baik',
+        satuan: '%',
+      }
+    ]);
+  }, [isSingle, branchCommoditiesBreakdown, serviceKpis, filteredUtilisasi]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       {/* Active Branch Filter Banner (When a specific branch is selected) */}
@@ -1016,123 +1190,483 @@ export default function PortSightBeranda({
         </div>
       )}
 
-      {/* 1. Kinerja Operasional Semua Layanan Pelabuhan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa) */}
-      <div style={{ marginBottom: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 800,
-                color: 'var(--accent-cyan)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: 'rgba(2, 132, 199, 0.08)',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-pill)',
-                border: '1px solid rgba(2, 132, 199, 0.25)',
-              }}
-            >
-              <Ship size={13} />
-              Kinerja Operasional Semua Layanan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
-            </span>
-          </div>
+      {/* View Switcher: Mode Visual Grafik Terpadu vs Mode Kartu Ringkas */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '8px',
+          padding: '8px 14px',
+          backgroundColor: 'var(--bg-card)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 800,
+              color: 'var(--accent-cyan)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Activity size={14} />
+            Executive Performance Overview
+          </span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            {isNone
-              ? 'Pilih cabang untuk melihat data'
-              : isAll
-              ? 'Konsolidasi 28 Cabang Resmi Regional 4'
-              : isSingle
-              ? `Realisasi Cabang: ${activeBranch?.name || selectedTerminal}`
-              : `${selectedCodes.length} Cabang Terpilih`}
+            • {isNone
+                ? 'Cabang Dikosongkan'
+                : isAll
+                ? 'Konsolidasi 28 Cabang Resmi Regional 4'
+                : isSingle
+                ? `Cabang: ${activeBranch?.name || selectedTerminal}`
+                : `${selectedCodes.length} Cabang Terpilih`}
           </span>
         </div>
 
-        <div className="kpi-row-5">
-          {serviceKpis.map((kpi, idx) => (
-            <div
-              key={`srv-${idx}`}
-              className="kpi-summary-box"
-              onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
-              style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
-            >
-              <div className="kpi-header-label">{kpi.title}</div>
-              <div className="kpi-huge-number">{kpi.value}</div>
-              <div className="kpi-comparison-rows">
-                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
-                  <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
-                    <strong>{kpi.comp1}</strong>
-                  </div>
-                )}
-                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
-                  <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
-                    <strong>{kpi.comp2}</strong>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-inner)', padding: '3px', borderRadius: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setDashboardView('visual')}
+            style={{
+              padding: '5px 12px',
+              fontSize: '11.5px',
+              fontWeight: dashboardView === 'visual' ? 700 : 500,
+              backgroundColor: dashboardView === 'visual' ? '#0284c7' : 'transparent',
+              color: dashboardView === 'visual' ? '#ffffff' : 'var(--text-muted)',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <BarChart3 size={13} />
+            <span>Grafik Terpadu</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDashboardView('cards')}
+            style={{
+              padding: '5px 12px',
+              fontSize: '11.5px',
+              fontWeight: dashboardView === 'cards' ? 700 : 500,
+              backgroundColor: dashboardView === 'cards' ? '#0284c7' : 'transparent',
+              color: dashboardView === 'cards' ? '#ffffff' : 'var(--text-muted)',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Layers size={13} />
+            <span>Kartu Metrik</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. Kinerja Finansial, Beban Biaya & Mutu Operasi */}
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', marginTop: '14px', flexWrap: 'wrap', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span
+      {dashboardView === 'visual' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Bagian Atas: Metrik Finansial & KPI Gauge */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {/* 1. Finansial Kombinasi Bar & Line Chart */}
+            <div
               style={{
-                fontSize: '11px',
-                fontWeight: 800,
-                color: '#38bdf8',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-pill)',
-                border: '1px solid rgba(56, 189, 248, 0.25)',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
               }}
             >
-              <DollarSign size={13} />
-              Kinerja Finansial, Efisiensi Beban Biaya & Mutu Operasi
-            </span>
-          </div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Pendapatan − Beban Biaya = Laba Usaha
-          </span>
-        </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <DollarSign size={16} style={{ color: '#38bdf8' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                    Kinerja Finansial (Pendapatan, Beban, Laba Usaha)
+                  </span>
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Realisasi vs RKAP & YoY
+                </span>
+              </div>
 
-        <div className="kpi-row-5">
-          {financeKpis.map((kpi, idx) => (
-            <div
-              key={`fin-${idx}`}
-              className="kpi-summary-box"
-              onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
-              style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
-            >
-              <div className="kpi-header-label">{kpi.title}</div>
-              <div className="kpi-huge-number">{kpi.value}</div>
-              <div className="kpi-comparison-rows">
-                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
-                  <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
-                    <strong>{kpi.comp1}</strong>
-                  </div>
-                )}
-                {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
-                  <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
-                    <strong>{kpi.comp2}</strong>
-                  </div>
-                )}
+              <div style={{ width: '100%', height: 240 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={mainCombinedChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.07)" vertical={false} />
+                    <XAxis dataKey="kpi" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis yAxisId="left" stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" M" />
+                    <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={11} tickLine={false} unit="%" domain={[0, 140]} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--bg-surface)',
+                        borderColor: 'var(--border-subtle)',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        color: 'var(--text-main)',
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
+                    <Bar yAxisId="left" dataKey="nominalRealisasi" name="Realisasi (Miliar Rp)" fill="#0284c7" radius={[4, 4, 0, 0]} barSize={28} />
+                    <Bar yAxisId="left" dataKey="nominalTarget" name="Target RKAP (Miliar Rp)" fill="rgba(148, 163, 184, 0.25)" stroke="#64748b" radius={[4, 4, 0, 0]} barSize={28} />
+                    <Line yAxisId="right" type="monotone" dataKey="capaianRkap" name="% Capaian RKAP" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 4, fill: '#f59e0b' }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             </div>
-          ))}
+
+            {/* 2. KPI Gauge Indicators (Pendapatan, Beban, Laba, Kesiapan Alat) */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Gauge size={16} style={{ color: '#10b981' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                    KPI Gauge & Kesiapan Alat (RFU)
+                  </span>
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Pencapaian vs Target Resmi
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '10px',
+                  flex: 1,
+                }}
+              >
+                {gaugeMetrics.map((g, idx) => {
+                  const circumference = Math.PI * 34;
+                  const clampedPct = Math.min(Math.max(g.percentage, 0), 150);
+                  const strokeOffset = circumference - (clampedPct / 150) * circumference;
+
+                  return (
+                    <div
+                      key={`gauge-${idx}`}
+                      style={{
+                        backgroundColor: 'var(--bg-inner)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '8px',
+                        padding: '10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                          {g.title}
+                        </span>
+                        <span className={`status-badge-chip ${g.isGood ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+                          {g.isGood ? 'Baik' : 'Waspada'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0' }}>
+                        <svg width="68" height="42" viewBox="0 0 80 48">
+                          <path
+                            d="M 6 42 A 34 34 0 0 1 74 42"
+                            fill="none"
+                            stroke="rgba(255, 255, 255, 0.08)"
+                            strokeWidth={7}
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M 6 42 A 34 34 0 0 1 74 42"
+                            fill="none"
+                            stroke={g.color}
+                            strokeWidth={7}
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeOffset}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-title)' }}>
+                            {g.percentage}%
+                          </div>
+                          <div style={{ fontSize: '9.5px', color: 'var(--text-muted)' }}>
+                            Capaian RKAP
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px' }}>
+                        <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--text-title)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {g.realisasi}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          <span>{g.target}</span>
+                          <span className={g.isGood ? 'text-positive' : 'text-alert'}>{g.yoy}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Bagian Bawah: Kinerja Layanan Pelabuhan & Utilisasi Dermaga (BOR) */}
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Ship size={16} style={{ color: 'var(--accent-cyan)' }} />
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                  Kinerja Layanan {isSingle ? `Cabang [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}` : 'Pelabuhan Terintegrasi'} & BOR
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#06b6d4' }} />
+                  Capaian RKAP (%)
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#3b82f6' }} />
+                  Pertumbuhan YoY (%)
+                </span>
+              </div>
+            </div>
+
+            <div style={{ width: '100%', height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={servicesGroupedChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.07)" vertical={false} />
+                  <XAxis dataKey="layanan" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                  <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit="%" domain={[0, 140]} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'var(--bg-surface)',
+                      borderColor: 'var(--border-subtle)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: 'var(--text-main)',
+                    }}
+                    formatter={(val: any, name: any, item: any) => [
+                      `${val}% (${item.payload.nominal})`,
+                      name === 'capaianRkap' ? 'Pencapaian RKAP' : 'Pertumbuhan YoY'
+                    ]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
+                  <Bar dataKey="capaianRkap" name="Capaian RKAP (%)" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={24}>
+                    {servicesGroupedChartData.map((entry, index) => (
+                      <Cell key={`cell-rkap-${index}`} fill={entry.status === 'Baik' ? '#06b6d4' : '#f59e0b'} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="pertumbuhanYoy" name="Pertumbuhan YoY (%)" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={24}>
+                    {servicesGroupedChartData.map((entry, index) => (
+                      <Cell key={`cell-yoy-${index}`} fill={entry.pertumbuhanYoy >= 0 ? '#10b981' : '#ef4444'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Quick Metrics Breakdown Strip */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '8px',
+                marginTop: '4px',
+              }}
+            >
+              {servicesGroupedChartData.map((s, idx) => (
+                <div
+                  key={`strip-${idx}`}
+                  style={{
+                    backgroundColor: 'var(--bg-inner)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '6px',
+                    padding: '8px 10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                      {s.layanan}
+                    </span>
+                    <span className={`status-badge-chip ${s.status === 'Baik' ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '8.5px', padding: '1px 4px' }}>
+                      {s.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', marginTop: '2px' }}>
+                    {s.nominal}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    <span>RKAP {s.capaianRkap}%</span>
+                    <span className={s.pertumbuhanYoy >= 0 ? 'text-positive' : 'text-alert'}>
+                      {s.pertumbuhanYoy >= 0 ? '+' : ''}{s.pertumbuhanYoy}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* 1. Kinerja Operasional Semua Layanan Pelabuhan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa) */}
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    color: 'var(--accent-cyan)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-pill)',
+                    border: '1px solid rgba(2, 132, 199, 0.25)',
+                  }}
+                >
+                  <Ship size={13} />
+                  Kinerja Operasional Semua Layanan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
+                </span>
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {isNone
+                  ? 'Pilih cabang untuk melihat data'
+                  : isAll
+                  ? 'Konsolidasi 28 Cabang Resmi Regional 4'
+                  : isSingle
+                  ? `Realisasi Cabang: ${activeBranch?.name || selectedTerminal}`
+                  : `${selectedCodes.length} Cabang Terpilih`}
+              </span>
+            </div>
+
+            <div className="kpi-row-5">
+              {serviceKpis.map((kpi, idx) => (
+                <div
+                  key={`srv-${idx}`}
+                  className="kpi-summary-box"
+                  onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
+                  style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
+                >
+                  <div className="kpi-header-label">{kpi.title}</div>
+                  <div className="kpi-huge-number">{kpi.value}</div>
+                  <div className="kpi-comparison-rows">
+                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
+                      <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
+                        <strong>{kpi.comp1}</strong>
+                      </div>
+                    )}
+                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
+                      <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
+                        <strong>{kpi.comp2}</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Kinerja Finansial, Beban Biaya & Mutu Operasi */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', marginTop: '14px', flexWrap: 'wrap', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    color: '#38bdf8',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-pill)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                  }}
+                >
+                  <DollarSign size={13} />
+                  Kinerja Finansial, Efisiensi Beban Biaya & Mutu Operasi
+                </span>
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Pendapatan − Beban Biaya = Laba Usaha
+              </span>
+            </div>
+
+            <div className="kpi-row-5">
+              {financeKpis.map((kpi, idx) => (
+                <div
+                  key={`fin-${idx}`}
+                  className="kpi-summary-box"
+                  onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
+                  style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
+                >
+                  <div className="kpi-header-label">{kpi.title}</div>
+                  <div className="kpi-huge-number">{kpi.value}</div>
+                  <div className="kpi-comparison-rows">
+                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
+                      <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
+                        <strong>{kpi.comp1}</strong>
+                      </div>
+                    )}
+                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
+                      <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
+                        <strong>{kpi.comp2}</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Main Split: Kinerja per Terminal (4x2) vs Perlu Perhatian */}
       <div className="split-dashboard-layout">

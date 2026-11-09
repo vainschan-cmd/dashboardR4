@@ -15,7 +15,7 @@
 - [x] Hapus password/hash dari semua respons API.
 - [x] Lindungi konfigurasi sistem, database, dan integrasi; jangan kirim rahasia ke browser.
 - [x] Tetapkan path database saat deployment dan batasi path file sinkronisasi.
-- [ ] Hapus token tunnel dari kode; rotasi jika masih aktif; simpan rahasia di environment/pengelola rahasia.
+- [x] Hapus token tunnel dari kode; rotasi jika masih aktif; simpan rahasia di environment/pengelola rahasia.
 - [x] Hapus login cepat dan kredensial demo dari produksi.
 - [x] Ganti/upgrade parser xlsx yang terkena advisory sebelum menerima workbook tidak tepercaya.
 
@@ -86,7 +86,7 @@
 - [ ] Ukur baseline waktu muat, Core Web Vitals, bundle, request, latensi API, dan query.
 - [x] Hentikan parsing Excel sinkron berulang pada request dashboard.
 - [x] Ambil data sesuai modul/periode/scope; tambahkan pagination dan filter server.
-- [ ] Tambahkan indeks berdasarkan pola query; gunakan agregasi tersimpan jika pengukuran membutuhkannya.
+- [x] Tambahkan indeks berdasarkan pola query; gunakan agregasi tersimpan jika pengukuran membutuhkannya.
 - [x] Terapkan cache dengan invalidasi dan isolasi akses yang benar.
 - [x] Kurangi request ganda; batalkan request filter usang.
 - [x] Lazy-load chart/modal/modul berat; kurangi client component dan dependensi yang tidak perlu.
@@ -101,7 +101,7 @@
 - [x] Kelompokkan Ringkasan, Kinerja, Tata Kelola Data, dan Administrasi.
 - [x] Sediakan desktop ringkas dan drawer mobile; perjelas menu aktif, identitas, role, scope, breadcrumb.
 - [x] Buat route per modul/detail; simpan filter di URL dan pertahankan saat navigasi.
-- [ ] Susun beranda berdasarkan keputusan BOD: periode/scope/status/waktu pembaruan, 4–6 KPI, isu prioritas, perbandingan cabang.
+- [x] Susun beranda berdasarkan keputusan BOD: periode/scope/status/waktu pembaruan, 4–6 KPI, isu prioritas, perbandingan cabang.
 - [x] Tampilkan gap target dan tren; letakkan isu sebelum daftar cabang.
 - [x] Gunakan tabel sortable untuk perbandingan dan chart untuk tren; ringkas angka dengan detail angka penuh.
 - [x] Kurangi kartu seragam, pill, gradient, shadow, dan ikon dekoratif.
@@ -180,3 +180,4 @@ Detail implementasi, bukti, dan pekerjaan tersisa: [P2-IMPLEMENTASI.md](P2-IMPLE
 - [ ] Lengkapi metrik Core Web Vitals/latensi baseline API, audit aksesibilitas semua formulir, dan regresi P0/P1 sesudah refactor P2.
 
 Checkbox gabungan tetap kosong bila hanya sebagian cakupannya selesai. P2 belum dinyatakan seluruhnya selesai.
+

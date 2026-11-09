@@ -247,6 +247,18 @@ function initSchema(db: DatabaseSync) {
       config_json TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    -- Query optimization indexes for fast filtering and analytics
+    CREATE INDEX IF NOT EXISTS idx_records_branch_period ON monthly_records (branch_id, year, month);
+    CREATE INDEX IF NOT EXISTS idx_records_period ON monthly_records (year, month);
+    CREATE INDEX IF NOT EXISTS idx_records_branch ON monthly_records (branch_id);
+    CREATE INDEX IF NOT EXISTS idx_records_dept ON monthly_records (department_id);
+    CREATE INDEX IF NOT EXISTS idx_records_indicator ON monthly_records (indicator_id);
+    CREATE INDEX IF NOT EXISTS idx_records_status ON monthly_records (verification_status);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_import_batches_period ON import_batches (period_year, period_month);
+    CREATE INDEX IF NOT EXISTS idx_kpi_indicators_dept ON kpi_indicators (department_id);
+    CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
   `);
 
   try {
