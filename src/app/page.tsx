@@ -1,28 +1,104 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import PortSightHeader from '@/components/layout/PortSightHeader';
 import Sidebar from '@/components/layout/Sidebar';
 import PortSightBeranda from '@/components/portsight/PortSightBeranda';
-import PortSightKeuangan from '@/components/portsight/PortSightKeuangan';
-import PortSightOpkom from '@/components/portsight/PortSightOpkom';
-import PortSightKinerja from '@/components/portsight/PortSightKinerja';
-import PortSightUtilisasi from '@/components/portsight/PortSightUtilisasi';
-import PortSightPeralatan from '@/components/portsight/PortSightPeralatan';
-import PortSightFasilitas from '@/components/portsight/PortSightFasilitas';
-import PortSightPeriode from '@/components/portsight/PortSightPeriode';
-import ImportCenter from '@/components/admin/ImportCenter';
-import VerificationQueue from '@/components/admin/VerificationQueue';
-import TemplateMapping from '@/components/admin/TemplateMapping';
-import MasterDataView from '@/components/admin/MasterDataView';
-import AuditTrailView from '@/components/admin/AuditTrailView';
-import DataRecordsView from '@/components/admin/DataRecordsView';
-import ManualDataInputModal, { ModuleType } from '@/components/admin/ManualDataInputModal';
-import ComparisonModal from '@/components/modals/ComparisonModal';
-import AuthModal from '@/components/auth/AuthModal';
+import type { ModuleType } from '@/components/admin/ManualDataInputModal';
 import LoginScreen from '@/components/auth/LoginScreen';
 import { Branch, Department, KPIIndicator, TemplateConfig, UserRole, EquipmentItem, User, SystemParameters, DatabaseConfig, IntegrationCredentials } from '@/lib/types';
 import { X, CheckCircle2, Database, Layers, FileSpreadsheet, Sliders, History, Anchor, Clock, AlertTriangle } from 'lucide-react';
+
+function ModuleSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '8px 0' }}>
+      <div
+        className="skeleton-shimmer"
+        style={{ height: '56px', borderRadius: 'var(--radius-md)' }}
+      />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '12px',
+        }}
+      >
+        {[1, 2, 3, 4].map((idx) => (
+          <div
+            key={idx}
+            className="skeleton-shimmer"
+            style={{ height: '104px', borderRadius: 'var(--radius-md)' }}
+          />
+        ))}
+      </div>
+      <div
+        className="skeleton-shimmer"
+        style={{ height: '320px', borderRadius: 'var(--radius-md)' }}
+      />
+    </div>
+  );
+}
+
+const PortSightKeuangan = dynamic(() => import('@/components/portsight/PortSightKeuangan'), {
+  loading: () => <ModuleSkeleton />,
+});
+const PortSightOpkom = dynamic(() => import('@/components/portsight/PortSightOpkom'), {
+  loading: () => <ModuleSkeleton />,
+});
+const PortSightKinerja = dynamic(() => import('@/components/portsight/PortSightKinerja'), {
+  loading: () => <ModuleSkeleton />,
+});
+const PortSightUtilisasi = dynamic(() => import('@/components/portsight/PortSightUtilisasi'), {
+  loading: () => <ModuleSkeleton />,
+});
+const PortSightPeralatan = dynamic(() => import('@/components/portsight/PortSightPeralatan'), {
+  loading: () => <ModuleSkeleton />,
+});
+const PortSightFasilitas = dynamic(() => import('@/components/portsight/PortSightFasilitas'), {
+  loading: () => <ModuleSkeleton />,
+});
+const PortSightPeriode = dynamic(() => import('@/components/portsight/PortSightPeriode'), {
+  loading: () => <ModuleSkeleton />,
+});
+const ImportCenter = dynamic(() => import('@/components/admin/ImportCenter'), {
+  loading: () => <ModuleSkeleton />,
+});
+const VerificationQueue = dynamic(() => import('@/components/admin/VerificationQueue'), {
+  loading: () => <ModuleSkeleton />,
+});
+const TemplateMapping = dynamic(() => import('@/components/admin/TemplateMapping'), {
+  loading: () => <ModuleSkeleton />,
+});
+const MasterDataView = dynamic(() => import('@/components/admin/MasterDataView'), {
+  loading: () => <ModuleSkeleton />,
+});
+const AuditTrailView = dynamic(() => import('@/components/admin/AuditTrailView'), {
+  loading: () => <ModuleSkeleton />,
+});
+const DataRecordsView = dynamic(() => import('@/components/admin/DataRecordsView'), {
+  loading: () => <ModuleSkeleton />,
+});
+const ManualDataInputModal = dynamic(() => import('@/components/admin/ManualDataInputModal'));
+const ComparisonModal = dynamic(() => import('@/components/modals/ComparisonModal'));
+const AuthModal = dynamic(() => import('@/components/auth/AuthModal'));
+
+const VALID_TABS = new Set([
+  'beranda',
+  'periode',
+  'keuangan',
+  'opkom',
+  'kinerja',
+  'utilisasi',
+  'peralatan',
+  'fasilitas',
+  'data_records',
+  'master_data',
+  'verification',
+  'import_center',
+  'templates',
+  'audit_trail',
+]);
 
 export default function DashboardHome() {
   // Navigation active tab
@@ -85,8 +161,11 @@ export default function DashboardHome() {
     setManualInputModalOpen(true);
   };
 
-  // Load saved theme & user auth from localStorage on mount
+  // Load saved theme, URL search params & validate active HttpOnly JWT session from /api/users/me on mount
   useEffect(() => {
+    let isMounted = true;
+    const abortController = new AbortController();
+
     try {
       const savedTheme = localStorage.getItem('portsight_theme') as 'dark' | 'light' | null;
       if (savedTheme === 'dark') {
@@ -96,11 +175,63 @@ export default function DashboardHome() {
         setTheme('light');
         document.documentElement.setAttribute('data-theme', 'light');
       }
+      localStorage.removeItem('portsight_auth_user');
+    } catch (e) {
+      console.error(e);
+    }
 
-      const savedUser = localStorage.getItem('portsight_auth_user');
-      if (savedUser) {
-        const u = JSON.parse(savedUser) as User;
-        if (u && (u.nipp || u.username)) {
+    // Read initial URL search params (?tab=...&branch=...&period=...)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      const branchParam = params.get('branch');
+      const periodParam = params.get('period');
+      if (tabParam && VALID_TABS.has(tabParam)) {
+        setActiveTab(tabParam);
+      }
+      if (branchParam) {
+        setSelectedTerminal(branchParam);
+      }
+      if (periodParam) {
+        setSelectedPeriod(periodParam);
+      }
+    } catch (e) {
+      console.warn('Gagal membaca parameter URL:', e);
+    }
+
+    const handlePopState = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        const branchParam = params.get('branch');
+        const periodParam = params.get('period');
+        if (tabParam && VALID_TABS.has(tabParam)) {
+          setActiveTab(tabParam);
+        }
+        if (branchParam) {
+          setSelectedTerminal(branchParam);
+        }
+        if (periodParam) {
+          setSelectedPeriod(periodParam);
+        }
+      } catch (e) {
+        console.warn('Gagal menyinkronkan riwayat navigasi:', e);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+
+    const restoreJwtSession = async () => {
+      try {
+        const res = await fetch('/api/users/me', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+          signal: abortController.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.success && data.authenticated && data.user) {
+          const u = data.user as User;
           setCurrentUser(u);
           setUserRole(u.role);
           setUsername(u.nipp || u.username);
@@ -109,13 +240,51 @@ export default function DashboardHome() {
           }
           try {
             localStorage.setItem('portsight_last_activity', String(Date.now()));
-          } catch (e) {}
+          } catch (e) {
+            console.warn('Gagal menyimpan waktu aktivitas:', e);
+          }
+        }
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          // Unauthenticated or network error — remain on LoginScreen
         }
       }
-    } catch (e) {
-      console.error(e);
-    }
+    };
+
+    restoreJwtSession();
+
+    return () => {
+      isMounted = false;
+      abortController.abort();
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
+
+  // Synchronize activeTab, selectedTerminal, and selectedPeriod with URL search params
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', activeTab);
+      url.searchParams.set('branch', selectedTerminal);
+      url.searchParams.set('period', selectedPeriod);
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) {
+      console.warn('Gagal memperbarui parameter URL:', e);
+    }
+  }, [activeTab, selectedTerminal, selectedPeriod, currentUser]);
+
+  // Close Drilldown Modal on Escape key
+  useEffect(() => {
+    if (!drilldownItem) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDrilldownItem(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [drilldownItem]);
 
   // Inactivity Activity Tracker & Auto-Logout Watcher (Default 30 Menit)
   useEffect(() => {
@@ -152,8 +321,9 @@ export default function DashboardHome() {
       const warningWindowMs = warningMinutes * 60 * 1000;
 
       if (elapsedMs >= timeoutMs) {
-        // TIMEOUT EXPIRED: Otomatis kembali ke menu login
+        // TIMEOUT EXPIRED: Revoke HttpOnly JWT cookie & return to login screen
         clearInterval(intervalId);
+        fetch('/api/users/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
         try {
           localStorage.removeItem('portsight_auth_user');
           localStorage.removeItem('portsight_last_activity');
@@ -189,12 +359,12 @@ export default function DashboardHome() {
   };
 
   // Fetch Master Data, Users, and Verification Pending Count
-  const loadMasterData = async () => {
+  const loadMasterData = useCallback(async (signal?: AbortSignal) => {
     try {
       const [resMaster, resVer, resUsers] = await Promise.all([
-        fetch('/api/master'),
-        fetch('/api/verification?month=9&year=2026'),
-        fetch('/api/users')
+        fetch('/api/master', { credentials: 'include', signal }),
+        fetch('/api/verification?month=9&year=2026', { credentials: 'include', signal }),
+        fetch('/api/users', { credentials: 'include', signal }),
       ]);
       const dataMaster = await resMaster.json();
       if (dataMaster.success) {
@@ -221,14 +391,19 @@ export default function DashboardHome() {
       if (dataUsers.success) {
         setUsersList(dataUsers.users || []);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.error(e);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadMasterData();
-  }, []);
+    if (!currentUser) return;
+    const abortController = new AbortController();
+    loadMasterData(abortController.signal);
+    return () => abortController.abort();
+  }, [currentUser?.id, loadMasterData]);
 
   const handleLoginSuccess = (user: User) => {
     setSessionExpiredMessage(null);
@@ -242,17 +417,23 @@ export default function DashboardHome() {
       setSelectedTerminal('ALL');
     }
     try {
-      localStorage.setItem('portsight_auth_user', JSON.stringify(user));
+      localStorage.removeItem('portsight_auth_user');
       localStorage.setItem('portsight_last_activity', String(Date.now()));
-    } catch (e) {}
-    loadMasterData();
+    } catch (e) {
+      console.warn('Gagal membersihkan penyimpanan sesi lama:', e);
+    }
   };
 
   const handleLogout = () => {
+    fetch('/api/users/logout', { method: 'POST', credentials: 'include' }).catch((e) => {
+      console.warn('Gagal memanggil endpoint logout:', e);
+    });
     try {
       localStorage.removeItem('portsight_auth_user');
       localStorage.removeItem('portsight_last_activity');
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Gagal menghapus penyimpanan aktivitas:', e);
+    }
     setSessionExpiredMessage(null);
     setIdleWarningSeconds(null);
     setCurrentUser(null);
@@ -266,7 +447,6 @@ export default function DashboardHome() {
       branch_id: selectedTerminal,
       month: '9',
       year: '2026',
-      role: userRole,
     });
     window.location.href = `/api/reports/export?${params.toString()}`;
   };
@@ -275,17 +455,11 @@ export default function DashboardHome() {
     window.print();
   };
 
-  const isBod =
-    userRole === 'viewer' ||
-    currentUser?.role === 'viewer' ||
-    String(userRole).toLowerCase().includes('bod') ||
-    String(currentUser?.role).toLowerCase().includes('bod') ||
-    currentUser?.nipp === '10000' ||
-    currentUser?.username === '10000' ||
-    String(currentUser?.name).toLowerCase().includes('bod');
-
-  const canManageUsers = !isBod && (userRole === 'super_admin' || userRole === 'admin_regional');
-  const isPicCabang = !isBod && (userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99'));
+  // Pure RBAC role checks based on authenticated session role
+  const effectiveRole: UserRole = currentUser?.role || userRole;
+  const isBod = effectiveRole === 'viewer';
+  const canManageUsers = effectiveRole === 'super_admin' || effectiveRole === 'admin_regional';
+  const isPicCabang = effectiveRole === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99';
   const isGovernanceView = !isBod && ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab);
 
   useEffect(() => {
@@ -401,7 +575,7 @@ export default function DashboardHome() {
                 className={`governance-pill ${activeTab === 'data_records' ? 'active' : ''}`}
               >
                 <Database size={13} />
-                <span>Data Record Kinerja</span>
+                <span>Rekaman Data Kinerja</span>
               </button>
               {canManageUsers && (
                 <button
@@ -417,9 +591,9 @@ export default function DashboardHome() {
                 className={`governance-pill ${activeTab === 'verification' ? 'active' : ''}`}
               >
                 <CheckCircle2 size={13} />
-                <span>Verifikasi & Monitoring</span>
+                <span>Verifikasi & Pemantauan</span>
                 {pendingCount > 0 && (
-                  <span style={{ backgroundColor: '#fbbf24', color: '#0e1b2e', fontSize: '10px', fontWeight: 800, padding: '1px 5px', borderRadius: '10px' }}>
+                  <span style={{ backgroundColor: 'var(--status-alert-text)', color: '#0f172a', fontSize: '10px', fontWeight: 800, padding: '1px 5px', borderRadius: '10px' }}>
                     {pendingCount}
                   </span>
                 )}
@@ -429,21 +603,21 @@ export default function DashboardHome() {
                 className={`governance-pill ${activeTab === 'import_center' ? 'active' : ''}`}
               >
                 <FileSpreadsheet size={13} />
-                <span>Import Spreadsheet</span>
+                <span>Impor Spreadsheet</span>
               </button>
               <button
                 onClick={() => setActiveTab('templates')}
                 className={`governance-pill ${activeTab === 'templates' ? 'active' : ''}`}
               >
                 <Sliders size={13} />
-                <span>Template Mapping</span>
+                <span>Pemetaan Templat</span>
               </button>
               <button
                 onClick={() => setActiveTab('audit_trail')}
                 className={`governance-pill ${activeTab === 'audit_trail' ? 'active' : ''}`}
               >
                 <History size={13} />
-                <span>Audit Trail & Log</span>
+                <span>Jejak Audit & Log</span>
               </button>
             </div>
           </div>
@@ -643,58 +817,99 @@ export default function DashboardHome() {
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ backgroundColor: '#132238', borderColor: '#223c63', color: '#ffffff', maxWidth: '580px' }}
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-subtle)',
+              color: 'var(--text-main)',
+              maxWidth: '580px',
+            }}
           >
-            <div className="modal-header" style={{ borderColor: '#1e3557' }}>
+            <div className="modal-header" style={{ borderColor: 'var(--border-subtle)' }}>
               <div>
                 <span className="illustration-pill" style={{ fontSize: '10px', padding: '2px 8px' }}>
                   Detail Indikator
                 </span>
-                <h3 className="modal-title" style={{ color: '#ffffff', marginTop: '6px' }}>
+                <h3 className="modal-title" style={{ color: 'var(--text-title)', marginTop: '6px' }}>
                   {drilldownItem.title}
                 </h3>
               </div>
               <button
                 onClick={() => setDrilldownItem(null)}
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', backgroundColor: '#0e1c30', padding: '16px', borderRadius: '8px', border: '1px solid #1e3557' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '12px',
+                  backgroundColor: 'var(--bg-inner)',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
                 <div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Target RKAP YTD</div>
-                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', marginTop: '4px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Target RKAP YTD</div>
+                  <div
+                    className="tabular-nums"
+                    style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', marginTop: '4px' }}
+                  >
                     {drilldownItem.rawTarget || drilldownItem.comp1}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Realisasi Aktual YTD</div>
-                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#38bdf8', marginTop: '4px' }}>
-                    {drilldownItem.rawRealization || drilldownItem.value}
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Realisasi Aktual YTD</div>
+                  <div
+                    className="tabular-nums"
+                    style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-blue)', marginTop: '4px' }}
+                  >
+                    {drilldownItem.fullValue || drilldownItem.rawRealization || drilldownItem.value}
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#0e1c30', borderRadius: '8px', fontSize: '12.5px' }}>
-                <span style={{ color: '#94a3b8' }}>Performa terhadap Target:</span>
-                <strong className={drilldownItem.comp1Good ? 'text-positive' : 'text-alert'}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '12px',
+                  backgroundColor: 'var(--bg-inner)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-subtle)',
+                  fontSize: '12.5px',
+                }}
+              >
+                <span style={{ color: 'var(--text-muted)' }}>Pencapaian terhadap Target:</span>
+                <strong className={`tabular-nums ${drilldownItem.comp1Good ? 'text-positive' : 'text-alert'}`}>
                   {drilldownItem.comp1}
                 </strong>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#0e1c30', borderRadius: '8px', fontSize: '12.5px' }}>
-                <span style={{ color: '#94a3b8' }}>Pertumbuhan Tahunan (YoY):</span>
-                <strong className={drilldownItem.comp2Good ? 'text-positive' : 'text-alert'}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '12px',
+                  backgroundColor: 'var(--bg-inner)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-subtle)',
+                  fontSize: '12.5px',
+                }}
+              >
+                <span style={{ color: 'var(--text-muted)' }}>Pertumbuhan Tahunan (YoY):</span>
+                <strong className={`tabular-nums ${drilldownItem.comp2Good ? 'text-positive' : 'text-alert'}`}>
                   {drilldownItem.comp2}
                 </strong>
               </div>
             </div>
 
-            <div className="modal-footer" style={{ borderColor: '#1e3557', backgroundColor: '#0e1c30' }}>
+            <div className="modal-footer" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-inner)' }}>
               <button onClick={() => setDrilldownItem(null)} className="btn-dark" style={{ fontSize: '12px' }}>
                 Tutup
               </button>

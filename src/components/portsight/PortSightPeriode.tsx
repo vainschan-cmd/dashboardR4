@@ -202,11 +202,11 @@ export default function PortSightPeriode({
     return params.toString();
   };
 
-  const fetchData = async () => {
+  const fetchData = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       const query = buildQueryString();
-      const res = await fetch(`/api/modules-data?${query}`);
+      const res = await fetch(`/api/modules-data?${query}`, { signal });
       const json = await res.json();
       if (json.success) {
         setFinansial(json.finansial || []);
@@ -216,15 +216,21 @@ export default function PortSightPeriode({
         setPeralatan(json.peralatan || []);
         setFasilitas(json.fasilitas || []);
       }
-    } catch (e) {
-      console.error('Error fetching period data:', e);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.error('Error fetching period data:', e);
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
+    const abortController = new AbortController();
+    fetchData(abortController.signal);
+    return () => abortController.abort();
   }, [filterMode, presetPeriod, singleMonth, singleYear, startMonth, startYear, endMonth, endYear, startDate, endDate, branchFilter]);
 
   // Derived summaries
@@ -363,7 +369,7 @@ export default function PortSightPeriode({
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={fetchData}
+              onClick={() => fetchData()}
               className="btn-dark"
               style={{
                 display: 'flex',

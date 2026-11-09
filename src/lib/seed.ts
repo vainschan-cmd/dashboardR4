@@ -1,4 +1,5 @@
 import { getDb } from './db';
+import { hashPassword } from './auth';
 import { Branch, Department, User, KPIIndicator, TemplateConfig, KPIDirection, StatusColor } from './types';
 
 export function runSeed(force = false) {
@@ -232,7 +233,20 @@ export function runSeed(force = false) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const u of users) {
-    stmtUser.run(u.id, u.username, u.nipp, u.name, u.email || `${u.nipp}@pelindo.co.id`, u.divisi, u.departemen, u.password || 'password123', u.role, u.branch_id || null, u.department_id || null, u.active ? 1 : 0);
+    stmtUser.run(
+      u.id,
+      u.username,
+      u.nipp,
+      u.name,
+      u.email || `${u.nipp}@pelindo.co.id`,
+      u.divisi,
+      u.departemen,
+      hashPassword(u.password || 'password123'),
+      u.role,
+      u.branch_id || null,
+      u.department_id || null,
+      u.active ? 1 : 0
+    );
   }
 
   // 4. KPI Indicators

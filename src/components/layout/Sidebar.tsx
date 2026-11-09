@@ -58,6 +58,7 @@ export default function Sidebar({
   // 1. Collapsible Local State (Default: false / Expanded)
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [hoveredTooltip, setHoveredTooltip] = useState<{ label: string; top: number; badge?: number } | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
   // Restore saved collapse preference from localStorage
   useEffect(() => {
@@ -66,15 +67,34 @@ export default function Sidebar({
       if (saved === 'true') {
         setIsCollapsed(true);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Sidebar] Failed to read collapse preference:', e);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!showLogoutConfirm) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowLogoutConfirm(false);
+      } else if (e.key === 'Enter' && onLogout) {
+        setShowLogoutConfirm(false);
+        if (onCloseMobile) onCloseMobile();
+        onLogout();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showLogoutConfirm, onLogout, onCloseMobile]);
 
   const handleToggleCollapse = () => {
     setIsCollapsed((prev) => {
       const next = !prev;
       try {
         localStorage.setItem('portsight_sidebar_collapsed', String(next));
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[Sidebar] Failed to persist collapse preference:', e);
+      }
       return next;
     });
     setHoveredTooltip(null);
@@ -108,12 +128,12 @@ export default function Sidebar({
   };
 
   const adminMenus = [
-    { id: 'data_records', label: 'Data Record Kinerja', icon: Database },
+    { id: 'data_records', label: 'Rekaman Data Kinerja', icon: Database },
     ...(canManageUsers ? [{ id: 'master_data', label: 'Master Data & KPI', icon: Layers }] : []),
     { id: 'verification', label: 'Verifikasi & Monitoring', icon: CheckCircle2, badge: pendingCount > 0 ? pendingCount : undefined },
-    { id: 'import_center', label: 'Import Spreadsheet', icon: FileSpreadsheet },
-    { id: 'templates', label: 'Template Mapping', icon: Sliders },
-    { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
+    { id: 'import_center', label: 'Impor Spreadsheet', icon: FileSpreadsheet },
+    { id: 'templates', label: 'Pemetaan Template', icon: Sliders },
+    { id: 'audit_trail', label: 'Jejak Audit Sistem', icon: History },
   ];
 
   const handleSelect = (tabId: string) => {
@@ -341,19 +361,14 @@ export default function Sidebar({
             <>
               <div className="sidebar-simulation-pill">
                 <div className="sidebar-simulation-dot" />
-                <span>DATA SIMULASI RESMI</span>
+                <span>DATA SQLITE TERINTEGRASI</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                <span>Suite v2.4</span>
+                <span>Pelindo Regional 4</span>
                 {onLogout && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (confirm('Apakah Anda yakin ingin keluar dari akun?')) {
-                        if (onCloseMobile) onCloseMobile();
-                        onLogout();
-                      }
-                    }}
+                    onClick={() => setShowLogoutConfirm(true)}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -368,7 +383,7 @@ export default function Sidebar({
                     }}
                     title="Keluar dari Akun"
                   >
-                    <LogOut size={12} color="#f87171" />
+                    <LogOut size={12} strokeWidth={1.75} color="#f87171" />
                     <span>Keluar</span>
                   </button>
                 )}
@@ -378,12 +393,7 @@ export default function Sidebar({
             onLogout && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm('Apakah Anda yakin ingin keluar dari akun?')) {
-                    if (onCloseMobile) onCloseMobile();
-                    onLogout();
-                  }
-                }}
+                onClick={() => setShowLogoutConfirm(true)}
                 onMouseEnter={(e) => handleMouseEnter(e, 'Keluar dari Akun')}
                 onMouseLeave={handleMouseLeave}
                 style={{
@@ -401,12 +411,70 @@ export default function Sidebar({
                 title="Keluar dari Akun"
                 aria-label="Keluar dari Akun"
               >
-                <LogOut size={16} color="#f87171" />
+                <LogOut size={16} strokeWidth={1.75} color="#f87171" />
               </button>
             )
           )}
         </div>
       </aside>
+
+      {/* In-App Logout Confirmation Modal (Accessible with Escape & Enter) */}
+      {showLogoutConfirm && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 100000 }}
+          onClick={() => setShowLogoutConfirm(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sidebar-logout-title"
+        >
+          <div
+            className="modal-content"
+            style={{ maxWidth: '380px', padding: '20px', borderRadius: 'var(--radius-md)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <LogOut size={18} strokeWidth={1.75} color="#ef4444" />
+              <h4 id="sidebar-logout-title" style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
+                Konfirmasi Keluar Sesi
+              </h4>
+            </div>
+            <p style={{ margin: '0 0 18px 0', fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Apakah Anda yakin ingin mengakhiri sesi aktif dan keluar dari akun ini?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn-dark"
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{ padding: '7px 14px', fontSize: '12px', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Batal (Esc)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  if (onCloseMobile) onCloseMobile();
+                  if (onLogout) onLogout();
+                }}
+                style={{
+                  padding: '7px 14px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  borderRadius: '6px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Keluar (Enter)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 3. Efek Hover Tooltip: Tampil melayang di sisi kanan saat kondisi Collapsed */}
       {isCollapsed && hoveredTooltip && (

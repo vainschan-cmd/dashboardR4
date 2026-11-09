@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
+import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req, { requiredPermission: 'records:read' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
-    const branch_id = searchParams.get('branch_id') || undefined;
+    const rawBranchId = searchParams.get('branch_id') || undefined;
+    const branch_id = enforceBranchFilterForRead(auth.session, rawBranchId);
     const department_id = searchParams.get('department_id') || undefined;
     const month = searchParams.get('month') ? parseInt(searchParams.get('month')!, 10) : undefined;
     const year = searchParams.get('year') ? parseInt(searchParams.get('year')!, 10) : undefined;
@@ -17,13 +22,13 @@ export async function GET(req: NextRequest) {
       month,
       year,
       verified_only,
-      verification_status
+      verification_status,
     });
 
     return NextResponse.json({
       success: true,
       count: records.length,
-      records
+      records,
     });
   } catch (error: any) {
     return NextResponse.json(

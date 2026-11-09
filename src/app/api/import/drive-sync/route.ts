@@ -1,17 +1,26 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ingestInputData } from '@/lib/ingestInputData';
+import { sanitizeSafeDataFilePath } from '@/lib/db';
+import { requireAuth } from '@/lib/rbac';
 import path from 'path';
 import fs from 'fs';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req, { requiredPermission: 'import:write' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const body = await req.json().catch(() => ({}));
-    const targetFile = body.filePath || path.join(process.cwd(), 'data', 'input_data.xlsx');
+    const { safeRelativePath, resolvedAbsolutePath: targetFile } = sanitizeSafeDataFilePath(
+      body.filePath,
+      'input_data.xlsx',
+      ['.xlsx', '.xls', '.csv']
+    );
 
     if (!fs.existsSync(targetFile)) {
       return NextResponse.json({
         success: false,
-        error: `File ${targetFile} tidak ditemukan. Pastikan file input_data.xlsx dari akun regdashr@gmail.com tersedia.`
+        error: `File ${safeRelativePath} tidak ditemukan. Pastikan file input_data.xlsx tersedia di direktori data.`
       }, { status: 404 });
     }
 
@@ -19,7 +28,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Sinkronisasi file input_data.xlsx dari akun My Drive regdashr@gmail.com berhasil diproses!',
+      message: 'Sinkronisasi data dari file input_data.xlsx telah selesai diproses.',
       stats,
       account: 'regdashr@gmail.com',
       syncedAt: new Date().toISOString()

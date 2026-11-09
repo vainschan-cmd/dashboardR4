@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveManualInputRecord, ModuleType } from '@/lib/manualInputService';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
+import {
+  requireAuth,
+  validateBranchWriteAccess,
+  validateDepartmentWriteAccess,
+} from '@/lib/rbac';
+import { manualInputSchema, parseWithSchema } from '@/lib/validation';
+
+const MODULE_DEPARTMENT_MAP: Record<ModuleType, string> = {
+  finansial: 'dept_keu',
+  opkom: 'dept_ops',
+  kinerja: 'dept_ops',
+  utilisasi: 'dept_ops',
+  peralatan: 'dept_tek',
+  fasilitas: 'dept_tek',
+};
 
 const MODULE_OPTIONS = {
   finansial: {
@@ -48,51 +63,81 @@ const MODULE_OPTIONS = {
   },
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
+  if (!auth.authorized) return auth.response;
+
+  const branches =
+    auth.session.role === 'pic_cabang' && auth.session.branch_id && auth.session.branch_id !== 'R99'
+      ? OFFICIAL_BRANCHES.filter(b => b.code === auth.session.branch_id)
+      : OFFICIAL_BRANCHES;
+
   return NextResponse.json({
     success: true,
-    branches: OFFICIAL_BRANCHES,
+    branches,
     options: MODULE_OPTIONS,
   });
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req, { requiredPermission: 'manual_input:write' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const body = await req.json();
-    const { module, data, user } = body;
-
-    if (!module) {
+    const parsed = parseWithSchema(manualInputSchema, body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Parameter module wajib disertakan.' },
+        { success: false, error: parsed.error },
         { status: 400 }
       );
     }
+    const { module, data } = parsed.data as { module: ModuleType; data: Record<string, any> };
 
-    if (!data || typeof data !== 'object') {
+    // 1. Enforce Server-Side Branch Scope (Row-Level Security for pic_cabang)
+    const requestedBranch = data.kodeCabang || data.branchCode || data.KODE_CBG;
+    const branchCheck = validateBranchWriteAccess(auth.session, requestedBranch);
+    if (!branchCheck.allowed) {
       return NextResponse.json(
-        { success: false, error: 'Data form input wajib disertakan.' },
-        { status: 400 }
+        { success: false, error: branchCheck.error },
+        { status: 403 }
       );
     }
 
-    const validModules: ModuleType[] = ['finansial', 'opkom', 'kinerja', 'utilisasi', 'peralatan', 'fasilitas'];
-    if (!validModules.includes(module as ModuleType)) {
+    // 2. Enforce Server-Side Department Scope (Row-Level Security for pic_dept_regional)
+    const targetDeptId = MODULE_DEPARTMENT_MAP[module as ModuleType];
+    const deptCheck = validateDepartmentWriteAccess(auth.session, targetDeptId);
+    if (!deptCheck.allowed) {
       return NextResponse.json(
-        { success: false, error: `Modul "${module}" tidak valid. Pilih dari: ${validModules.join(', ')}` },
-        { status: 400 }
+        { success: false, error: deptCheck.error },
+        { status: 403 }
       );
     }
+
+    // Lock branch code in payload to validated branch
+    const scopedData = {
+      ...data,
+      kodeCabang: branchCheck.canonicalCode,
+    };
 
     const result = saveManualInputRecord({
       module: module as ModuleType,
-      data,
-      user,
+      data: scopedData,
+      user: {
+        id: auth.session.sub,
+        name: auth.session.name,
+        role: auth.session.role,
+        nipp: auth.session.nipp,
+      },
     });
 
     return NextResponse.json({
       success: true,
       message: result.message,
       isUpdate: result.isUpdate,
+      verificationStatus: result.verificationStatus,
+      recordId: result.recordId,
+      monthlyRecordId: result.monthlyRecordId,
       record: result.record,
     });
   } catch (error: any) {

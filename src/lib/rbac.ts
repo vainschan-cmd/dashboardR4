@@ -1,0 +1,355 @@
+import { NextRequest, NextResponse } from 'next/server';
+import type { User, UserRole } from './types';
+import {
+  getSessionFromRequest,
+  verifyJwtToken,
+  REFRESH_TOKEN_COOKIE,
+  type JwtSessionPayload,
+} from './auth';
+import {
+  OFFICIAL_BRANCHES,
+  getCanonicalBranchCode,
+  getBranchByCode,
+  getBranchById,
+} from './constants';
+
+export type Permission =
+  | 'dashboard:read'
+  | 'records:read'
+  | 'reports:export'
+  | 'manual_input:write'
+  | 'import:write'
+  | 'verification:read'
+  | 'verification:approve'
+  | 'templates:read'
+  | 'templates:manage'
+  | 'users:read'
+  | 'users:manage'
+  | 'master_data:read'
+  | 'master_data:manage'
+  | 'system_params:read'
+  | 'system_params:manage'
+  | 'audit_logs:read';
+
+export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
+  super_admin: [
+    'dashboard:read',
+    'records:read',
+    'reports:export',
+    'manual_input:write',
+    'import:write',
+    'verification:read',
+    'verification:approve',
+    'templates:read',
+    'templates:manage',
+    'users:read',
+    'users:manage',
+    'master_data:read',
+    'master_data:manage',
+    'system_params:read',
+    'system_params:manage',
+    'audit_logs:read',
+  ],
+  admin_regional: [
+    'dashboard:read',
+    'records:read',
+    'reports:export',
+    'manual_input:write',
+    'import:write',
+    'verification:read',
+    'verification:approve',
+    'templates:read',
+    'templates:manage',
+    'users:read',
+    'users:manage',
+    'master_data:read',
+    'master_data:manage',
+    'system_params:read',
+    'audit_logs:read',
+  ],
+  pic_dept_regional: [
+    'dashboard:read',
+    'records:read',
+    'reports:export',
+    'manual_input:write',
+    'import:write',
+    'verification:read',
+    'templates:read',
+    'master_data:read',
+  ],
+  pic_cabang: [
+    'dashboard:read',
+    'records:read',
+    'reports:export',
+    'manual_input:write',
+    'import:write',
+    'verification:read',
+    'templates:read',
+    'master_data:read',
+  ],
+  viewer: [
+    'dashboard:read',
+    'records:read',
+    'reports:export',
+    'master_data:read',
+  ],
+};
+
+function extractRole(userOrRole?: User | JwtSessionPayload | UserRole | string | null): UserRole | null {
+  if (!userOrRole) return null;
+  const rawRole = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  if (
+    rawRole === 'super_admin' ||
+    rawRole === 'admin_regional' ||
+    rawRole === 'pic_dept_regional' ||
+    rawRole === 'pic_cabang' ||
+    rawRole === 'viewer'
+  ) {
+    return rawRole;
+  }
+  return null;
+}
+
+export function hasPermission(
+  userOrRole: User | JwtSessionPayload | UserRole | string | null | undefined,
+  permission: Permission
+): boolean {
+  const role = extractRole(userOrRole);
+  if (!role) return false;
+  return ROLE_PERMISSIONS[role].includes(permission);
+}
+
+/**
+ * Pure role-based check for BOD / Executive Viewer (replaces string matching on name or NIPP).
+ */
+export function isExecutiveViewer(
+  userOrRole?: User | JwtSessionPayload | UserRole | string | null
+): boolean {
+  return extractRole(userOrRole) === 'viewer';
+}
+
+export function canManageUsersRole(
+  userOrRole?: User | JwtSessionPayload | UserRole | string | null
+): boolean {
+  return hasPermission(userOrRole, 'users:manage');
+}
+
+export function canVerifyDataRole(
+  userOrRole?: User | JwtSessionPayload | UserRole | string | null
+): boolean {
+  return hasPermission(userOrRole, 'verification:approve');
+}
+
+export function isPicCabangRole(
+  userOrRole?: User | JwtSessionPayload | UserRole | string | null
+): boolean {
+  return extractRole(userOrRole) === 'pic_cabang';
+}
+
+/**
+ * Resolve any branch identifier (code 'R01', id 'term_makassar', or name 'Makassar') into both canonical code & DB id.
+ */
+export function resolveBranchIdentity(rawBranch?: string | null): { code: string; id: string; name: string } | null {
+  if (!rawBranch) return null;
+  const trimmed = String(rawBranch).trim();
+  if (!trimmed || trimmed.toUpperCase() === 'ALL' || trimmed.toUpperCase() === 'NONE') {
+    return null;
+  }
+
+  const byId = getBranchById(trimmed);
+  if (byId) {
+    return { code: byId.code, id: byId.id, name: byId.name };
+  }
+
+  const byCode = getBranchByCode(trimmed);
+  if (byCode) {
+    return { code: byCode.code, id: byCode.id, name: byCode.name };
+  }
+
+  const canonical = getCanonicalBranchCode(trimmed, trimmed);
+  if (canonical) {
+    const found = getBranchByCode(canonical);
+    if (found) {
+      return { code: found.code, id: found.id, name: found.name };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract active JWT session from request (checking both access token and refresh token fallback).
+ */
+export async function resolveRequestSession(req: NextRequest): Promise<JwtSessionPayload | null> {
+  const session = await getSessionFromRequest(req);
+  if (session) return session;
+
+  const refreshCookie = req.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+  if (refreshCookie) {
+    const refreshPayload = await verifyJwtToken(refreshCookie);
+    if (refreshPayload && refreshPayload.type === 'refresh') {
+      return refreshPayload;
+    }
+  }
+  return null;
+}
+
+/**
+ * Guard helper for Next.js Route Handlers.
+ * Verifies JWT authentication and checks allowedRoles / requiredPermission.
+ */
+export async function requireAuth(
+  req: NextRequest,
+  options?: {
+    allowedRoles?: UserRole[];
+    requiredPermission?: Permission;
+  }
+): Promise<
+  | { authorized: true; session: JwtSessionPayload }
+  | { authorized: false; response: NextResponse }
+> {
+  const session = await resolveRequestSession(req);
+
+  if (!session) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          error: 'Sesi autentikasi tidak ditemukan atau telah berakhir. Silakan login kembali.',
+          message: 'Sesi autentikasi tidak ditemukan atau telah berakhir. Silakan login kembali.',
+        },
+        { status: 401 }
+      ),
+    };
+  }
+
+  if (options?.allowedRoles && !options.allowedRoles.includes(session.role)) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          error: `Akses ditolak: Role "${session.role}" tidak memiliki otorisasi untuk operasi ini.`,
+          message: `Akses ditolak: Role "${session.role}" tidak memiliki otorisasi untuk operasi ini.`,
+        },
+        { status: 403 }
+      ),
+    };
+  }
+
+  if (options?.requiredPermission && !hasPermission(session.role, options.requiredPermission)) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          error: `Akses ditolak: Anda tidak memiliki izin "${options.requiredPermission}".`,
+          message: `Akses ditolak: Anda tidak memiliki izin "${options.requiredPermission}".`,
+        },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { authorized: true, session };
+}
+
+/**
+ * Row-Level Security (ABAC) for READ endpoints:
+ * If the user is a `pic_cabang` assigned to a specific branch (not R99), force the branch filter to their assigned branch.
+ */
+export function enforceBranchFilterForRead(
+  session: JwtSessionPayload | null,
+  requestedBranch?: string | null
+): string | undefined {
+  if (session && session.role === 'pic_cabang' && session.branch_id && session.branch_id !== 'R99') {
+    const resolved = resolveBranchIdentity(session.branch_id);
+    return resolved ? resolved.code : session.branch_id;
+  }
+  return requestedBranch || undefined;
+}
+
+/**
+ * Row-Level Security (ABAC) for WRITE endpoints (Manual Input & Spreadsheet Commit):
+ * Verify that `pic_cabang` only writes to their assigned `branch_id`.
+ */
+export function validateBranchWriteAccess(
+  session: JwtSessionPayload,
+  targetBranchRaw?: string | null
+): { allowed: boolean; canonicalCode: string; branchId: string; error?: string } {
+  if (session.role === 'viewer') {
+    return {
+      allowed: false,
+      canonicalCode: '',
+      branchId: '',
+      error: 'Akses ditolak: Role Viewer (BOD) hanya memiliki akses baca.',
+    };
+  }
+
+  const targetResolved = resolveBranchIdentity(targetBranchRaw);
+
+  if (session.role === 'pic_cabang' && session.branch_id && session.branch_id !== 'R99') {
+    const assignedResolved = resolveBranchIdentity(session.branch_id);
+    const assignedCode = assignedResolved ? assignedResolved.code : session.branch_id.toUpperCase();
+    const assignedId = assignedResolved ? assignedResolved.id : session.branch_id;
+
+    if (!targetResolved) {
+      return {
+        allowed: true,
+        canonicalCode: assignedCode,
+        branchId: assignedId,
+      };
+    }
+
+    if (targetResolved.code !== assignedCode && targetResolved.id !== assignedId) {
+      return {
+        allowed: false,
+        canonicalCode: assignedCode,
+        branchId: assignedId,
+        error: `Akses ditolak: Sebagai PIC Cabang [${assignedCode}], Anda tidak diizinkan mengubah data cabang [${targetResolved.code}] ${targetResolved.name}.`,
+      };
+    }
+
+    return {
+      allowed: true,
+      canonicalCode: assignedCode,
+      branchId: assignedId,
+    };
+  }
+
+  return {
+    allowed: true,
+    canonicalCode: targetResolved?.code || String(targetBranchRaw || 'R01').toUpperCase(),
+    branchId: targetResolved?.id || String(targetBranchRaw || 'term_makassar'),
+  };
+}
+
+/**
+ * Row-Level Security (ABAC) for Department-scoped WRITE endpoints:
+ * Verify that `pic_dept_regional` only writes to their assigned `department_id` when a department is specified.
+ */
+export function validateDepartmentWriteAccess(
+  session: JwtSessionPayload,
+  targetDepartmentId?: string | null
+): { allowed: boolean; effectiveDepartmentId: string | null; error?: string } {
+  if (session.role === 'pic_dept_regional' && session.department_id) {
+    if (targetDepartmentId && targetDepartmentId !== session.department_id) {
+      return {
+        allowed: false,
+        effectiveDepartmentId: session.department_id,
+        error: `Akses ditolak: Sebagai PIC Departemen (${session.department_id}), Anda tidak diizinkan mengirim data untuk departemen (${targetDepartmentId}).`,
+      };
+    }
+    return {
+      allowed: true,
+      effectiveDepartmentId: session.department_id,
+    };
+  }
+
+  return {
+    allowed: true,
+    effectiveDepartmentId: targetDepartmentId || session.department_id || null,
+  };
+}
+

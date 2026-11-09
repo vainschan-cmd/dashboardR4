@@ -77,22 +77,30 @@ export default function PortSightKinerja({
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    const abortController = new AbortController();
     async function loadData() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/modules-data?period=${encodeURIComponent(selectedPeriod)}`);
+        const res = await fetch(`/api/modules-data?period=${encodeURIComponent(selectedPeriod)}`, {
+          signal: abortController.signal,
+        });
         const json = await res.json();
         if (json.success && json.kinerja) {
           setData(json.kinerja);
         }
-      } catch (e) {
-        console.error(e);
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') {
+          console.error(e);
+        }
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
     loadData();
-  }, [selectedPeriod]);
+    return () => abortController.abort();
+  }, [selectedPeriod, selectedTerminal]);
 
   const isNone = selectedTerminal === 'NONE';
   const selectedCodes = useMemo(() => isNone ? [] : parseSelectedBranches(selectedTerminal), [isNone, selectedTerminal]);

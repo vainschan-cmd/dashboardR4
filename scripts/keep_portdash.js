@@ -1,26 +1,40 @@
-const localtunnel = require('/Users/chandra/.npm/_npx/75ac80b86e83d4a2/node_modules/localtunnel');
+let localtunnel;
+try {
+  localtunnel = require('localtunnel');
+} catch {
+  console.error('[Tunnel Watcher] Paket "localtunnel" belum terpasang. Jalankan "npm install -D localtunnel" terlebih dahulu.');
+  process.exit(1);
+}
+
+const PORT = Number(process.env.PORT || 3000);
+const SUBDOMAIN = process.env.TUNNEL_SUBDOMAIN || 'portdash-r4';
+const EXPECTED_URL = `https://${SUBDOMAIN}.loca.lt`;
 
 // Keep event loop active permanently so process never exits
 setInterval(() => {}, 10000);
 
 async function keepPortdashAlive() {
-  console.log('[Tunnel Watcher] Memulai watcher khusus https://portdash-r4.loca.lt...');
+  console.log(`[Tunnel Watcher] Memulai pemantau tunnel untuk ${EXPECTED_URL}...`);
 
   while (true) {
     let tunnelInstance = null;
     try {
-      tunnelInstance = await localtunnel({ port: 3000, subdomain: 'portdash-r4' });
+      tunnelInstance = await localtunnel({ port: PORT, subdomain: SUBDOMAIN });
 
-      if (tunnelInstance.url === 'https://portdash-r4.loca.lt') {
-        console.log(`[Tunnel Watcher] BERHASIL! Terhubung ke ${tunnelInstance.url}`);
+      if (tunnelInstance.url === EXPECTED_URL) {
+        console.log(`[Tunnel Watcher] Terhubung ke ${tunnelInstance.url}`);
 
         await new Promise((resolve) => {
           let resolved = false;
           const finish = (reason) => {
             if (!resolved) {
               resolved = true;
-              console.log(`[Tunnel Watcher] Trigger reconnect (${reason})`);
-              try { tunnelInstance.close(); } catch (e) {}
+              console.log(`[Tunnel Watcher] Memicu sambungan ulang (${reason})`);
+              try {
+                tunnelInstance.close();
+              } catch (e) {
+                console.warn('[Tunnel Watcher] Gagal menutup instance tunnel:', e);
+              }
               resolve();
             }
           };
@@ -32,19 +46,27 @@ async function keepPortdashAlive() {
           }
         });
       } else {
-        console.log(`[Tunnel Watcher] Mendapat ${tunnelInstance.url} (bukan portdash-r4). Menunggu 3 detik...`);
-        try { tunnelInstance.close(); } catch (e) {}
+        console.log(`[Tunnel Watcher] Menerima ${tunnelInstance.url} (bukan ${SUBDOMAIN}). Menunggu 3 detik...`);
+        try {
+          tunnelInstance.close();
+        } catch (e) {
+          console.warn('[Tunnel Watcher] Gagal menutup instance tunnel sementara:', e);
+        }
         await new Promise((r) => setTimeout(r, 3000));
       }
     } catch (err) {
-      console.log(`[Tunnel Watcher] Error koneksi: ${err.message}. Mencoba lagi dalam 3 detik...`);
-      try { if (tunnelInstance) tunnelInstance.close(); } catch (e) {}
+      console.log(`[Tunnel Watcher] Gangguan koneksi: ${err.message}. Mencoba kembali dalam 3 detik...`);
+      try {
+        if (tunnelInstance) tunnelInstance.close();
+      } catch (e) {
+        console.warn('[Tunnel Watcher] Gagal membersihkan koneksi gagal:', e);
+      }
       await new Promise((r) => setTimeout(r, 3000));
     }
   }
 }
 
 keepPortdashAlive().catch((err) => {
-  console.error('[Tunnel Watcher] Fatal error:', err);
+  console.error('[Tunnel Watcher] Kesalahan fatal:', err);
   process.exit(1);
 });

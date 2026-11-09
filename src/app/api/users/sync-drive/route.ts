@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
+import { requireAuth } from '@/lib/rbac';
 import {
   exportUsersToSpreadsheet,
   importUsersFromSpreadsheet,
@@ -11,6 +12,9 @@ import {
 import fs from 'fs';
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  if (!auth.authorized) return auth.response;
+
   try {
     const contentType = req.headers.get('content-type') || '';
 
@@ -92,7 +96,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  if (!auth.authorized) return auth.response;
+
   try {
     const filePath = getMasterUserSpreadsheetPath();
     const exists = fs.existsSync(filePath);

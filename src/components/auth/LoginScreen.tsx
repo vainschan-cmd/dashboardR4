@@ -55,6 +55,10 @@ export default function LoginScreen({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const showDemoQuickLogin =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === 'true';
+
   const submitLogin = async (nippToUse?: string, passToUse?: string) => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -72,15 +76,16 @@ export default function LoginScreen({
     try {
       const res = await fetch('/api/users/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nipp: targetNipp, password: targetPass }),
       });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMsg(data.error || 'NIPP atau kata sandi tidak cocok.');
+        setErrorMsg(data.error || 'NIPP atau kata sandi yang Anda masukkan tidak sesuai.');
       } else {
-        setSuccessMsg(`Login berhasil! Selamat datang, ${data.user.name}.`);
+        setSuccessMsg(`Autentikasi berhasil. Selamat bertugas, ${data.user.name}.`);
         setTimeout(() => {
           onLoginSuccess(data.user);
         }, 500);
@@ -117,6 +122,7 @@ export default function LoginScreen({
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nipp: regNipp.trim(),
@@ -124,8 +130,8 @@ export default function LoginScreen({
           divisi: regDivisi.trim(),
           departemen: regDepartemen.trim(),
           password: regPassword,
-          role: regRole,
-          branch_id: regBranch || 'R99',
+          role: 'pic_cabang',
+          branch_id: regBranch || 'R01',
           email: `${regNipp.trim()}@pelindo.co.id`,
         }),
       });
@@ -135,7 +141,7 @@ export default function LoginScreen({
       if (!res.ok || !data.success) {
         setErrorMsg(data.error || 'Gagal mendaftarkan akun baru.');
       } else {
-        setSuccessMsg(`Pendaftaran berhasil! Akun NIPP ${regNipp} telah aktif. Masuk otomatis...`);
+        setSuccessMsg(`Pendaftaran akun NIPP ${regNipp} selesai. Mengalihkan ke beranda...`);
         setTimeout(() => {
           onLoginSuccess(data.user);
         }, 800);
@@ -160,21 +166,6 @@ export default function LoginScreen({
         overflowX: 'hidden',
       }}
     >
-      {/* Background Decorative Glow */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '-10%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '800px',
-          height: '400px',
-          background: 'radial-gradient(ellipse at center, rgba(30, 58, 138, 0.22) 0%, rgba(6, 182, 212, 0.08) 50%, transparent 70%)',
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
-
       {/* Top Bar / Brand Header */}
       <header
         style={{
@@ -523,7 +514,8 @@ export default function LoginScreen({
                   )}
                 </button>
 
-                {/* Quick Role & Branch Selector for Easy Evaluation */}
+                {/* Quick Role & Branch Selector for Development / Demo Evaluation */}
+                {showDemoQuickLogin && (
                 <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
                   <div
                     style={{
@@ -538,8 +530,8 @@ export default function LoginScreen({
                       justifyContent: 'space-between',
                     }}
                   >
-                    <span>⚡ Coba Login Cepat Sesuai Role & Cabang:</span>
-                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Password: password123</span>
+                    <span>Akses Evaluasi Role & Cabang (Mode Demo):</span>
+                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Sesi JWT Aktif</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
                     {/* PIC Cabang Makassar [R01] */}
@@ -559,13 +551,13 @@ export default function LoginScreen({
                         flexDirection: 'column',
                         gap: '2px',
                         borderRadius: 'var(--radius-sm)',
-                        borderColor: 'rgba(2, 132, 199, 0.4)',
-                        backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                        borderColor: 'var(--border-subtle)',
+                        backgroundColor: 'var(--bg-inner)',
                         cursor: 'pointer',
                       }}
                       title="Login sebagai PIC Cabang Makassar - Nuka (10004)"
                     >
-                      <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R01]</span>
+                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R01]</span>
                       <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Nuka (Makassar) • 10004</span>
                     </button>
 
@@ -586,13 +578,13 @@ export default function LoginScreen({
                         flexDirection: 'column',
                         gap: '2px',
                         borderRadius: 'var(--radius-sm)',
-                        borderColor: 'rgba(2, 132, 199, 0.4)',
-                        backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                        borderColor: 'var(--border-subtle)',
+                        backgroundColor: 'var(--bg-inner)',
                         cursor: 'pointer',
                       }}
                       title="Login sebagai PIC Cabang Balikpapan - Fachruddin (10008)"
                     >
-                      <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R04]</span>
+                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R04]</span>
                       <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Fachruddin (Balikpapan) • 10008</span>
                     </button>
 
@@ -613,13 +605,13 @@ export default function LoginScreen({
                         flexDirection: 'column',
                         gap: '2px',
                         borderRadius: 'var(--radius-sm)',
-                        borderColor: 'rgba(56, 189, 248, 0.4)',
-                        backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                        borderColor: 'var(--border-subtle)',
+                        backgroundColor: 'var(--bg-inner)',
                         cursor: 'pointer',
                       }}
                       title="Login sebagai Super Admin - M Mansyur (10001)"
                     >
-                      <span style={{ fontWeight: 800, color: '#38bdf8' }}>Super Admin</span>
+                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Super Admin</span>
                       <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M Mansyur • 10001</span>
                     </button>
 
@@ -640,13 +632,13 @@ export default function LoginScreen({
                         flexDirection: 'column',
                         gap: '2px',
                         borderRadius: 'var(--radius-sm)',
-                        borderColor: 'rgba(167, 139, 250, 0.4)',
-                        backgroundColor: 'rgba(167, 139, 250, 0.08)',
+                        borderColor: 'var(--border-subtle)',
+                        backgroundColor: 'var(--bg-inner)',
                         cursor: 'pointer',
                       }}
                       title="Login sebagai Admin Regional 4 - Asqar (10002)"
                     >
-                      <span style={{ fontWeight: 800, color: '#a78bfa' }}>Admin Regional 4</span>
+                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Admin Regional 4</span>
                       <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Asqar • 10002</span>
                     </button>
 
@@ -667,13 +659,13 @@ export default function LoginScreen({
                         flexDirection: 'column',
                         gap: '2px',
                         borderRadius: 'var(--radius-sm)',
-                        borderColor: 'rgba(16, 185, 129, 0.4)',
-                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        borderColor: 'var(--border-subtle)',
+                        backgroundColor: 'var(--bg-inner)',
                         cursor: 'pointer',
                       }}
                       title="Login sebagai PIC Dept Operasi Regional - Heiruddin (10003)"
                     >
-                      <span style={{ fontWeight: 800, color: '#10b981' }}>PIC Dept Operasi</span>
+                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Dept Operasi</span>
                       <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Heiruddin • 10003</span>
                     </button>
 
@@ -694,17 +686,18 @@ export default function LoginScreen({
                         flexDirection: 'column',
                         gap: '2px',
                         borderRadius: 'var(--radius-sm)',
-                        borderColor: 'rgba(245, 158, 11, 0.4)',
-                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        borderColor: 'var(--border-subtle)',
+                        backgroundColor: 'var(--bg-inner)',
                         cursor: 'pointer',
                       }}
                       title="Login sebagai BOD Regional 4 (Viewer) - Akhirman (10000)"
                     >
-                      <span style={{ fontWeight: 800, color: '#f59e0b' }}>BOD Regional 4</span>
+                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>BOD Regional 4</span>
                       <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Akhirman (BOD) • 10000</span>
                     </button>
                   </div>
                 </div>
+                )}
               </form>
             ) : (
               /* TAB 2: REGISTER */
@@ -766,14 +759,11 @@ export default function LoginScreen({
                     <label className="form-label">Hak Akses (Role) *</label>
                     <select
                       className="form-select"
-                      value={regRole}
-                      onChange={(e) => setRegRole(e.target.value as UserRole)}
+                      value="pic_cabang"
+                      disabled
+                      title="Pendaftaran mandiri dikunci pada role PIC Cabang. Penetapan role Admin dilakukan oleh Super Admin."
                     >
-                      <option value="super_admin">Super Admin (Hak Penuh & Pengaturan)</option>
-                      <option value="admin_regional">Admin Regional 4 (Analisis & Verifikasi)</option>
-                      <option value="pic_dept_regional">PIC Departemen Regional (Input & Pantau)</option>
                       <option value="pic_cabang">PIC Cabang Pelabuhan (Input Cabang)</option>
-                      <option value="viewer">BOD Pelindo Regional 4 (Viewer Eksekutif)</option>
                     </select>
                   </div>
 

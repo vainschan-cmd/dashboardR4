@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FileSpreadsheet,
-  CloudCheck
+  Clock
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
@@ -60,6 +60,10 @@ export default function AuthModal({
 
   if (!isOpen) return null;
 
+  const showDemoQuickLogin =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === 'true';
+
   const submitLogin = async (nippToUse?: string, passToUse?: string) => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -71,15 +75,16 @@ export default function AuthModal({
     try {
       const res = await fetch('/api/users/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nipp: targetNipp, password: targetPass }),
       });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMsg(data.error || 'Login gagal. Periksa kembali NIPP dan kata sandi Anda.');
+        setErrorMsg(data.error || 'NIPP atau kata sandi yang Anda masukkan tidak sesuai.');
       } else {
-        setSuccessMsg(`Berhasil login sebagai ${data.user.name}`);
+        setSuccessMsg(`Autentikasi berhasil sebagai ${data.user.name}`);
         setTimeout(() => {
           onLoginSuccess(data.user);
           onClose();
@@ -98,17 +103,17 @@ export default function AuthModal({
     setSuccessMsg(null);
 
     if (!regName.trim() || !regNipp.trim() || !regDivisi.trim() || !regDepartemen.trim()) {
-      setErrorMsg('Nama, NIPP, Divisi, dan Departemen wajib diisi!');
+      setErrorMsg('Nama, NIPP, Divisi, dan Departemen wajib diisi.');
       return;
     }
 
     if (!regPassword) {
-      setErrorMsg('Kata sandi wajib diisi!');
+      setErrorMsg('Kata sandi wajib diisi.');
       return;
     }
 
     if (regPassword !== regConfirmPassword) {
-      setErrorMsg('Konfirmasi kata sandi tidak cocok!');
+      setErrorMsg('Konfirmasi kata sandi tidak cocok.');
       return;
     }
 
@@ -117,6 +122,7 @@ export default function AuthModal({
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: regName.trim(),
@@ -135,7 +141,7 @@ export default function AuthModal({
       if (!res.ok || !data.success) {
         setErrorMsg(data.error || 'Pendaftaran gagal.');
       } else {
-        setSuccessMsg(`Pendaftaran berhasil! Akun ${data.user.name} (NIPP: ${data.user.nipp}) tersimpan ke Master Data & Spreadsheet My Drive.`);
+        setSuccessMsg(`Pendaftaran akun ${data.user.name} (NIPP: ${data.user.nipp}) telah disimpan ke Master Data.`);
         setTimeout(() => {
           onLoginSuccess(data.user);
           onClose();
@@ -179,7 +185,7 @@ export default function AuthModal({
               <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-muted)' }}>
                 {mode === 'login'
                   ? 'Gunakan NIPP sebagai username Anda'
-                  : 'Data tersinkron otomatis ke Spreadsheet My Drive (regdashr@gmail.com)'}
+                  : 'Data tersimpan di basis data SQLite dan diekspor ke master_user_pic.xlsx'}
               </p>
             </div>
           </div>
@@ -380,7 +386,7 @@ export default function AuthModal({
                   cursor: loading ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? <span className="spin">⏳</span> : <Lock size={15} />}
+                {loading ? <Clock size={15} strokeWidth={1.75} /> : <Lock size={15} strokeWidth={1.75} />}
                 <span>{loading ? 'Memverifikasi...' : 'Masuk ke Dashboard'}</span>
               </button>
 
@@ -409,7 +415,8 @@ export default function AuthModal({
                 </div>
               )}
 
-              {/* Quick Role & Branch Selector for Easy Switching */}
+              {/* Quick Role & Branch Selector for Demo / Dev Switching */}
+              {showDemoQuickLogin && (
               <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
                 <div
                   style={{
@@ -423,8 +430,8 @@ export default function AuthModal({
                     justifyContent: 'space-between',
                   }}
                 >
-                  <span>⚡ Ganti Cepat Akun / Role:</span>
-                  <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Password: password123</span>
+                  <span>Ganti Cepat Akun / Role (Mode Demo):</span>
+                  <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Sesi JWT Aktif</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                   {/* PIC Cabang Makassar [R01] */}
@@ -439,7 +446,7 @@ export default function AuthModal({
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
                     title="Login sebagai PIC Cabang Makassar - Nuka (10004)"
                   >
-                    <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R01]</span>
+                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R01]</span>
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Nuka (Makassar) • 10004</span>
                   </button>
 
@@ -455,7 +462,7 @@ export default function AuthModal({
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
                     title="Login sebagai PIC Cabang Balikpapan - Fachruddin (10008)"
                   >
-                    <span style={{ fontWeight: 800, color: 'var(--accent-cyan)' }}>PIC Cabang [R04]</span>
+                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R04]</span>
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Fachruddin (Balikpapan) • 10008</span>
                   </button>
 
@@ -471,7 +478,7 @@ export default function AuthModal({
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
                     title="Login sebagai Super Admin - M Mansyur (10001)"
                   >
-                    <span style={{ fontWeight: 800, color: '#38bdf8' }}>Super Admin</span>
+                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Super Admin</span>
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M Mansyur • 10001</span>
                   </button>
 
@@ -487,7 +494,7 @@ export default function AuthModal({
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
                     title="Login sebagai Admin Regional 4 - Asqar (10002)"
                   >
-                    <span style={{ fontWeight: 800, color: '#a78bfa' }}>Admin Regional 4</span>
+                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Admin Regional 4</span>
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Asqar • 10002</span>
                   </button>
 
@@ -503,7 +510,7 @@ export default function AuthModal({
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
                     title="Login sebagai PIC Dept Operasi Regional - Heiruddin (10003)"
                   >
-                    <span style={{ fontWeight: 800, color: '#10b981' }}>PIC Dept Operasi</span>
+                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Dept Operasi</span>
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Heiruddin • 10003</span>
                   </button>
 
@@ -519,11 +526,12 @@ export default function AuthModal({
                     style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
                     title="Login sebagai BOD Regional 4 (Viewer) - Akhirman (10000)"
                   >
-                    <span style={{ fontWeight: 800, color: '#f59e0b' }}>BOD Regional 4</span>
+                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>BOD Regional 4</span>
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Akhirman (BOD) • 10000</span>
                   </button>
                 </div>
               </div>
+              )}
             </form>
           ) : (
             /* TAB 2: FORM DAFTAR AKUN BARU */
@@ -542,9 +550,9 @@ export default function AuthModal({
                   color: 'var(--accent-blue)',
                 }}
               >
-                <FileSpreadsheet size={15} style={{ flexShrink: 0 }} />
+                <FileSpreadsheet size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
                 <span>
-                  Data otomatis tersimpan di database & spreadsheet My Drive <strong>regdashr@gmail.com</strong>
+                  Data akun disimpan di basis data SQLite dan diekspor ke berkas <strong>master_user_pic.xlsx</strong>
                 </span>
               </div>
 
@@ -697,8 +705,8 @@ export default function AuthModal({
                   cursor: loading ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? <span className="spin">⏳</span> : <UserPlus size={15} />}
-                <span>{loading ? 'Menyimpan ke My Drive...' : 'Daftar Akun Baru & Simpan ke My Drive'}</span>
+                {loading ? <Clock size={15} strokeWidth={1.75} /> : <UserPlus size={15} strokeWidth={1.75} />}
+                <span>{loading ? 'Menyimpan Data Akun...' : 'Daftar Akun Baru'}</span>
               </button>
 
               <div style={{ textAlign: 'center', marginTop: '4px' }}>

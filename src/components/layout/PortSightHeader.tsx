@@ -94,6 +94,7 @@ export default function PortSightHeader({
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isNavbarCollapsed, setIsNavbarCollapsed] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     try {
@@ -101,15 +102,33 @@ export default function PortSightHeader({
       if (saved === 'true') {
         setIsNavbarCollapsed(true);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[PortSightHeader] Failed to read navbar collapse state:', e);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!showLogoutConfirm) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowLogoutConfirm(false);
+      } else if (e.key === 'Enter' && onLogout) {
+        setShowLogoutConfirm(false);
+        onLogout();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showLogoutConfirm, onLogout]);
 
   const handleToggleNavbar = () => {
     setIsNavbarCollapsed((prev) => {
       const next = !prev;
       try {
         localStorage.setItem('portsight_navbar_collapsed', String(next));
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[PortSightHeader] Failed to persist navbar collapse state:', e);
+      }
       return next;
     });
   };
@@ -144,17 +163,10 @@ export default function PortSightHeader({
 
   const mainTabs = MAIN_NAVIGATION_TABS;
 
-  const isBod =
-    userRole === 'viewer' ||
-    currentUser?.role === 'viewer' ||
-    String(userRole).toLowerCase().includes('bod') ||
-    String(currentUser?.role).toLowerCase().includes('bod') ||
-    currentUser?.nipp === '10000' ||
-    currentUser?.username === '10000' ||
-    String(currentUser?.name).toLowerCase().includes('bod');
-
-  const isPicCabang = !isBod && (userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99'));
-  const canManageUsers = !isBod && (userRole === 'super_admin' || userRole === 'admin_regional');
+  const effectiveRole = currentUser?.role || userRole;
+  const isBod = effectiveRole === 'viewer';
+  const isPicCabang = effectiveRole === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99';
+  const canManageUsers = effectiveRole === 'super_admin' || effectiveRole === 'admin_regional';
   const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
   const currentBranchName = OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal)?.name;
   const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
@@ -244,24 +256,24 @@ export default function PortSightHeader({
 
   const adminTabs = isPicCabang
     ? [
-        { id: 'data_records', label: 'Data Record Kinerja Cabang', icon: Database },
-        { id: 'import_center', label: 'Import Data Cabang (.xlsx)', icon: FileSpreadsheet },
+        { id: 'data_records', label: 'Rekaman Data Kinerja Cabang', icon: Database },
+        { id: 'import_center', label: 'Impor Data Cabang (.xlsx)', icon: FileSpreadsheet },
         { id: 'verification', label: `Monitoring Status Pengesahan ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
       ]
     : canManageUsers
     ? [
-        { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
+        { id: 'data_records', label: 'Rekaman Data Kinerja', icon: Database },
         { id: 'master_data', label: 'Master Data & KPI', icon: Layers },
         { id: 'verification', label: `Verifikasi & Monitoring ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
-        { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
-        { id: 'templates', label: 'Template & Mapping', icon: Sliders },
-        { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
+        { id: 'import_center', label: 'Impor Spreadsheet', icon: FileSpreadsheet },
+        { id: 'templates', label: 'Pemetaan Template', icon: Sliders },
+        { id: 'audit_trail', label: 'Jejak Audit Sistem', icon: History },
       ]
     : [
-        { id: 'data_records', label: 'Data Record Kinerja (Raw)', icon: Database },
+        { id: 'data_records', label: 'Rekaman Data Kinerja', icon: Database },
         { id: 'verification', label: `Verifikasi & Monitoring ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: CheckCircle2 },
-        { id: 'import_center', label: 'Import Excel / Sheets', icon: FileSpreadsheet },
-        { id: 'audit_trail', label: 'Audit Trail & Log', icon: History },
+        { id: 'import_center', label: 'Impor Spreadsheet', icon: FileSpreadsheet },
+        { id: 'audit_trail', label: 'Jejak Audit Sistem', icon: History },
       ];
 
   const pageHeadings: Record<string, string> = {
@@ -272,11 +284,11 @@ export default function PortSightHeader({
       ? 'Data per Periode & Analisis Rentang Waktu (Multi-Modul)'
       : `Data per Periode - ${selectedBranchTitle}`,
     keuangan: isAll
-      ? 'Dashboard Finance (Keuangan) Pelindo R4'
-      : `Dashboard Finance - ${selectedBranchTitle}`,
+      ? 'Dashboard Kinerja Keuangan Pelindo R4'
+      : `Dashboard Kinerja Keuangan - ${selectedBranchTitle}`,
     opkom: isAll
-      ? 'Dashboard Opkom (Operasi & Komersial) Pelindo R4'
-      : `Dashboard Opkom - ${selectedBranchTitle}`,
+      ? 'Dashboard Operasi & Komersial Pelindo R4'
+      : `Dashboard Operasi & Komersial - ${selectedBranchTitle}`,
     kinerja: isAll
       ? 'Dashboard Kinerja Pelayanan Operasional Pelindo R4'
       : `Dashboard Kinerja - ${selectedBranchTitle}`,
@@ -290,13 +302,13 @@ export default function PortSightHeader({
       ? 'Dashboard Fasilitas & Infrastruktur Pelabuhan Regional 4'
       : `Dashboard Fasilitas - ${selectedBranchTitle}`,
     data_records: isAll
-      ? 'Data Record Kinerja Pelabuhan Regional 4'
-      : `Data Record Kinerja - ${selectedBranchTitle}`,
+      ? 'Rekaman Data Kinerja Pelabuhan Regional 4'
+      : `Rekaman Data Kinerja - ${selectedBranchTitle}`,
     master_data: 'Master Data Pelindo Regional 4',
     verification: 'Verifikasi & Pengesahan Data Kinerja',
-    import_center: 'Pusat Impor Spreadsheet & Google Sheets',
-    templates: 'Konfigurasi Template & Dynamic Mapping',
-    audit_trail: 'Audit Trail & Rekam Jejak Sistem',
+    import_center: 'Pusat Impor Spreadsheet',
+    templates: 'Konfigurasi Template & Pemetaan Kolom',
+    audit_trail: 'Jejak Audit & Riwayat Aktivitas Sistem',
   };
 
   const handleSelectTab = (tabId: string) => {
@@ -408,11 +420,7 @@ export default function PortSightHeader({
           {onLogout && (
             <button
               type="button"
-              onClick={() => {
-                if (confirm('Apakah Anda yakin ingin keluar dari akun?')) {
-                  onLogout();
-                }
-              }}
+              onClick={() => setShowLogoutConfirm(true)}
               className="btn-dark"
               style={{
                 padding: '4px 8px',
@@ -429,7 +437,7 @@ export default function PortSightHeader({
               }}
               title="Keluar dari Akun (Logout)"
             >
-              <LogOut size={12} color="#f87171" />
+              <LogOut size={12} strokeWidth={1.75} color="#f87171" />
               <span className="hidden-on-mobile">Keluar</span>
             </button>
           )}
@@ -1136,7 +1144,7 @@ export default function PortSightHeader({
               <option value="all">vs RKAP & 2025</option>
               <option value="rkap">vs Target RKAP 2026</option>
               <option value="yoy">vs Realisasi 2025 (YoY)</option>
-              <option value="modal">📊 Buka Matriks Komparasi...</option>
+              <option value="modal">Buka Matriks Komparasi...</option>
             </select>
             <button
               type="button"
@@ -1160,6 +1168,63 @@ export default function PortSightHeader({
           </div>
         </div>
       </div>
+
+      {/* In-App Logout Confirmation Modal (Accessible with Escape & Enter) */}
+      {showLogoutConfirm && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 100000 }}
+          onClick={() => setShowLogoutConfirm(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="header-logout-title"
+        >
+          <div
+            className="modal-content"
+            style={{ maxWidth: '380px', padding: '20px', borderRadius: 'var(--radius-md)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <LogOut size={18} strokeWidth={1.75} color="#ef4444" />
+              <h4 id="header-logout-title" style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
+                Konfirmasi Keluar Sesi
+              </h4>
+            </div>
+            <p style={{ margin: '0 0 18px 0', fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Apakah Anda yakin ingin mengakhiri sesi aktif dan keluar dari akun ini?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn-dark"
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{ padding: '7px 14px', fontSize: '12px', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Batal (Esc)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  if (onLogout) onLogout();
+                }}
+                style={{
+                  padding: '7px 14px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  borderRadius: '6px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Keluar (Enter)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

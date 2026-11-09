@@ -49,22 +49,28 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    const abortController = new AbortController();
     async function loadData() {
       try {
         setLoading(true);
-        const res = await fetch('/api/modules-data');
+        const res = await fetch('/api/modules-data', { signal: abortController.signal });
         const json = await res.json();
         if (json.success && json.finansial) {
           setData(json.finansial);
         }
-      } catch (e) {
-        console.error(e);
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') {
+          console.error(e);
+        }
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
     loadData();
-  }, []);
+    return () => abortController.abort();
+  }, [selectedTerminal]);
 
   const filteredData = data.filter(d => {
     if (!isBranchMatch(selectedTerminal, d.branchCode, d.branchName)) return false;

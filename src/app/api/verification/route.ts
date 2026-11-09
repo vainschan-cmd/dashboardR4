@@ -1,29 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
+import { getClientIp } from '@/lib/auth';
+import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
+import { verificationSchema, parseWithSchema } from '@/lib/validation';
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
     const month = searchParams.get('month') ? parseInt(searchParams.get('month')!, 10) : undefined;
     const year = searchParams.get('year') ? parseInt(searchParams.get('year')!, 10) : undefined;
+    const rawBranch = searchParams.get('branch_id') || undefined;
+    const branch_id = enforceBranchFilterForRead(auth.session, rawBranch);
 
-    // Fetch records needing attention
+    // Fetch records needing attention (scoped by branch for pic_cabang)
     const pendingRecords = dbQueries.getMonthlyRecords({
+      branch_id,
       month,
       year,
-      verification_status: 'pending_verification'
+      verification_status: 'pending_verification',
     });
 
     const revisionRecords = dbQueries.getMonthlyRecords({
+      branch_id,
       month,
       year,
-      verification_status: 'revision_needed'
+      verification_status: 'revision_needed',
     });
 
     // Generate completeness summary matrix for the selected period
-    const branches = dbQueries.getBranches();
+    const allBranches = dbQueries.getBranches();
+    const branches = branch_id
+      ? allBranches.filter(b => b.id === branch_id || b.code.toUpperCase() === branch_id.toUpperCase())
+      : allBranches;
     const departments = dbQueries.getDepartments();
-    const allRecords = dbQueries.getMonthlyRecords({ month, year });
+    const allRecords = dbQueries.getMonthlyRecords({ branch_id, month, year });
 
     const matrix = branches.map(b => {
       const deptStatuses = departments.map(d => {
@@ -35,7 +48,7 @@ export async function GET(req: NextRequest) {
             department_name: d.name,
             status: 'belum_upload' as const,
             pic: d.pic_name,
-            records_count: 0
+            records_count: 0,
           };
         }
         const hasRevision = matching.some(r => r.verification_status === 'revision_needed');
@@ -43,11 +56,15 @@ export async function GET(req: NextRequest) {
         const hasDraft = matching.some(r => r.verification_status === 'draft');
         const allVerified = matching.every(r => r.verification_status === 'verified');
 
-        const status = hasRevision ? 'revision_needed'
-          : hasPending ? 'pending_verification'
-          : hasDraft ? 'draft'
-          : allVerified ? 'verified'
-          : 'pending_verification';
+        const status = hasRevision
+          ? 'revision_needed'
+          : hasPending
+            ? 'pending_verification'
+            : hasDraft
+              ? 'draft'
+              : allVerified
+                ? 'verified'
+                : 'pending_verification';
 
         return {
           department_id: d.id,
@@ -56,7 +73,7 @@ export async function GET(req: NextRequest) {
           status,
           pic: d.pic_name,
           records_count: matching.length,
-          last_updated: matching[0]?.uploaded_at
+          last_updated: matching[0]?.uploaded_at,
         };
       });
 
@@ -65,7 +82,7 @@ export async function GET(req: NextRequest) {
         branch_code: b.code,
         branch_name: b.name,
         region: b.region,
-        departments: deptStatuses
+        departments: deptStatuses,
       };
     });
 
@@ -75,7 +92,7 @@ export async function GET(req: NextRequest) {
       revisionCount: revisionRecords.length,
       pendingRecords,
       revisionRecords,
-      matrix
+      matrix,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -86,45 +103,67 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Server-side RBAC: Only super_admin or admin_regional can verify or request revisions
+  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  if (!auth.authorized) return auth.response;
+
   try {
     const body = await req.json();
-    const { recordIds, status, verifierUsername, userRole, revisionNotes } = body;
+    const parsed = parseWithSchema(verificationSchema, body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, message: parsed.error, error: parsed.error },
+        { status: 400 }
+      );
+    }
+    const { recordIds, status, revisionNotes } = parsed.data;
 
-    if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
-      return NextResponse.json({ success: false, message: 'ID record tidak valid' }, { status: 400 });
+    // Four-Eyes Principle: Prevent self-approval of records uploaded by the same user
+    const targetRecords = dbQueries.getMonthlyRecordsByIds(recordIds);
+    const sessionNipp = auth.session.nipp.toLowerCase();
+    const sessionName = auth.session.name.toLowerCase();
+
+    const selfUploaded = targetRecords.find(r => {
+      const uploader = String(r.uploaded_by || '').trim().toLowerCase();
+      return uploader && (uploader === sessionNipp || uploader === sessionName);
+    });
+
+    if (selfUploaded) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Prinsip Four-Eyes: Anda tidak dapat memverifikasi data (${selfUploaded.id}) yang Anda unggah sendiri.`,
+          error: `Prinsip Four-Eyes: Anda tidak dapat memverifikasi data (${selfUploaded.id}) yang Anda unggah sendiri.`,
+        },
+        { status: 403 }
+      );
     }
 
-    if (!['verified', 'revision_needed'].includes(status)) {
-      return NextResponse.json({ success: false, message: 'Status verifikasi hanya dapat berupa "verified" atau "revision_needed".' }, { status: 400 });
-    }
-
-    // Role check: Only admin_regional or super_admin can verify or request revisions
-    if (userRole && !['admin_regional', 'super_admin'].includes(userRole)) {
-      return NextResponse.json({
-        success: false,
-        message: 'Akses ditolak: Hanya Admin Regional atau Super Admin yang berhak memverifikasi atau meminta revisi data.'
-      }, { status: 403 });
-    }
-
-    dbQueries.updateRecordVerification(recordIds, status, verifierUsername || 'adminreg', revisionNotes);
+    dbQueries.updateRecordVerification(
+      recordIds,
+      status,
+      auth.session.nipp,
+      revisionNotes
+    );
 
     const action = status === 'verified' ? 'APPROVE' : 'REVISE';
     const statusLabel = status === 'verified' ? 'Terverifikasi (Disetujui Resmi)' : 'Perlu Revisi';
 
     dbQueries.createAuditLog({
-      user_id: verifierUsername || 'adminreg',
-      user_name: verifierUsername || 'Admin Regional',
-      user_role: userRole || 'admin_regional',
+      user_id: auth.session.sub,
+      user_name: auth.session.name,
+      user_role: auth.session.role,
       action,
       entity: 'MONTHLY_RECORD',
       entity_id: recordIds.join(', '),
-      details: `${statusLabel} untuk ${recordIds.length} data kinerja.${revisionNotes ? ` Catatan revisi: "${revisionNotes}"` : ''}`
+      details: `${statusLabel} untuk ${recordIds.length} data kinerja oleh ${auth.session.name} (NIPP: ${auth.session.nipp}).${revisionNotes ? ` Catatan revisi: "${revisionNotes}"` : ''}`,
+      ip_address: getClientIp(req),
     });
 
     return NextResponse.json({
       success: true,
-      message: `Status berhasil diperbarui menjadi ${statusLabel}.`,
-      updatedCount: recordIds.length
+      message: `Status verifikasi berhasil diperbarui menjadi ${statusLabel}.`,
+      updatedCount: recordIds.length,
     });
   } catch (error: any) {
     return NextResponse.json(

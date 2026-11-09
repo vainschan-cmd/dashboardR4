@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
-import {
+import type {
   Branch,
   Department,
   EquipmentItem,
@@ -18,11 +18,75 @@ import {
   IntegrationCredentials,
 } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
+import { hashPassword, verifyPassword, isPasswordHashed } from './auth';
+
+export const SECRET_MASK = '••••••••';
 
 // Ensure data folder exists
 const dataDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
+}
+
+/**
+ * Strictly confine file paths inside the workspace `./data` directory to prevent Path Traversal / Arbitrary File Creation.
+ */
+export function sanitizeSafeDataFilePath(
+  rawPath: string | undefined | null,
+  defaultFileName: string = 'ed_dashboard.db',
+  allowedExtensions: string[] = ['.db', '.sqlite', '.sqlite3']
+): { safeRelativePath: string; resolvedAbsolutePath: string } {
+  const cleaned = String(rawPath || '').trim();
+  let baseName = cleaned ? path.basename(cleaned) : defaultFileName;
+  // Strip any null bytes or unsafe characters
+  baseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '');
+  if (!baseName || baseName === '.' || baseName === '..') {
+    baseName = defaultFileName;
+  }
+  const ext = path.extname(baseName).toLowerCase();
+  if (allowedExtensions.length > 0 && !allowedExtensions.includes(ext)) {
+    baseName = `${baseName}${allowedExtensions[0]}`;
+  }
+  const safeRelativePath = path.posix.join('data', baseName);
+  const resolvedAbsolutePath = path.join(process.cwd(), 'data', baseName);
+  return { safeRelativePath, resolvedAbsolutePath };
+}
+
+/**
+ * Strip password hash/plaintext from a User record before returning to callers or API responses.
+ */
+export function toSafeUser(raw: any): User {
+  if (!raw) return raw;
+  const { password: _removedPassword, ...rest } = raw;
+  return {
+    ...rest,
+    nipp: raw.nipp || raw.username,
+    username: raw.username || raw.nipp,
+    active: Boolean(raw.active),
+  };
+}
+
+/**
+ * Mask sensitive database credentials before returning in API responses.
+ */
+export function toSafeDbConfig(cfg?: DatabaseConfig): DatabaseConfig {
+  const source = cfg || getDbConfig();
+  return {
+    ...source,
+    pg_password: source.pg_password ? SECRET_MASK : '',
+  };
+}
+
+/**
+ * Mask sensitive external API keys and tokens before returning in API responses.
+ */
+export function toSafeIntegrationCredentials(creds?: IntegrationCredentials): IntegrationCredentials {
+  const source = creds || dbQueries.getIntegrationCredentials();
+  return {
+    ...source,
+    google_api_key: source.google_api_key ? SECRET_MASK : '',
+    api_gateway_token: source.api_gateway_token ? SECRET_MASK : '',
+  };
 }
 
 // Database location & configuration management
@@ -31,7 +95,12 @@ export function getDbConfig(): DatabaseConfig {
   if (fs.existsSync(configPath)) {
     try {
       const content = fs.readFileSync(configPath, 'utf8');
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      const { safeRelativePath } = sanitizeSafeDataFilePath(parsed.sqlite_path, 'ed_dashboard.db');
+      return {
+        ...parsed,
+        sqlite_path: safeRelativePath,
+      };
     } catch (e) {
       console.error('Error reading db_config.json:', e);
     }
@@ -51,18 +120,61 @@ export function getDbConfig(): DatabaseConfig {
 
 export function getDbPath(): string {
   if (process.env.DATABASE_PATH) {
-    return process.env.DATABASE_PATH;
+    return sanitizeSafeDataFilePath(process.env.DATABASE_PATH, 'ed_dashboard.db').resolvedAbsolutePath;
   }
   const cfg = getDbConfig();
   if (cfg.sqlite_path) {
-    return path.isAbsolute(cfg.sqlite_path)
-      ? cfg.sqlite_path
-      : path.join(process.cwd(), cfg.sqlite_path);
+    return sanitizeSafeDataFilePath(cfg.sqlite_path, 'ed_dashboard.db').resolvedAbsolutePath;
   }
   return path.join(process.cwd(), 'data', 'ed_dashboard.db');
 }
 
 let dbInstance: DatabaseSync | null = null;
+let transactionDepth = 0;
+
+export function withTransaction<T>(db: DatabaseSync, fn: () => T): T {
+  const isNested = transactionDepth > 0;
+  const savepointName = `sp_${transactionDepth}`;
+  transactionDepth++;
+  try {
+    if (isNested) {
+      db.exec(`SAVEPOINT ${savepointName}`);
+    } else {
+      db.exec('BEGIN IMMEDIATE');
+    }
+    const result = fn();
+    if (isNested) {
+      db.exec(`RELEASE SAVEPOINT ${savepointName}`);
+    } else {
+      db.exec('COMMIT');
+    }
+    return result;
+  } catch (err) {
+    try {
+      if (isNested) {
+        db.exec(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+      } else {
+        db.exec('ROLLBACK');
+      }
+    } catch (rollbackErr) {
+      console.error('[DB] Gagal melakukan rollback transaksi:', rollbackErr);
+    }
+    throw err;
+  } finally {
+    transactionDepth = Math.max(0, transactionDepth - 1);
+  }
+}
+
+function execSafeMigration(db: DatabaseSync, sql: string) {
+  try {
+    db.exec(sql);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes('duplicate column name')) {
+      console.warn('[DB Migration] Peringatan eksekusi migrasi:', msg);
+    }
+  }
+}
 
 export function getDb(): DatabaseSync {
   if (!dbInstance) {
@@ -72,6 +184,9 @@ export function getDb(): DatabaseSync {
       fs.mkdirSync(dir, { recursive: true });
     }
     dbInstance = new DatabaseSync(activePath);
+    dbInstance.exec('PRAGMA journal_mode = WAL;');
+    dbInstance.exec('PRAGMA synchronous = NORMAL;');
+    dbInstance.exec('PRAGMA foreign_keys = ON;');
     initSchema(dbInstance);
   }
   return dbInstance;
@@ -79,9 +194,19 @@ export function getDb(): DatabaseSync {
 
 export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): DatabaseConfig {
   const current = getDbConfig();
+  const safePath = cfg.sqlite_path
+    ? sanitizeSafeDataFilePath(cfg.sqlite_path, 'ed_dashboard.db').safeRelativePath
+    : current.sqlite_path;
+  const resolvedPgPassword =
+    cfg.pg_password === SECRET_MASK || cfg.pg_password === undefined
+      ? current.pg_password || ''
+      : cfg.pg_password;
+
   const updated: DatabaseConfig = {
     ...current,
     ...cfg,
+    sqlite_path: safePath,
+    pg_password: resolvedPgPassword,
     updated_at: new Date().toISOString(),
     updated_by: updatedBy || 'Administrator',
   };
@@ -94,13 +219,17 @@ export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): 
       INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
       VALUES ('cfg_database', 'database_config', ?, ?)
     `).run(JSON.stringify(updated), updated.updated_at!);
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[DB] Gagal menyimpan konfigurasi database ke integration_settings:', e);
+  }
 
-  if (cfg.sqlite_path && cfg.sqlite_path !== current.sqlite_path) {
+  if (safePath && safePath !== current.sqlite_path) {
     if (dbInstance) {
       try {
         dbInstance.close();
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[DB] Gagal menutup koneksi SQLite lama:', e);
+      }
       dbInstance = null;
     }
   }
@@ -248,6 +377,149 @@ function initSchema(db: DatabaseSync) {
       updated_at TEXT NOT NULL
     );
 
+    -- Structured SQLite Module Tables (Single Source of Truth for all 6 modules)
+    CREATE TABLE IF NOT EXISTS module_finansial (
+      id TEXT PRIMARY KEY,
+      monthly_record_id TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      branch_code TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      rekening TEXT NOT NULL,
+      cabang_rp REAL DEFAULT 0,
+      pmt_rp REAL DEFAULT 0,
+      ptp_rp REAL DEFAULT 0,
+      psl_rp REAL DEFAULT 0,
+      pjm_rp REAL DEFAULT 0,
+      eliminasi_rp REAL DEFAULT 0,
+      konsolidasi_rp REAL DEFAULT 0,
+      yoy REAL DEFAULT 0,
+      rka REAL DEFAULT 0,
+      source_type TEXT DEFAULT 'google_sheets',
+      verification_status TEXT DEFAULT 'verified',
+      uploaded_by TEXT,
+      uploaded_at TEXT,
+      verified_by TEXT,
+      verified_at TEXT,
+      revision_notes TEXT,
+      verified_snapshot_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS module_opkom (
+      id TEXT PRIMARY KEY,
+      monthly_record_id TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      branch_code TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      layanan TEXT NOT NULL,
+      satuan TEXT NOT NULL,
+      jumlah_rp REAL DEFAULT 0,
+      yoy REAL DEFAULT 0,
+      rka REAL DEFAULT 0,
+      source_type TEXT DEFAULT 'google_sheets',
+      verification_status TEXT DEFAULT 'verified',
+      uploaded_by TEXT,
+      uploaded_at TEXT,
+      verified_by TEXT,
+      verified_at TEXT,
+      revision_notes TEXT,
+      verified_snapshot_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS module_kinerja (
+      id TEXT PRIMARY KEY,
+      monthly_record_id TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      branch_code TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      kd_kine TEXT NOT NULL,
+      nm_kine TEXT NOT NULL,
+      satuan TEXT NOT NULL,
+      nilai REAL DEFAULT 0,
+      source_type TEXT DEFAULT 'google_sheets',
+      verification_status TEXT DEFAULT 'verified',
+      uploaded_by TEXT,
+      uploaded_at TEXT,
+      verified_by TEXT,
+      verified_at TEXT,
+      revision_notes TEXT,
+      verified_snapshot_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS module_utilisasi (
+      id TEXT PRIMARY KEY,
+      monthly_record_id TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      branch_code TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      kd_jenderm TEXT,
+      dermaga TEXT NOT NULL,
+      bor REAL DEFAULT 0,
+      yor REAL DEFAULT 0,
+      sor REAL DEFAULT 0,
+      source_type TEXT DEFAULT 'google_sheets',
+      verification_status TEXT DEFAULT 'verified',
+      uploaded_by TEXT,
+      uploaded_at TEXT,
+      verified_by TEXT,
+      verified_at TEXT,
+      revision_notes TEXT,
+      verified_snapshot_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS module_peralatan (
+      id TEXT PRIMARY KEY,
+      monthly_record_id TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      branch_code TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      kd_alat TEXT NOT NULL,
+      nm_alat TEXT NOT NULL,
+      singkatan TEXT,
+      jns_alat TEXT,
+      jumlah REAL DEFAULT 0,
+      availability REAL DEFAULT 0,
+      utilisasi REAL DEFAULT 0,
+      source_type TEXT DEFAULT 'google_sheets',
+      verification_status TEXT DEFAULT 'verified',
+      uploaded_by TEXT,
+      uploaded_at TEXT,
+      verified_by TEXT,
+      verified_at TEXT,
+      revision_notes TEXT,
+      verified_snapshot_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS module_fasilitas (
+      id TEXT PRIMARY KEY,
+      monthly_record_id TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      branch_code TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      nama_fasilitas TEXT NOT NULL,
+      jenis_fasilitas TEXT NOT NULL,
+      satuan TEXT,
+      panjang_m REAL DEFAULT 0,
+      lebar_m REAL DEFAULT 0,
+      mlws REAL DEFAULT 0,
+      luas_sqm REAL DEFAULT 0,
+      kapasitas TEXT,
+      keterangan TEXT,
+      source_type TEXT DEFAULT 'google_sheets',
+      verification_status TEXT DEFAULT 'verified',
+      uploaded_by TEXT,
+      uploaded_at TEXT,
+      verified_by TEXT,
+      verified_at TEXT,
+      revision_notes TEXT,
+      verified_snapshot_json TEXT
+    );
+
     -- Query optimization indexes for fast filtering and analytics
     CREATE INDEX IF NOT EXISTS idx_records_branch_period ON monthly_records (branch_id, year, month);
     CREATE INDEX IF NOT EXISTS idx_records_period ON monthly_records (year, month);
@@ -259,33 +531,50 @@ function initSchema(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_import_batches_period ON import_batches (period_year, period_month);
     CREATE INDEX IF NOT EXISTS idx_kpi_indicators_dept ON kpi_indicators (department_id);
     CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
+    CREATE INDEX IF NOT EXISTS idx_mod_fin_branch_period ON module_finansial (branch_code, year, month);
+    CREATE INDEX IF NOT EXISTS idx_mod_fin_status ON module_finansial (verification_status);
+    CREATE INDEX IF NOT EXISTS idx_mod_fin_rec_id ON module_finansial (monthly_record_id);
+    CREATE INDEX IF NOT EXISTS idx_mod_opkom_branch_period ON module_opkom (branch_code, year, month);
+    CREATE INDEX IF NOT EXISTS idx_mod_opkom_status ON module_opkom (verification_status);
+    CREATE INDEX IF NOT EXISTS idx_mod_opkom_rec_id ON module_opkom (monthly_record_id);
+    CREATE INDEX IF NOT EXISTS idx_mod_kinerja_branch_period ON module_kinerja (branch_code, year, month);
+    CREATE INDEX IF NOT EXISTS idx_mod_kinerja_status ON module_kinerja (verification_status);
+    CREATE INDEX IF NOT EXISTS idx_mod_kinerja_rec_id ON module_kinerja (monthly_record_id);
+    CREATE INDEX IF NOT EXISTS idx_mod_util_branch_period ON module_utilisasi (branch_code, year, month);
+    CREATE INDEX IF NOT EXISTS idx_mod_util_status ON module_utilisasi (verification_status);
+    CREATE INDEX IF NOT EXISTS idx_mod_util_rec_id ON module_utilisasi (monthly_record_id);
+    CREATE INDEX IF NOT EXISTS idx_mod_alat_branch_period ON module_peralatan (branch_code, year, month);
+    CREATE INDEX IF NOT EXISTS idx_mod_alat_status ON module_peralatan (verification_status);
+    CREATE INDEX IF NOT EXISTS idx_mod_alat_rec_id ON module_peralatan (monthly_record_id);
+    CREATE INDEX IF NOT EXISTS idx_mod_fas_branch_period ON module_fasilitas (branch_code, year, month);
+    CREATE INDEX IF NOT EXISTS idx_mod_fas_status ON module_fasilitas (verification_status);
   `);
 
-  try {
-    db.exec("ALTER TABLE branches ADD COLUMN order_seq INTEGER DEFAULT 99;");
-  } catch {}
-  try {
-    db.exec("UPDATE monthly_records SET branch_id = 'term_makassar' WHERE branch_id = 'term_new_makassar';");
-    db.exec("DELETE FROM branches WHERE id = 'term_new_makassar' OR code = 'TRM-NMK';");
-  } catch {}
+  execSafeMigration(db, "ALTER TABLE branches ADD COLUMN order_seq INTEGER DEFAULT 99;");
+  execSafeMigration(db, "UPDATE monthly_records SET branch_id = 'term_makassar' WHERE branch_id = 'term_new_makassar';");
+  execSafeMigration(db, "DELETE FROM branches WHERE id = 'term_new_makassar' OR code = 'TRM-NMK';");
+
   try {
     const updateOrderStmt = db.prepare("UPDATE branches SET order_seq = ? WHERE code = ?");
     for (const b of OFFICIAL_BRANCHES) {
       updateOrderStmt.run(b.order, b.code);
     }
-  } catch {}
+  } catch (e) {
+    console.warn('[DB Migration] Gagal memperbarui urutan cabang:', e);
+  }
 
   // User table migrations
-  try { db.exec("ALTER TABLE users ADD COLUMN nipp TEXT;"); } catch {}
-  try { db.exec("ALTER TABLE users ADD COLUMN divisi TEXT;"); } catch {}
-  try { db.exec("ALTER TABLE users ADD COLUMN departemen TEXT;"); } catch {}
-  try { db.exec("ALTER TABLE users ADD COLUMN password TEXT;"); } catch {}
-  try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT;"); } catch {}
-  try {
-    db.exec("DELETE FROM users WHERE id IN ('usr_pic_nmk', 'usr_viewer', 'usr_super', 'usr_pic_ops', 'usr_adminreg') OR username IN ('pic_nmk', 'bod_regional', 'superadmin', 'pic_ops', 'adminreg');");
-  } catch {}
+  execSafeMigration(db, "ALTER TABLE users ADD COLUMN nipp TEXT;");
+  execSafeMigration(db, "ALTER TABLE users ADD COLUMN divisi TEXT;");
+  execSafeMigration(db, "ALTER TABLE users ADD COLUMN departemen TEXT;");
+  execSafeMigration(db, "ALTER TABLE users ADD COLUMN password TEXT;");
+  execSafeMigration(db, "ALTER TABLE users ADD COLUMN created_at TEXT;");
+  execSafeMigration(
+    db,
+    "DELETE FROM users WHERE id IN ('usr_pic_nmk', 'usr_viewer', 'usr_super', 'usr_pic_ops', 'usr_adminreg') OR username IN ('pic_nmk', 'bod_regional', 'superadmin', 'pic_ops', 'adminreg');"
+  );
 
-  // Ensure default official PICs exist with NIPP
+  // Ensure default official PICs exist with NIPP and migrate any plaintext passwords to scrypt hashes
   try {
     const existing = db.prepare("SELECT COUNT(*) as count FROM users WHERE nipp IS NOT NULL AND nipp != ''").get() as { count: number };
     if (!existing || existing.count === 0) {
@@ -304,7 +593,7 @@ function initSchema(db: DatabaseSync) {
           u.email || `${u.nipp}@pelindo.co.id`,
           u.divisi,
           u.departemen,
-          u.password || 'password123',
+          hashPassword(u.password || 'password123'),
           u.role,
           u.branch_id || null,
           u.department_id || null,
@@ -312,8 +601,18 @@ function initSchema(db: DatabaseSync) {
           u.created_at || new Date().toISOString()
         );
       }
-      const allUsers = db.prepare("SELECT * FROM users ORDER BY nipp ASC").all() as any[];
+      const allUsers = (db.prepare("SELECT * FROM users ORDER BY nipp ASC").all() as any[]).map(toSafeUser);
       exportUsersToSpreadsheet(allUsers);
+    } else {
+      // Automatically migrate any legacy unhashed passwords in the database to scrypt hashes
+      const userRows = db.prepare("SELECT id, password FROM users").all() as Array<{ id: string; password: string | null }>;
+      const updatePassStmt = db.prepare("UPDATE users SET password = ? WHERE id = ?");
+      for (const row of userRows) {
+        const rawPass = row.password || 'password123';
+        if (!isPasswordHashed(rawPass)) {
+          updatePassStmt.run(hashPassword(rawPass), row.id);
+        }
+      }
     }
   } catch (e) {
     console.error('Auto-seed users error:', e);
@@ -366,29 +665,25 @@ export const dbQueries = {
     }));
   },
 
-  // Users / PIC
+  // Users / PIC (Always sanitized via toSafeUser so password hash is never exposed)
   getUsers: (): User[] => {
     const rows = getDb().prepare('SELECT * FROM users ORDER BY nipp ASC, name ASC').all() as any[];
-    return rows.map(r => ({
-      ...r,
-      nipp: r.nipp || r.username,
-      active: Boolean(r.active)
-    }));
+    return rows.map(toSafeUser);
   },
   getUserByNipp: (nipp: string): User | null => {
     const r = getDb().prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(nipp, nipp) as any;
     if (!r) return null;
-    return { ...r, nipp: r.nipp || r.username, active: Boolean(r.active) };
+    return toSafeUser(r);
   },
   getUserByUsername: (username: string): User | null => {
     const r = getDb().prepare('SELECT * FROM users WHERE username = ? OR nipp = ?').get(username, username) as any;
     if (!r) return null;
-    return { ...r, nipp: r.nipp || r.username, active: Boolean(r.active) };
+    return toSafeUser(r);
   },
   getUserById: (id: string): User | null => {
     const r = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
     if (!r) return null;
-    return { ...r, nipp: r.nipp || r.username, active: Boolean(r.active) };
+    return toSafeUser(r);
   },
   createUser: (data: {
     nipp: string;
@@ -406,7 +701,7 @@ export const dbQueries = {
     const id = `usr_${cleanNipp}_${Date.now()}`;
     const role: UserRole = data.role || 'pic_cabang';
     const email = data.email || `${cleanNipp}@pelindo.co.id`;
-    const password = data.password || 'password123';
+    const hashedPassword = hashPassword(data.password || 'password123');
     const createdAt = new Date().toISOString();
 
     const stmt = db.prepare(`
@@ -421,7 +716,7 @@ export const dbQueries = {
       email,
       data.divisi.trim(),
       data.departemen.trim(),
-      password,
+      hashedPassword,
       role,
       data.branch_id || null,
       data.department_id || null,
@@ -467,7 +762,12 @@ export const dbQueries = {
     const department_id = data.department_id !== undefined ? data.department_id : existing.department_id;
     const email = data.email !== undefined ? data.email : (existing.email || `${cleanNipp}@pelindo.co.id`);
     const active = data.active !== undefined ? (data.active ? 1 : 0) : existing.active;
-    const password = (data.password && data.password.trim().length > 0) ? data.password.trim() : existing.password;
+    const password =
+      data.password && data.password.trim().length > 0
+        ? hashPassword(data.password.trim())
+        : isPasswordHashed(existing.password)
+          ? existing.password
+          : hashPassword(existing.password || 'password123');
 
     db.prepare(`
       UPDATE users 
@@ -478,7 +778,9 @@ export const dbQueries = {
     try {
       const { exportUsersToSpreadsheet } = require('./userPicSync');
       exportUsersToSpreadsheet(dbQueries.getUsers());
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[DB] Gagal mengekspor daftar pengguna ke spreadsheet pada updateUser:', e);
+    }
 
     return dbQueries.getUserById(id);
   },
@@ -488,18 +790,34 @@ export const dbQueries = {
     try {
       const { exportUsersToSpreadsheet } = require('./userPicSync');
       exportUsersToSpreadsheet(dbQueries.getUsers());
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[DB] Gagal mengekspor daftar pengguna ke spreadsheet pada deleteUser:', e);
+    }
     return true;
   },
   authenticateUser: (nipp: string, password: string): User | null => {
-    const cleanNipp = String(nipp).trim();
-    const user = dbQueries.getUserByNipp(cleanNipp);
-    if (!user) return null;
-    // Check password: allow user's stored password or standard default 'password123' / '1'
-    if (user.password && user.password !== password && password !== 'password123' && password !== '1') {
+    const cleanNipp = String(nipp || '').trim();
+    if (!cleanNipp || !password) return null;
+
+    const db = getDb();
+    const rawRow = db.prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(cleanNipp, cleanNipp) as any;
+    if (!rawRow) return null;
+
+    const storedPassword = rawRow.password || '';
+    if (!verifyPassword(password, storedPassword)) {
       return null;
     }
-    return user;
+
+    // Upgrade to scrypt hash if row was somehow not yet hashed
+    if (!isPasswordHashed(storedPassword)) {
+      try {
+        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(password), rawRow.id);
+      } catch (e) {
+        console.warn('[DB] Gagal memutakhirkan hash kata sandi:', e);
+      }
+    }
+
+    return toSafeUser(rawRow);
   },
 
   // Indicators
@@ -581,8 +899,24 @@ export const dbQueries = {
     const params: any[] = [];
 
     if (filter.branch_id && filter.branch_id !== 'ALL') {
-      conditions.push('r.branch_id = ?');
-      params.push(filter.branch_id);
+      if (filter.branch_id === 'NONE') {
+        conditions.push('1 = 0');
+      } else {
+        const tokens = filter.branch_id
+          .split(',')
+          .map(t => t.trim())
+          .filter(Boolean);
+        if (tokens.length === 1) {
+          conditions.push('(r.branch_id = ? OR UPPER(b.code) = UPPER(?))');
+          params.push(tokens[0], tokens[0]);
+        } else if (tokens.length > 1) {
+          const placeholders = tokens.map(() => '(r.branch_id = ? OR UPPER(b.code) = UPPER(?))').join(' OR ');
+          conditions.push(`(${placeholders})`);
+          for (const tok of tokens) {
+            params.push(tok, tok);
+          }
+        }
+      }
     }
     if (filter.department_id && filter.department_id !== 'ALL') {
       conditions.push('r.department_id = ?');
@@ -624,62 +958,104 @@ export const dbQueries = {
     }));
   },
 
-  // Update record verification
+  getMonthlyRecordsByIds: (recordIds: string[]): MonthlyRecord[] => {
+    if (!recordIds || recordIds.length === 0) return [];
+    const db = getDb();
+    const placeholders = recordIds.map(() => '?').join(', ');
+    const rows = db
+      .prepare(`SELECT * FROM monthly_records WHERE id IN (${placeholders})`)
+      .all(...recordIds) as any[];
+    return rows.map(r => ({
+      ...r,
+      is_simulated: Boolean(r.is_simulated),
+    }));
+  },
+
+  // Update record verification across monthly_records and all module_* tables
   updateRecordVerification: (
     recordIds: string[],
     status: 'verified' | 'revision_needed',
     verifiedBy: string,
     revisionNotes?: string
   ) => {
+    if (!recordIds || recordIds.length === 0) return;
     const db = getDb();
     const now = new Date().toISOString();
-    const stmt = db.prepare(`
-      UPDATE monthly_records
-      SET verification_status = ?, verified_by = ?, verified_at = ?, revision_notes = ?
-      WHERE id = ?
-    `);
-    for (const id of recordIds) {
-      stmt.run(status, verifiedBy, now, revisionNotes || null, id);
-    }
+    withTransaction(db, () => {
+      const stmt = db.prepare(`
+        UPDATE monthly_records
+        SET verification_status = ?, verified_by = ?, verified_at = ?, revision_notes = ?
+        WHERE id = ?
+      `);
+      const moduleTables = [
+        'module_finansial',
+        'module_opkom',
+        'module_kinerja',
+        'module_utilisasi',
+        'module_peralatan',
+        'module_fasilitas',
+      ];
+      const moduleStmts = moduleTables.map(table =>
+        db.prepare(
+          status === 'verified'
+            ? `UPDATE ${table}
+               SET verification_status = ?, verified_by = ?, verified_at = ?, revision_notes = ?, verified_snapshot_json = NULL
+               WHERE id = ? OR monthly_record_id = ?`
+            : `UPDATE ${table}
+               SET verification_status = ?, verified_by = ?, verified_at = ?, revision_notes = ?
+               WHERE id = ? OR monthly_record_id = ?`
+        )
+      );
+
+      for (const id of recordIds) {
+        stmt.run(status, verifiedBy, now, revisionNotes || null, id);
+        for (const modStmt of moduleStmts) {
+          modStmt.run(status, verifiedBy, now, revisionNotes || null, id, id);
+        }
+      }
+    });
   },
 
   // Save imported records
   insertMonthlyRecords: (records: Omit<MonthlyRecord, 'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'>[]) => {
+    if (!records || records.length === 0) return;
     const db = getDb();
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO monthly_records (
-        id, branch_id, department_id, indicator_id, month, year,
-        target, realization, unit, achievement_pct, status_color, notes,
-        source_type, batch_id, verification_status, revision_notes,
-        uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    withTransaction(db, () => {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO monthly_records (
+          id, branch_id, department_id, indicator_id, month, year,
+          target, realization, unit, achievement_pct, status_color, notes,
+          source_type, batch_id, verification_status, revision_notes,
+          uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    for (const r of records) {
-      stmt.run(
-        r.id,
-        r.branch_id,
-        r.department_id,
-        r.indicator_id,
-        r.month,
-        r.year,
-        r.target,
-        r.realization,
-        r.unit,
-        r.achievement_pct,
-        r.status_color,
-        r.notes || '',
-        r.source_type,
-        r.batch_id || null,
-        r.verification_status,
-        r.revision_notes || null,
-        r.uploaded_by,
-        r.uploaded_at,
-        r.verified_by || null,
-        r.verified_at || null,
-        r.is_simulated ? 1 : 0
-      );
-    }
+      for (const r of records) {
+        stmt.run(
+          r.id,
+          r.branch_id,
+          r.department_id,
+          r.indicator_id,
+          r.month,
+          r.year,
+          r.target,
+          r.realization,
+          r.unit,
+          r.achievement_pct,
+          r.status_color,
+          r.notes || '',
+          r.source_type,
+          r.batch_id || null,
+          r.verification_status,
+          r.revision_notes || null,
+          r.uploaded_by,
+          r.uploaded_at,
+          r.verified_by || null,
+          r.verified_at || null,
+          r.is_simulated ? 1 : 0
+        );
+      }
+    });
   },
 
   // Import Batches
@@ -835,9 +1211,24 @@ export const dbQueries = {
   saveIntegrationCredentials: (creds: Partial<IntegrationCredentials>, updatedBy?: string): IntegrationCredentials => {
     const db = getDb();
     const current = dbQueries.getIntegrationCredentials();
+    const safeDrivePath = creds.google_drive_file_path
+      ? sanitizeSafeDataFilePath(creds.google_drive_file_path, 'input_data.xlsx', ['.xlsx', '.xls', '.csv']).safeRelativePath
+      : current.google_drive_file_path || 'data/input_data.xlsx';
+    const resolvedApiKey =
+      creds.google_api_key === SECRET_MASK || creds.google_api_key === undefined
+        ? current.google_api_key || ''
+        : creds.google_api_key;
+    const resolvedGatewayToken =
+      creds.api_gateway_token === SECRET_MASK || creds.api_gateway_token === undefined
+        ? current.api_gateway_token || ''
+        : creds.api_gateway_token;
+
     const updated: IntegrationCredentials = {
       ...current,
       ...creds,
+      google_drive_file_path: safeDrivePath,
+      google_api_key: resolvedApiKey,
+      api_gateway_token: resolvedGatewayToken,
       updated_at: new Date().toISOString(),
       updated_by: updatedBy || 'Administrator',
     };
@@ -854,7 +1245,9 @@ export const dbQueries = {
         sheet_name: updated.google_sheets_name || currentGSheet.sheet_name,
         service_account_email: updated.google_drive_email || currentGSheet.service_account_email,
       });
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[DB] Gagal menyinkronkan konfigurasi Google Sheets:', e);
+    }
 
     return updated;
   }

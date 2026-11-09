@@ -1,8 +1,10 @@
-import { getDb } from './db';
+import { getDb, withTransaction } from './db';
 import * as xlsx from 'xlsx';
 import path from 'path';
 import fs from 'fs';
-import { OFFICIAL_BRANCHES, getCanonicalBranchCode } from './constants';
+import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from './constants';
+
+const MAX_SPREADSHEET_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB batas keamanan unggahan spreadsheet
 
 export const BRANCH_CODE_TO_ID: Record<string, string> = {
   'R01': 'term_makassar',
@@ -54,14 +56,28 @@ export function getBranchId(code: string, name?: string): string {
 
 export function getField(row: any, name: string): any {
   if (!row) return undefined;
-  if (row[name] !== undefined) return row[name];
   const target = name.trim().toLowerCase();
+  let fallbackVal: any = undefined;
   for (const k of Object.keys(row)) {
     if (k.trim().toLowerCase() === target) {
-      return row[k];
+      const val = row[k];
+      if (val !== undefined && val !== null && val !== '' && val !== 0 && val !== '0') {
+        return val;
+      }
+      if (fallbackVal === undefined) {
+        fallbackVal = val;
+      }
     }
   }
-  return undefined;
+  return fallbackVal;
+}
+
+function slugKey(str: string): string {
+  return String(str || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '') || 'item';
 }
 
 export function ingestInputData(filePath?: string) {
@@ -71,13 +87,21 @@ export function ingestInputData(filePath?: string) {
     throw new Error(`File input_data.xlsx tidak ditemukan di path: ${excelPath}`);
   }
 
+  const stat = fs.statSync(excelPath);
+  if (stat.size > MAX_SPREADSHEET_SIZE_BYTES) {
+    throw new Error(
+      `Ukuran file spreadsheet (${(stat.size / (1024 * 1024)).toFixed(2)} MB) melebihi batas maksimal 5 MB.`
+    );
+  }
+
   const db = getDb();
-  console.log(`[Ingest] Membaca file spreadsheet resmi: ${excelPath}...`);
+  console.log(`[Ingest] Membaca file spreadsheet lokal: ${excelPath}`);
   const fileBuffer = fs.readFileSync(excelPath);
   const wb = xlsx.read(fileBuffer, { type: 'buffer' });
 
-  // 0. Pastikan Semua KPI Indicators Terdaftar (mencegah foreign key error)
-  console.log('[Ingest] 0. Sinkronisasi KPI Indicators & Taksonomi Indikator...');
+  return withTransaction(db, () => {
+    // 0. Pastikan Semua KPI Indicators Terdaftar (mencegah foreign key error)
+    console.log('[Ingest] 0. Sinkronisasi KPI Indicators & Taksonomi Indikator...');
   const allIndicators = [
     { id: 'kpi_teus', code: 'OPS-TEUS', name: 'Arus Petikemas', department_id: 'dept_ops', category: 'Kargo', unit: 'TEUs', direction: 'higher_is_better', default_target: 1026000, is_core: 1 },
     { id: 'kpi_cargo', code: 'OPS-CARGO', name: 'Arus Barang', department_id: 'dept_ops', category: 'Kargo', unit: 'Ton', direction: 'higher_is_better', default_target: 8300000, is_core: 1 },
@@ -197,7 +221,9 @@ export function ingestInputData(filePath?: string) {
   try {
     db.exec("UPDATE monthly_records SET branch_id = 'term_makassar' WHERE branch_id = 'term_new_makassar';");
     db.exec("DELETE FROM branches WHERE id = 'term_new_makassar' OR code = 'TRM-NMK';");
-  } catch {}
+  } catch (err) {
+    console.warn('[Ingest] Peringatan saat membersihkan cabang demo:', err);
+  }
 
   // Extract branch list matching official specification (28 Branches)
   const stmtBranch = db.prepare(`
@@ -230,15 +256,154 @@ export function ingestInputData(filePath?: string) {
     countBranches++;
   }
 
-  // Statement for Monthly Records
+  // Statement for Monthly Records (preserving pending/revision manual inputs on conflict)
   const stmtRec = db.prepare(`
-    INSERT OR REPLACE INTO monthly_records (
+    INSERT INTO monthly_records (
       id, branch_id, department_id, indicator_id, month, year,
       target, realization, unit, achievement_pct, status_color, notes,
       source_type, batch_id, verification_status, revision_notes,
       uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    ON CONFLICT(id) DO UPDATE SET
+      branch_id = excluded.branch_id,
+      department_id = excluded.department_id,
+      indicator_id = excluded.indicator_id,
+      month = excluded.month,
+      year = excluded.year,
+      target = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.target ELSE excluded.target END,
+      realization = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.realization ELSE excluded.realization END,
+      unit = excluded.unit,
+      achievement_pct = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.achievement_pct ELSE excluded.achievement_pct END,
+      status_color = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.status_color ELSE excluded.status_color END,
+      notes = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.notes ELSE excluded.notes END,
+      source_type = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.source_type ELSE excluded.source_type END,
+      verification_status = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.verification_status ELSE excluded.verification_status END,
+      revision_notes = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.revision_notes ELSE excluded.revision_notes END,
+      uploaded_by = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.uploaded_by ELSE excluded.uploaded_by END,
+      uploaded_at = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.uploaded_at ELSE excluded.uploaded_at END,
+      verified_by = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.verified_by ELSE excluded.verified_by END,
+      verified_at = CASE WHEN monthly_records.source_type = 'manual_input' AND monthly_records.verification_status IN ('pending_verification', 'revision_needed') THEN monthly_records.verified_at ELSE excluded.verified_at END
   `);
+
+  const stmtModFin = db.prepare(`
+    INSERT INTO module_finansial (
+      id, monthly_record_id, year, month, branch_code, branch_name, rekening,
+      cabang_rp, pmt_rp, ptp_rp, psl_rp, pjm_rp, eliminasi_rp, konsolidasi_rp,
+      yoy, rka, source_type, verification_status, uploaded_by, uploaded_at, verified_by, verified_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google_sheets', 'verified', 'regdashr@gmail.com', ?, 'bod_regional', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      cabang_rp = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.cabang_rp ELSE excluded.cabang_rp END,
+      pmt_rp = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.pmt_rp ELSE excluded.pmt_rp END,
+      ptp_rp = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.ptp_rp ELSE excluded.ptp_rp END,
+      psl_rp = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.psl_rp ELSE excluded.psl_rp END,
+      pjm_rp = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.pjm_rp ELSE excluded.pjm_rp END,
+      eliminasi_rp = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.eliminasi_rp ELSE excluded.eliminasi_rp END,
+      konsolidasi_rp = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.konsolidasi_rp ELSE excluded.konsolidasi_rp END,
+      yoy = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.yoy ELSE excluded.yoy END,
+      rka = CASE WHEN module_finansial.source_type = 'manual_input' AND module_finansial.verification_status IN ('pending_verification', 'revision_needed') THEN module_finansial.rka ELSE excluded.rka END
+  `);
+
+  const stmtModOpkom = db.prepare(`
+    INSERT INTO module_opkom (
+      id, monthly_record_id, year, month, branch_code, branch_name, layanan, satuan,
+      jumlah_rp, yoy, rka, source_type, verification_status, uploaded_by, uploaded_at, verified_by, verified_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google_sheets', 'verified', 'regdashr@gmail.com', ?, 'bod_regional', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      jumlah_rp = CASE WHEN module_opkom.source_type = 'manual_input' AND module_opkom.verification_status IN ('pending_verification', 'revision_needed') THEN module_opkom.jumlah_rp ELSE excluded.jumlah_rp END,
+      yoy = CASE WHEN module_opkom.source_type = 'manual_input' AND module_opkom.verification_status IN ('pending_verification', 'revision_needed') THEN module_opkom.yoy ELSE excluded.yoy END,
+      rka = CASE WHEN module_opkom.source_type = 'manual_input' AND module_opkom.verification_status IN ('pending_verification', 'revision_needed') THEN module_opkom.rka ELSE excluded.rka END
+  `);
+
+  const stmtModKinerja = db.prepare(`
+    INSERT INTO module_kinerja (
+      id, monthly_record_id, year, month, branch_code, branch_name, kd_kine, nm_kine, satuan,
+      nilai, source_type, verification_status, uploaded_by, uploaded_at, verified_by, verified_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google_sheets', 'verified', 'regdashr@gmail.com', ?, 'bod_regional', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      nilai = CASE WHEN module_kinerja.source_type = 'manual_input' AND module_kinerja.verification_status IN ('pending_verification', 'revision_needed') THEN module_kinerja.nilai ELSE excluded.nilai END
+  `);
+
+  const stmtModUtil = db.prepare(`
+    INSERT INTO module_utilisasi (
+      id, monthly_record_id, year, month, branch_code, branch_name, kd_jenderm, dermaga,
+      bor, yor, sor, source_type, verification_status, uploaded_by, uploaded_at, verified_by, verified_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google_sheets', 'verified', 'regdashr@gmail.com', ?, 'bod_regional', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      bor = CASE WHEN module_utilisasi.source_type = 'manual_input' AND module_utilisasi.verification_status IN ('pending_verification', 'revision_needed') THEN module_utilisasi.bor ELSE excluded.bor END,
+      yor = CASE WHEN module_utilisasi.source_type = 'manual_input' AND module_utilisasi.verification_status IN ('pending_verification', 'revision_needed') THEN module_utilisasi.yor ELSE excluded.yor END,
+      sor = CASE WHEN module_utilisasi.source_type = 'manual_input' AND module_utilisasi.verification_status IN ('pending_verification', 'revision_needed') THEN module_utilisasi.sor ELSE excluded.sor END
+  `);
+
+  const stmtModAlat = db.prepare(`
+    INSERT INTO module_peralatan (
+      id, monthly_record_id, year, month, branch_code, branch_name, kd_alat, nm_alat, singkatan, jns_alat,
+      jumlah, availability, utilisasi, source_type, verification_status, uploaded_by, uploaded_at, verified_by, verified_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google_sheets', 'verified', 'regdashr@gmail.com', ?, 'bod_regional', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      jumlah = CASE WHEN module_peralatan.source_type = 'manual_input' AND module_peralatan.verification_status IN ('pending_verification', 'revision_needed') THEN module_peralatan.jumlah ELSE excluded.jumlah END,
+      availability = CASE WHEN module_peralatan.source_type = 'manual_input' AND module_peralatan.verification_status IN ('pending_verification', 'revision_needed') THEN module_peralatan.availability ELSE excluded.availability END,
+      utilisasi = CASE WHEN module_peralatan.source_type = 'manual_input' AND module_peralatan.verification_status IN ('pending_verification', 'revision_needed') THEN module_peralatan.utilisasi ELSE excluded.utilisasi END
+  `);
+
+  const stmtModFas = db.prepare(`
+    INSERT INTO module_fasilitas (
+      id, monthly_record_id, year, month, branch_code, branch_name, nama_fasilitas, jenis_fasilitas, satuan,
+      panjang_m, lebar_m, mlws, luas_sqm, kapasitas, keterangan, source_type, verification_status, uploaded_by, uploaded_at, verified_by, verified_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google_sheets', 'verified', 'regdashr@gmail.com', ?, 'bod_regional', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      panjang_m = CASE WHEN module_fasilitas.source_type = 'manual_input' AND module_fasilitas.verification_status IN ('pending_verification', 'revision_needed') THEN module_fasilitas.panjang_m ELSE excluded.panjang_m END,
+      lebar_m = CASE WHEN module_fasilitas.source_type = 'manual_input' AND module_fasilitas.verification_status IN ('pending_verification', 'revision_needed') THEN module_fasilitas.lebar_m ELSE excluded.lebar_m END,
+      mlws = CASE WHEN module_fasilitas.source_type = 'manual_input' AND module_fasilitas.verification_status IN ('pending_verification', 'revision_needed') THEN module_fasilitas.mlws ELSE excluded.mlws END,
+      luas_sqm = CASE WHEN module_fasilitas.source_type = 'manual_input' AND module_fasilitas.verification_status IN ('pending_verification', 'revision_needed') THEN module_fasilitas.luas_sqm ELSE excluded.luas_sqm END,
+      kapasitas = CASE WHEN module_fasilitas.source_type = 'manual_input' AND module_fasilitas.verification_status IN ('pending_verification', 'revision_needed') THEN module_fasilitas.kapasitas ELSE excluded.kapasitas END,
+      keterangan = CASE WHEN module_fasilitas.source_type = 'manual_input' AND module_fasilitas.verification_status IN ('pending_verification', 'revision_needed') THEN module_fasilitas.keterangan ELSE excluded.keterangan END
+  `);
+
+  const nowIso = new Date().toISOString();
+
+  // 1b. Ingest Facility rows into module_fasilitas
+  let countFas = 0;
+  for (let i = 0; i < facilityRows.length; i++) {
+    const f = facilityRows[i];
+    const rawCode = String(getField(f, 'KODE_CBG') || '').trim().toUpperCase();
+    const rawName = String(getField(f, 'NM_CBG') || '').trim();
+    if (!rawCode && !rawName) continue;
+    const code = getCanonicalBranchCode(rawCode, rawName);
+    const branchName = getBranchNameByCode(code) || rawName || code;
+    const year = Number(getField(f, 'TAHUN') || 2026);
+    const month = Number(getField(f, 'BULAN') || 9);
+    const namaFasilitas = String(getField(f, 'nm_pasfel') || getField(f, 'nm_faspel') || `Fasilitas_${i + 1}`).trim();
+    const jenisFasilitas = String(getField(f, 'jns_faspel') || '').trim();
+    const satuan = String(getField(f, 'satuan') || 'meter').trim();
+    const panjangM = Number(getField(f, 'panjang') || 0);
+    const lebarM = Number(getField(f, 'lebar') || 0);
+    const mlws = Number(getField(f, 'mLws') || 0);
+    const luasSqm = Number(getField(f, 'luas') || getField(f, 'nilai') || 0);
+    const kapasitas = getField(f, 'kapasitas') ? String(getField(f, 'kapasitas')).trim() : null;
+    const keterangan = getField(f, 'ket') ? String(getField(f, 'ket')).trim() : '';
+
+    const fasId = `mod_fas_${year}_${month}_${code}_${slugKey(namaFasilitas)}_${slugKey(jenisFasilitas)}_${i}`;
+    stmtModFas.run(
+      fasId,
+      null,
+      year,
+      month,
+      code,
+      branchName,
+      namaFasilitas,
+      jenisFasilitas,
+      satuan,
+      panjangM,
+      lebarM,
+      mlws,
+      luasSqm,
+      kapasitas,
+      keterangan,
+      nowIso,
+      nowIso
+    );
+    countFas++;
+  }
 
   // 2. Ingest Financial Data from 'finansial'
   console.log('[Ingest] 2. Mengimpor Data Finansial dari sheet finansial...');
@@ -247,16 +412,26 @@ export function ingestInputData(filePath?: string) {
 
   let countFin = 0;
   for (const row of finRows) {
-    const code = String(row['KODE_CBG'] || '').trim().toUpperCase();
-    const branchName = String(row['NM_CBG'] || '').trim();
+    const rawCode = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
+    const rawName = String(getField(row, 'NM_CBG') || '').trim();
+    const code = getCanonicalBranchCode(rawCode, rawName);
+    const branchName = getBranchNameByCode(code) || rawName || code;
     const branchId = getBranchId(code, branchName);
-    const rekening = String(row['REKENING'] || '').trim().toLowerCase();
-    const year = Number(row['TAHUN'] || 2026);
-    const month = Number(row['BULAN'] || 9);
+    const rawRekening = String(getField(row, 'REKENING') || 'Pendapatan').trim();
+    const rekening = rawRekening.toLowerCase();
+    const year = Number(getField(row, 'TAHUN') || 2025);
+    const month = Number(getField(row, 'BULAN') || 9);
 
-    const konsolidasiRp = Number(row['KONSOLIDASI'] || row['CABANG'] || 0);
+    const cabangRp = Number(getField(row, 'CABANG') || 0);
+    const pmtRp = Number(getField(row, 'PMT') || 0);
+    const ptpRp = Number(getField(row, 'PTP') || 0);
+    const pslRp = Number(getField(row, 'PSL') || 0);
+    const pjmRp = Number(getField(row, 'PJM') || 0);
+    const eliminasiRp = Number(getField(row, 'ELIMINASI') || 0);
+    const konsolidasiRp = Number(getField(row, 'KONSOLIDASI') ?? cabangRp ?? 0);
     const konsolidasiM = Number((konsolidasiRp / 1_000_000_000).toFixed(2));
-    const rkaPct = Number(Number(row['RKA'] || 100).toFixed(1));
+    const yoyPct = Number(Number(getField(row, 'YOY') || 0).toFixed(1));
+    const rkaPct = Number(Number(getField(row, 'RKA') || 0).toFixed(1));
     const targetM = rkaPct > 0 ? Number((konsolidasiM / (rkaPct / 100)).toFixed(2)) : konsolidasiM;
     const statusColor = rkaPct >= 100 ? 'green' : rkaPct >= 95 ? 'yellow' : 'red';
 
@@ -270,6 +445,29 @@ export function ingestInputData(filePath?: string) {
     }
 
     const recId = `rec_fin_${year}_${month}_${code}_${indId}`;
+    const modFinId = `mod_fin_${year}_${month}_${code}_${slugKey(rawRekening)}`;
+
+    stmtModFin.run(
+      modFinId,
+      recId,
+      year,
+      month,
+      code,
+      branchName,
+      rawRekening,
+      cabangRp,
+      pmtRp,
+      ptpRp,
+      pslRp,
+      pjmRp,
+      eliminasiRp,
+      konsolidasiRp,
+      yoyPct,
+      rkaPct,
+      nowIso,
+      nowIso
+    );
+
     stmtRec.run(
       recId,
       branchId,
@@ -282,15 +480,15 @@ export function ingestInputData(filePath?: string) {
       'Miliar Rp',
       rkaPct,
       statusColor,
-      `Data finansial ${row['REKENING']} dari spreadsheet input_data.xlsx (regdashr@gmail.com)`,
+      `Data finansial ${rawRekening} dari spreadsheet input_data.xlsx (regdashr@gmail.com)`,
       'google_sheets',
       'batch_mysteve_input_data',
       'verified',
       null,
       'regdashr@gmail.com',
-      new Date().toISOString(),
+      nowIso,
       'bod_regional',
-      new Date().toISOString()
+      nowIso
     );
     countFin++;
   }
@@ -302,22 +500,44 @@ export function ingestInputData(filePath?: string) {
 
   let countUtil = 0;
   for (const row of utilRows) {
-    const code = String(row['KODE_CBG'] || '').trim().toUpperCase();
-    const branchName = String(row['NM_CBG'] || '').trim();
+    const rawCode = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
+    const rawName = String(getField(row, 'NM_CBG') || '').trim();
+    const code = getCanonicalBranchCode(rawCode, rawName);
+    const branchName = getBranchNameByCode(code) || rawName || code;
     const branchId = getBranchId(code, branchName);
-    const year = Number(row['TAHUN'] || 2026);
-    const month = Number(row['BULAN'] || 9);
-    const dermagaType = String(row['DERMAGA'] || 'MULTIPURPOSE');
+    const year = Number(getField(row, 'TAHUN') || 2026);
+    const month = Number(getField(row, 'BULAN') || 9);
+    const kdJenderm = String(getField(row, 'KD_JENDERM') ?? '1').trim();
+    const dermagaType = String(getField(row, 'DERMAGA') || 'MULTIPURPOSE').trim();
 
-    const bor = Number(row['BOR'] || 0);
-    const yor = Number(row['YOR'] || 0);
-    const sor = Number(row['SOR'] || 0);
+    const bor = Number(getField(row, 'BOR') || 0);
+    const yor = Number(getField(row, 'YOR') || 0);
+    const sor = Number(getField(row, 'SOR') || 0);
+
+    const borRecId = `rec_util_${year}_${month}_${code}_bor_${dermagaType.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const modUtilId = `mod_util_${year}_${month}_${code}_${slugKey(dermagaType)}`;
+
+    stmtModUtil.run(
+      modUtilId,
+      borRecId,
+      year,
+      month,
+      code,
+      branchName,
+      kdJenderm,
+      dermagaType,
+      bor,
+      yor,
+      sor,
+      nowIso,
+      nowIso
+    );
 
     if (bor > 0) {
       const borPct = Number(((bor / 60) * 100).toFixed(1));
       const borColor = bor <= 65 ? 'green' : bor <= 75 ? 'yellow' : 'red';
       stmtRec.run(
-        `rec_util_${year}_${month}_${code}_bor_${dermagaType.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        borRecId,
         branchId,
         'dept_ops',
         'kpi_bor',
@@ -334,9 +554,9 @@ export function ingestInputData(filePath?: string) {
         'verified',
         null,
         'regdashr@gmail.com',
-        new Date().toISOString(),
+        nowIso,
         'bod_regional',
-        new Date().toISOString()
+        nowIso
       );
       countUtil++;
     }
@@ -362,9 +582,9 @@ export function ingestInputData(filePath?: string) {
         'verified',
         null,
         'regdashr@gmail.com',
-        new Date().toISOString(),
+        nowIso,
         'bod_regional',
-        new Date().toISOString()
+        nowIso
       );
       countUtil++;
     }
@@ -390,9 +610,9 @@ export function ingestInputData(filePath?: string) {
         'verified',
         null,
         'regdashr@gmail.com',
-        new Date().toISOString(),
+        nowIso,
         'bod_regional',
-        new Date().toISOString()
+        nowIso
       );
       countUtil++;
     }
@@ -405,17 +625,42 @@ export function ingestInputData(filePath?: string) {
 
   let countAlat = 0;
   for (const row of alatRows) {
-    const code = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
-    const branchName = String(getField(row, 'NM_CBG') || '').trim();
+    const rawCode = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
+    const rawName = String(getField(row, 'NM_CBG') || '').trim();
+    const code = getCanonicalBranchCode(rawCode, rawName);
+    const branchName = getBranchNameByCode(code) || rawName || code;
     const branchId = getBranchId(code, branchName);
     const year = Number(getField(row, 'TAHUN') || 2026);
     const month = Number(getField(row, 'BULAN') || 9);
-    const alatName = String(getField(row, 'NM_ALAT') || getField(row, 'KD_ALAT') || 'Alat');
-    const singkatan = String(getField(row, 'SINGKATAN_ALAT') || getField(row, 'SINGKT') || '');
+    const kdAlat = String(getField(row, 'KD_ALAT') || '').trim();
+    const alatName = String(getField(row, 'NM_ALAT') || kdAlat || 'Alat').trim();
+    const singkatan = String(getField(row, 'SINGKATAN_ALAT') || getField(row, 'SINGKT') || '').trim();
+    const jnsAlat = String(getField(row, 'JNS_ALAT') || '').trim();
 
     const util = Number(getField(row, 'UTILISASI') || 0);
     const avail = Number(getField(row, 'AVAILABILITY') || 0);
     const jumlah = Number(getField(row, 'JUMLAH') || 0);
+
+    const primaryAlatRecId = `rec_alat_qty_${year}_${month}_${code}_${singkatan || slugKey(kdAlat || alatName)}`;
+    const modAlatId = `mod_alat_${year}_${month}_${code}_${slugKey(kdAlat || singkatan || alatName)}`;
+
+    stmtModAlat.run(
+      modAlatId,
+      primaryAlatRecId,
+      year,
+      month,
+      code,
+      branchName,
+      kdAlat,
+      alatName,
+      singkatan,
+      jnsAlat,
+      jumlah,
+      avail,
+      util,
+      nowIso,
+      nowIso
+    );
 
     if (avail > 0) {
       const recId = `rec_alat_avail_${year}_${month}_${code}_${singkatan || 'alat'}`;
@@ -440,9 +685,9 @@ export function ingestInputData(filePath?: string) {
         'verified',
         null,
         'regdashr@gmail.com',
-        new Date().toISOString(),
+        nowIso,
         'bod_regional',
-        new Date().toISOString()
+        nowIso
       );
       countAlat++;
     }
@@ -470,17 +715,16 @@ export function ingestInputData(filePath?: string) {
         'verified',
         null,
         'regdashr@gmail.com',
-        new Date().toISOString(),
+        nowIso,
         'bod_regional',
-        new Date().toISOString()
+        nowIso
       );
       countAlat++;
     }
 
     if (jumlah > 0) {
-      const recId = `rec_alat_qty_${year}_${month}_${code}_${singkatan || 'alat'}`;
       stmtRec.run(
-        recId,
+        primaryAlatRecId,
         branchId,
         'dept_tek',
         'kpi_alat_qty',
@@ -497,65 +741,90 @@ export function ingestInputData(filePath?: string) {
         'verified',
         null,
         'regdashr@gmail.com',
-        new Date().toISOString(),
+        nowIso,
         'bod_regional',
-        new Date().toISOString()
+        nowIso
       );
       countAlat++;
     }
   }
 
-  // 5. Ingest Commodity Revenue from 'opkom'
-  console.log('[Ingest] 5. Mengimpor Pendapatan per Komoditas dari sheet opkom...');
+  // 5. Ingest Commodity Revenue & Throughput from 'opkom'
+  console.log('[Ingest] 5. Mengimpor Pendapatan & Trafik per Komoditas dari sheet opkom...');
   const opkomSheet = wb.Sheets['opkom'];
   const opkomRows: any[] = opkomSheet ? xlsx.utils.sheet_to_json(opkomSheet) : [];
 
   let countOpkom = 0;
   for (const row of opkomRows) {
     const rawCode = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
-    const branchName = String(getField(row, 'NM_CBG') || '').trim();
-    const code = getCanonicalBranchCode(rawCode, branchName);
+    const rawName = String(getField(row, 'NM_CBG') || '').trim();
+    const code = getCanonicalBranchCode(rawCode, rawName);
+    const branchName = getBranchNameByCode(code) || rawName || code;
     const branchId = getBranchId(code, branchName);
     const year = Number(getField(row, 'TAHUN') || 2026);
     const month = Number(getField(row, 'BULAN') || 9);
-    const layanan = String(getField(row, 'LAYANAN') || '').toUpperCase();
-    const jumlahRp = Number(getField(row, 'JUMLAH') || 0);
-    const jumlahM = Number((jumlahRp / 1_000_000_000).toFixed(2));
-    const rkaPct = Number(Number(getField(row, 'RKA') || 100).toFixed(1));
-    const targetM = rkaPct > 0 ? Number((jumlahM / (rkaPct / 100)).toFixed(2)) : jumlahM;
-    const color = rkaPct >= 100 ? 'green' : rkaPct >= 95 ? 'yellow' : 'red';
+    const layanan = String(getField(row, 'LAYANAN') || '').trim().toUpperCase();
+    const satuan = String(getField(row, 'SATUAN') || 'Rp').trim();
+    const jumlahVal = Number(getField(row, 'JUMLAH') || 0);
+    const yoyPct = Number(Number(getField(row, 'YOY') || 0).toFixed(1));
+    const rkaPct = Number(Number(getField(row, 'RKA') || 0).toFixed(1));
 
-    if (jumlahM > 0) {
-      let indId = 'kpi_rev';
-      if (layanan.includes('PETIKEMAS')) indId = 'kpi_teus_rev';
-      else if (layanan.includes('BARANG')) indId = 'kpi_cargo_rev';
-      else if (layanan.includes('KAPAL')) indId = 'kpi_ship_rev';
-      else if (layanan.includes('PENUMPANG')) indId = 'kpi_pax_rev';
-      else if (layanan.includes('RUPA')) indId = 'kpi_misc_rev';
+    const recId = `rec_opkom_${year}_${month}_${code}_${layanan.replace(/[^a-zA-Z0-9]/g, '_')}_${slugKey(satuan)}`;
+    const modOpkomId = `mod_opkom_${year}_${month}_${code}_${slugKey(layanan)}_${slugKey(satuan)}`;
 
-      stmtRec.run(
-        `rec_opkom_${year}_${month}_${code}_${layanan.replace(/[^a-zA-Z0-9]/g, '_')}`,
-        branchId,
-        'dept_ops',
-        indId,
-        month,
-        year,
-        targetM,
-        jumlahM,
-        'Miliar Rp',
-        rkaPct,
-        color,
-        `Pendapatan Layanan ${layanan} dari spreadsheet input_data.xlsx`,
-        'google_sheets',
-        'batch_mysteve_input_data',
-        'verified',
-        null,
-        'regdashr@gmail.com',
-        new Date().toISOString(),
-        'bod_regional',
-        new Date().toISOString()
-      );
-      countOpkom++;
+    stmtModOpkom.run(
+      modOpkomId,
+      recId,
+      year,
+      month,
+      code,
+      branchName,
+      layanan,
+      satuan,
+      jumlahVal,
+      yoyPct,
+      rkaPct,
+      nowIso,
+      nowIso
+    );
+
+    if (satuan.toLowerCase() === 'rp') {
+      const jumlahM = Number((jumlahVal / 1_000_000_000).toFixed(2));
+      const targetM = rkaPct > 0 ? Number((jumlahM / (rkaPct / 100)).toFixed(2)) : jumlahM;
+      const color = rkaPct >= 100 ? 'green' : rkaPct >= 95 ? 'yellow' : 'red';
+
+      if (jumlahM > 0) {
+        let indId = 'kpi_rev';
+        if (layanan.includes('PETIKEMAS')) indId = 'kpi_teus_rev';
+        else if (layanan.includes('BARANG')) indId = 'kpi_cargo_rev';
+        else if (layanan.includes('KAPAL')) indId = 'kpi_ship_rev';
+        else if (layanan.includes('PENUMPANG')) indId = 'kpi_pax_rev';
+        else if (layanan.includes('RUPA')) indId = 'kpi_misc_rev';
+
+        stmtRec.run(
+          recId,
+          branchId,
+          'dept_ops',
+          indId,
+          month,
+          year,
+          targetM,
+          jumlahM,
+          'Miliar Rp',
+          rkaPct,
+          color,
+          `Pendapatan Layanan ${layanan} dari spreadsheet input_data.xlsx`,
+          'google_sheets',
+          'batch_mysteve_input_data',
+          'verified',
+          null,
+          'regdashr@gmail.com',
+          nowIso,
+          'bod_regional',
+          nowIso
+        );
+        countOpkom++;
+      }
     }
   }
 
@@ -566,15 +835,17 @@ export function ingestInputData(filePath?: string) {
 
   let countKinerja = 0;
   for (const row of kinerjaRows) {
-    const code = String(row['KODE_CBG'] || '').trim().toUpperCase();
-    const branchName = String(row['NM_CBG'] || '').trim();
+    const rawCode = String(getField(row, 'KODE_CBG') || '').trim().toUpperCase();
+    const rawName = String(getField(row, 'NM_CBG') || '').trim();
+    const code = getCanonicalBranchCode(rawCode, rawName);
+    const branchName = getBranchNameByCode(code) || rawName || code;
     const branchId = getBranchId(code, branchName);
-    const year = Number(row['TAHUN'] || 2026);
-    const month = Number(row['BULAN'] || 9);
-    const kdKine = String(row['KD_KINE'] || '').trim();
-    const nmKine = String(row['NM_KINE'] || '').trim().toUpperCase();
-    const satuan = String(row['SATUAN'] || '').trim();
-    const nilai = Number(row['NILAI'] || 0);
+    const year = Number(getField(row, 'TAHUN') || 2026);
+    const month = Number(getField(row, 'BULAN') || 9);
+    const kdKine = String(getField(row, 'KD_KINE') || '').trim();
+    const nmKine = String(getField(row, 'NM_KINE') || '').trim().toUpperCase();
+    const satuan = String(getField(row, 'SATUAN') || '').trim();
+    const nilai = Number(getField(row, 'NILAI') || 0);
 
     let indId = '';
     let target = 0;
@@ -620,6 +891,24 @@ export function ingestInputData(filePath?: string) {
       unit = 'Ton/Hari';
     }
 
+    const recId = indId ? `rec_kine_${year}_${month}_${code}_${indId}` : `rec_kine_${year}_${month}_${code}_${slugKey(kdKine)}_${slugKey(satuan)}`;
+    const modKineId = `mod_kine_${year}_${month}_${code}_${slugKey(kdKine)}_${slugKey(nmKine)}_${slugKey(satuan)}`;
+
+    stmtModKinerja.run(
+      modKineId,
+      indId ? recId : null,
+      year,
+      month,
+      code,
+      branchName,
+      kdKine,
+      nmKine,
+      satuan,
+      nilai,
+      nowIso,
+      nowIso
+    );
+
     if (indId && nilai > 0) {
       const achPct = isHigherBetter
         ? Number(((nilai / target) * 100).toFixed(1))
@@ -627,7 +916,7 @@ export function ingestInputData(filePath?: string) {
       const color = achPct >= 100 ? 'green' : achPct >= 90 ? 'yellow' : 'red';
 
       stmtRec.run(
-        `rec_kine_${year}_${month}_${code}_${indId}`,
+        recId,
         branchId,
         'dept_ops',
         indId,
@@ -644,9 +933,9 @@ export function ingestInputData(filePath?: string) {
         'verified',
         null,
         'regdashr@gmail.com',
-        new Date().toISOString(),
+        nowIso,
         'bod_regional',
-        new Date().toISOString()
+        nowIso
       );
       countKinerja++;
     }
@@ -675,26 +964,26 @@ export function ingestInputData(filePath?: string) {
     new Date().toISOString()
   );
 
-  // 8. Record in Audit Log
-  const totalRecords = countFin + countUtil + countAlat + countOpkom + countKinerja;
-  db.prepare(`
-    INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity, entity_id, details, timestamp, ip_address)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    `aud_ingest_${Date.now()}`,
-    'usr_regdashr',
-    'regdashr@gmail.com (Google Drive Sync)',
-    'super_admin',
-    'IMPORT',
-    'GOOGLE_DRIVE_EXCEL',
-    'input_data.xlsx',
-    `Sukses sinkronisasi file input_data.xlsx akun regdashr@gmail.com: ${countBranches} cabang master, ${countEquip} katalog alat, dan total ${totalRecords} records kinerja operasional & finansial.`,
-    new Date().toISOString(),
-    '127.0.0.1'
-  );
+    // 8. Record in Audit Log
+    const totalRecords = countFin + countUtil + countAlat + countOpkom + countKinerja;
+    db.prepare(`
+      INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity, entity_id, details, timestamp, ip_address)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      `aud_ingest_${Date.now()}`,
+      'usr_regdashr',
+      'Sinkronisasi Spreadsheet Lokal',
+      'super_admin',
+      'IMPORT',
+      'SPREADSHEET_LOCAL',
+      'input_data.xlsx',
+      `Sinkronisasi file spreadsheet lokal input_data.xlsx selesai: ${countBranches} cabang master, ${countEquip} katalog alat, dan total ${totalRecords} rekaman kinerja operasional & finansial.`,
+      new Date().toISOString(),
+      '127.0.0.1'
+    );
 
-  console.log(`\n======================================================
-SUKSES BESAR! Data master dan inputan berhasil diimpor:
+    console.log(`\n======================================================
+Sinkronisasi data master dan rekaman kinerja selesai:
 - Master Cabang Pelabuhan : ${countBranches} cabang (R01-R80, R99)
 - Master Katalog Peralatan: ${countEquip} jenis alat (AL01-AL21)
 - Data Finansial          : ${countFin} rekaman (Pendapatan, Beban, Laba)
@@ -703,18 +992,19 @@ SUKSES BESAR! Data master dan inputan berhasil diimpor:
 - Data Komoditas (Opkom)  : ${countOpkom} rekaman (Kapal, Petikemas, Barang)
 - Data Kinerja Operasional: ${countKinerja} rekaman (WTP, BSH, BCH, TGH, TSD)
 ------------------------------------------------------
-Total Records Terimpor    : ${totalRecords}
-Sumber Data Akun          : regdashr@gmail.com (My Drive input_data.xlsx)
+Total Rekaman Terimpor    : ${totalRecords}
+Sumber Berkas             : data/input_data.xlsx (Penyimpanan Lokal)
 ======================================================\n`);
 
-  return {
-    branches: countBranches,
-    equipment: countEquip,
-    financial: countFin,
-    utilization: countUtil,
-    equipmentReadiness: countAlat,
-    commodity: countOpkom,
-    performance: countKinerja,
-    totalRecords,
-  };
+    return {
+      branches: countBranches,
+      equipment: countEquip,
+      financial: countFin,
+      utilization: countUtil,
+      equipmentReadiness: countAlat,
+      commodity: countOpkom,
+      performance: countKinerja,
+      totalRecords,
+    };
+  });
 }

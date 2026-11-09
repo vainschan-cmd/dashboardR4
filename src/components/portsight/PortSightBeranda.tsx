@@ -1,17 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   AlertTriangle,
   Building2,
   Ship,
-  Boxes,
-  Wrench,
   Layers,
   Activity,
-  ArrowRight,
-  TrendingUp,
-  TrendingDown,
   RotateCcw,
   DollarSign,
   ChevronRight,
@@ -21,9 +16,10 @@ import {
   X,
   BarChart3,
   CheckSquare,
-  Users,
   Gauge,
   CheckCircle2,
+  Lock,
+  Info,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -38,9 +34,10 @@ import {
   CartesianGrid,
   Cell,
 } from 'recharts';
-import { OFFICIAL_BRANCHES, getBranchByCode, isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
+import { getSelectedBranchLabel } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
 import { User, UserRole } from '@/lib/types';
+import { useBerandaAnalytics } from '@/hooks/useBerandaAnalytics';
 
 interface PortSightBerandaProps {
   selectedTerminal?: string;
@@ -56,7 +53,7 @@ interface PortSightBerandaProps {
 
 export default function PortSightBeranda({
   selectedTerminal = 'ALL',
-  selectedPeriod = 'FY 2025',
+  selectedPeriod = 'YTD Sep 2026',
   onSelectTerminal,
   onNavigateTab,
   onOpenDrilldown,
@@ -65,1001 +62,70 @@ export default function PortSightBeranda({
   comparisonMode = 'all',
   onOpenComparisonModal,
 }: PortSightBerandaProps) {
-  const [loading, setLoading] = useState<boolean>(true);
-  const [finansial, setFinansial] = useState<any[]>([]);
-  const [opkom, setOpkom] = useState<any[]>([]);
-  const [peralatan, setPeralatan] = useState<any[]>([]);
-  const [kinerja, setKinerja] = useState<any[]>([]);
-  const [utilisasi, setUtilisasi] = useState<any[]>([]);
   const [terminalSearch, setTerminalSearch] = useState<string>('');
   const [dashboardView, setDashboardView] = useState<'visual' | 'cards'>('visual');
 
-  // Fetch complete modules data from backend
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        const queryParams = new URLSearchParams();
-        if (selectedPeriod) {
-          queryParams.append('period', selectedPeriod);
-        }
-        const res = await fetch(`/api/modules-data?${queryParams.toString()}`);
-        const json = await res.json();
-        if (json.success) {
-          setFinansial(json.finansial || []);
-          setOpkom(json.opkom || []);
-          setPeralatan(json.peralatan || []);
-          setKinerja(json.kinerja || []);
-          setUtilisasi(json.utilisasi || []);
-        }
-      } catch (e) {
-        console.error('Error loading beranda data:', e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-  }, [selectedPeriod]);
+  const {
+    loading,
+    verifiedOnly,
+    setVerifiedOnly,
+    verificationSummary,
+    isPicCabang,
+    isNone,
+    isAll,
+    isSingle,
+    isMulti,
+    selectedCodes,
+    activeBranch,
+    filteredUtilisasi,
+    serviceKpis,
+    financeKpis,
+    terminalsOverview,
+    filteredTerminalsOverview,
+    selectedBranchesMetrics,
+    branchCommoditiesBreakdown,
+    attentionItems,
+    mainCombinedChartData,
+    gaugeMetrics,
+    servicesGroupedChartData,
+  } = useBerandaAnalytics({
+    selectedTerminal,
+    selectedPeriod,
+    currentUser,
+    userRole,
+    terminalSearch,
+  });
 
-  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
-  const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
-  const isNone = !isPicCabang && selectedTerminal === 'NONE';
-  const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
-  const selectedCodes = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      return [currentUser.branch_id];
-    }
-    if (isNone) return [];
-    if (isAll) return OFFICIAL_BRANCHES.map(b => b.code);
-    return parseSelectedBranches(selectedTerminal);
-  }, [isPicCabang, currentUser?.branch_id, isNone, isAll, selectedTerminal]);
-  const isSingle = isPicCabang || (!isAll && !isNone && selectedCodes.length === 1);
-  const isMulti = !isPicCabang && !isAll && !isNone && selectedCodes.length > 1;
-
-  const activeBranch = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id) {
-      return assignedBranch || getBranchByCode(currentUser.branch_id) || null;
-    }
-    if (!isSingle) return null;
-    return getBranchByCode(selectedCodes[0]) || OFFICIAL_BRANCHES.find(b => b.code === selectedCodes[0]);
-  }, [isPicCabang, currentUser?.branch_id, assignedBranch, isSingle, selectedCodes]);
-
-  // Filter dataset by selected branch or use all
-  const filteredFin = useMemo(() => {
-    if (isNone) return [];
-    if (isAll) return finansial;
-    return finansial.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
-  }, [isNone, isAll, selectedTerminal, finansial]);
-
-  const filteredOpkom = useMemo(() => {
-    if (isNone) return [];
-    if (isAll) return opkom;
-    return opkom.filter(o => isBranchMatch(selectedTerminal, o.branchCode, o.branchName));
-  }, [isNone, isAll, selectedTerminal, opkom]);
-
-  const filteredPeralatan = useMemo(() => {
-    if (isNone) return [];
-    if (isAll) return peralatan;
-    return peralatan.filter(p => isBranchMatch(selectedTerminal, p.branchCode, p.branchName));
-  }, [isNone, isAll, selectedTerminal, peralatan]);
-
-  const filteredKinerja = useMemo(() => {
-    if (isNone) return [];
-    if (isAll) return kinerja;
-    return kinerja.filter(k => isBranchMatch(selectedTerminal, k.branchCode, k.branchName));
-  }, [isNone, isAll, selectedTerminal, kinerja]);
-
-  const filteredUtilisasi = useMemo(() => {
-    if (isNone) return [];
-    if (isAll) return utilisasi;
-    return utilisasi.filter(u => isBranchMatch(selectedTerminal, u.branchCode, u.branchName));
-  }, [isNone, isAll, selectedTerminal, utilisasi]);
-
-  // 1. Calculate All 5 Port Services KPI Metrics (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
-  const serviceKpis = useMemo(() => {
-    if (isNone) {
-      return [
-        {
-          title: 'Kapal (GT)',
-          value: '0 GT',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: '0 GT',
-          rawRealization: '0 GT',
-        },
-        {
-          title: 'Petikemas (TEUs)',
-          value: '0 TEUs',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: '0 TEUs',
-          rawRealization: '0 TEUs',
-        },
-        {
-          title: 'Barang (ton)',
-          value: '0 Ton',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: '0 Ton',
-          rawRealization: '0 Ton',
-        },
-        {
-          title: 'Penumpang (orang)',
-          value: '0 org',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: '0 org',
-          rawRealization: '0 org',
-        },
-        {
-          title: 'Rupa-rupa usaha',
-          value: 'Rp 0',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: 'Rp 0',
-          rawRealization: 'Rp 0',
-        },
-      ];
-    }
-
-    // a. Kapal (GT)
-    const kapalGtRows = filteredOpkom.filter(o => {
-      const lay = (o.layanan || '').toUpperCase();
-      const sat = (o.satuan || '').toUpperCase();
-      return lay.includes('KAPAL') && sat.includes('GT');
-    });
-    const totalKapalGt = kapalGtRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-    const avgRkaKapal = kapalGtRows.length > 0
-      ? (kapalGtRows.reduce((a, b) => a + (b.rka || 0), 0) / kapalGtRows.length).toFixed(1)
-      : '84.1';
-    const avgYoyKapal = kapalGtRows.length > 0
-      ? (kapalGtRows.reduce((a, b) => a + (b.yoy || 0), 0) / kapalGtRows.length).toFixed(1)
-      : '95.2';
-
-    let formattedKapal = '0 GT';
-    if (totalKapalGt > 0) {
-      if (totalKapalGt >= 1_000_000) {
-        formattedKapal = `${(totalKapalGt / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt GT`;
-      } else if (totalKapalGt >= 1_000) {
-        formattedKapal = `${(totalKapalGt / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb GT`;
-      } else {
-        formattedKapal = `${totalKapalGt.toLocaleString('id-ID')} GT`;
-      }
-    } else if (isAll) {
-      formattedKapal = '325,11 jt GT';
-    }
-
-    // b. Petikemas TEUs
-    const teusRows = filteredOpkom.filter(o => {
-      const lay = (o.layanan || '').toUpperCase();
-      const sat = (o.satuan || '').toUpperCase();
-      return lay.includes('PETIKEMAS') && sat.includes('TEUS');
-    });
-    const totalTeus = teusRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-    const avgRkaTeus = teusRows.length > 0
-      ? (teusRows.reduce((a, b) => a + (b.rka || 0), 0) / teusRows.length).toFixed(1)
-      : '83.2';
-    const avgYoyTeus = teusRows.length > 0
-      ? (teusRows.reduce((a, b) => a + (b.yoy || 0), 0) / teusRows.length).toFixed(1)
-      : '87.9';
-
-    let formattedTeus = '1,92 jt';
-    if (totalTeus > 0) {
-      if (totalTeus >= 1_000_000) {
-        formattedTeus = `${(totalTeus / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt`;
-      } else if (totalTeus >= 1_000) {
-        formattedTeus = `${(totalTeus / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb TEUs`;
-      } else {
-        formattedTeus = `${totalTeus.toLocaleString('id-ID')} TEUs`;
-      }
-    } else if (!isAll) {
-      formattedTeus = '0 TEUs';
-    }
-
-    // c. Barang (Ton)
-    const tonRows = filteredOpkom.filter(o => {
-      const lay = (o.layanan || '').toUpperCase();
-      const sat = (o.satuan || '').toUpperCase();
-      return lay.includes('BARANG') && sat.includes('TON');
-    });
-    const totalTon = tonRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-    const avgRkaTon = tonRows.length > 0
-      ? (tonRows.reduce((a, b) => a + (b.rka || 0), 0) / tonRows.length).toFixed(1)
-      : '81.3';
-    const avgYoyTon = tonRows.length > 0
-      ? (tonRows.reduce((a, b) => a + (b.yoy || 0), 0) / tonRows.length).toFixed(1)
-      : '81.8';
-
-    let formattedTon = '33,42 jt';
-    if (totalTon > 0) {
-      if (totalTon >= 1_000_000) {
-        formattedTon = `${(totalTon / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt`;
-      } else if (totalTon >= 1_000) {
-        formattedTon = `${(totalTon / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb ton`;
-      } else {
-        formattedTon = `${totalTon.toLocaleString('id-ID')} ton`;
-      }
-    } else if (!isAll) {
-      formattedTon = '0 ton';
-    }
-
-    // d. Penumpang (Orang)
-    const pnpRows = filteredOpkom.filter(o => {
-      const lay = (o.layanan || '').toUpperCase();
-      const sat = (o.satuan || '').toUpperCase();
-      return lay.includes('PENUMPANG') && sat.includes('ORANG');
-    });
-    const totalPnp = pnpRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-    const avgRkaPnp = pnpRows.length > 0
-      ? (pnpRows.reduce((a, b) => a + (b.rka || 0), 0) / pnpRows.length).toFixed(1)
-      : '76.1';
-    const avgYoyPnp = pnpRows.length > 0
-      ? (pnpRows.reduce((a, b) => a + (b.yoy || 0), 0) / pnpRows.length).toFixed(1)
-      : '79.9';
-
-    let formattedPnp = '0 org';
-    if (totalPnp > 0) {
-      if (totalPnp >= 1_000_000) {
-        formattedPnp = `${(totalPnp / 1_000_000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} jt org`;
-      } else if (totalPnp >= 1_000) {
-        formattedPnp = `${(totalPnp / 1_000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} rb org`;
-      } else {
-        formattedPnp = `${totalPnp.toLocaleString('id-ID')} org`;
-      }
-    } else if (isAll) {
-      formattedPnp = '6,68 jt org';
-    }
-
-    // e. Rupa-rupa Usaha (Rp)
-    const rupaRows = filteredOpkom.filter(o => {
-      const lay = (o.layanan || '').toUpperCase();
-      return lay.includes('RUPA');
-    });
-    const totalRupa = rupaRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-    const avgRkaRupa = rupaRows.length > 0
-      ? (rupaRows.reduce((a, b) => a + (b.rka || 0), 0) / rupaRows.length).toFixed(1)
-      : '77.1';
-    const avgYoyRupa = rupaRows.length > 0
-      ? (rupaRows.reduce((a, b) => a + (b.yoy || 0), 0) / rupaRows.length).toFixed(1)
-      : '79.7';
-
-    let formattedRupa = 'Rp 0';
-    if (totalRupa > 0) {
-      formattedRupa = formatRupiahFull(totalRupa);
-    } else if (isAll) {
-      formattedRupa = 'Rp 485.408.307.811';
-    }
-
-    return [
-      {
-        title: 'Kapal (GT)',
-        value: formattedKapal,
-        comp1: `RKAP ${avgRkaKapal}%`,
-        comp1Good: Number(avgRkaKapal) >= 100,
-        comp2: `YoY ${Number(avgYoyKapal) >= 100 ? '+' : ''}${(Number(avgYoyKapal) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyKapal) >= 100,
-        rawTarget: isAll ? '386,57 jt GT' : `${Math.round(totalKapalGt / (Number(avgRkaKapal) / 100 || 1)).toLocaleString('id-ID')} GT`,
-        rawRealization: formattedKapal,
-      },
-      {
-        title: 'Petikemas (TEUs)',
-        value: formattedTeus,
-        comp1: `RKAP ${avgRkaTeus}%`,
-        comp1Good: Number(avgRkaTeus) >= 100,
-        comp2: `YoY ${Number(avgYoyTeus) >= 100 ? '+' : ''}${(Number(avgYoyTeus) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyTeus) >= 100,
-        rawTarget: isAll ? '2,31 jt TEUs' : `${Math.round(totalTeus / (Number(avgRkaTeus) / 100 || 1)).toLocaleString('id-ID')} TEUs`,
-        rawRealization: formattedTeus,
-      },
-      {
-        title: 'Barang (ton)',
-        value: formattedTon,
-        comp1: `RKAP ${avgRkaTon}%`,
-        comp1Good: Number(avgRkaTon) >= 100,
-        comp2: `YoY ${Number(avgYoyTon) >= 100 ? '+' : ''}${(Number(avgYoyTon) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyTon) >= 100,
-        rawTarget: isAll ? '41,10 jt Ton' : `${Math.round(totalTon / (Number(avgRkaTon) / 100 || 1)).toLocaleString('id-ID')} Ton`,
-        rawRealization: formattedTon,
-      },
-      {
-        title: 'Penumpang (orang)',
-        value: formattedPnp,
-        comp1: `RKAP ${avgRkaPnp}%`,
-        comp1Good: Number(avgRkaPnp) >= 100,
-        comp2: `YoY ${Number(avgYoyPnp) >= 100 ? '+' : ''}${(Number(avgYoyPnp) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyPnp) >= 100,
-        rawTarget: isAll ? '8,77 jt org' : `${Math.round(totalPnp / (Number(avgRkaPnp) / 100 || 1)).toLocaleString('id-ID')} org`,
-        rawRealization: formattedPnp,
-      },
-      {
-        title: 'Rupa-rupa usaha',
-        value: formattedRupa,
-        comp1: `RKAP ${avgRkaRupa}%`,
-        comp1Good: Number(avgRkaRupa) >= 100,
-        comp2: `YoY ${Number(avgYoyRupa) >= 100 ? '+' : ''}${(Number(avgYoyRupa) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyRupa) >= 100,
-        rawTarget: formatRupiahFull(Math.round((totalRupa || 485408307811) / (Number(avgRkaRupa) / 100 || 1))),
-        rawRealization: formattedRupa,
-      },
-    ];
-  }, [filteredOpkom, isNone, isAll]);
-
-  // 2. Calculate Financial (Pendapatan, Beban Biaya, Laba Usaha) & Keandalan Mutu (Kesiapan Alat, SLA)
-  const financeKpis = useMemo(() => {
-    if (isNone) {
-      return [
-        {
-          title: 'Pendapatan',
-          value: 'Rp 0',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: 'Rp 0',
-          rawRealization: 'Rp 0',
-        },
-        {
-          title: 'Beban biaya',
-          value: 'Rp 0',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: 'Rp 0',
-          rawRealization: 'Rp 0',
-        },
-        {
-          title: 'Laba usaha',
-          value: 'Rp 0',
-          comp1: 'Cabang Kosong',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: 'Rp 0',
-          rawRealization: 'Rp 0',
-        },
-        {
-          title: 'Kesiapan alat',
-          value: '0%',
-          comp1: 'Target 92,0%',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: '0%',
-          rawRealization: '0%',
-        },
-        {
-          title: 'SLA keluhan',
-          value: '0%',
-          comp1: 'Target 90,0%',
-          comp1Good: false,
-          comp2: 'Pilih cabang',
-          comp2Good: false,
-          rawTarget: '0%',
-          rawRealization: '0%',
-        },
-      ];
-    }
-
-    // a. Pendapatan Usaha
-    const revRows = filteredFin.filter(f => (f.rekening || '').toLowerCase().includes('pendapatan'));
-    const totalRev = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    const avgRkaRev = revRows.length > 0
-      ? (revRows.reduce((a, b) => a + (b.rka || 0), 0) / revRows.length).toFixed(1)
-      : '102.7';
-    const avgYoyRev = revRows.length > 0
-      ? (revRows.reduce((a, b) => a + (b.yoy || 0), 0) / revRows.length).toFixed(1)
-      : '115.6';
-
-    let renderRev = totalRev;
-    if (isAll) {
-      if (renderRev < 1_000_000_000_000) {
-        renderRev = 6794956407643;
-      }
-    } else {
-      if (renderRev === 0) {
-        const opkomRp = filteredOpkom.filter(o => o.satuan === 'Rp').reduce((a, b) => a + (b.jumlahRp || 0), 0);
-        if (opkomRp > 0) renderRev = opkomRp;
-      }
-    }
-
-    // b. Beban Biaya
-    const costRows = filteredFin.filter(f => (f.rekening || '').toLowerCase().includes('beban'));
-    let totalCost = Math.abs(costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0));
-    const avgRkaCost = costRows.length > 0
-      ? (costRows.reduce((a, b) => a + (b.rka || 0), 0) / costRows.length).toFixed(1)
-      : '98.7';
-    const avgYoyCost = costRows.length > 0
-      ? (costRows.reduce((a, b) => a + (b.yoy || 0), 0) / costRows.length).toFixed(1)
-      : '116.4';
-
-    let renderCost = totalCost;
-    if (isAll) {
-      if (renderCost < 100_000_000_000) {
-        renderCost = 4946387868940;
-      }
-    } else {
-      if (renderCost === 0 && renderRev > 0) {
-        renderCost = Math.round(renderRev * 0.76);
-      }
-    }
-
-    // c. Laba Usaha
-    const opRows = filteredFin.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
-    let totalOp = opRows.length > 0
-      ? opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0)
-      : (renderRev > 0 && renderCost > 0 ? renderRev - renderCost : 0);
-
-    const avgRkaOp = opRows.length > 0
-      ? (opRows.reduce((a, b) => a + (b.rka || 0), 0) / opRows.length).toFixed(1)
-      : '106.4';
-    const avgYoyOp = opRows.length > 0
-      ? (opRows.reduce((a, b) => a + (b.yoy || 0), 0) / opRows.length).toFixed(1)
-      : '150.0';
-
-    let renderOp = totalOp;
-    if (isAll) {
-      if (renderOp < 100_000_000_000) {
-        renderOp = 1552568538703;
-      }
-    } else {
-      if (renderOp === 0 && renderRev > 0) {
-        renderOp = Math.round(renderRev * 0.24);
-      }
-    }
-
-    // d. Kesiapan Alat (Readiness RFU %)
-    let avgAlat = '93.6';
-    const validAvail = filteredPeralatan.filter(p => (p.availability || 0) > 0);
-    const activeAlat = filteredPeralatan.filter(p => (p.jumlah || 0) > 0);
-    if (validAvail.length > 0) {
-      avgAlat = (validAvail.reduce((a, b) => a + (b.availability || 0), 0) / validAvail.length).toFixed(1);
-    } else if (activeAlat.length > 0 && !isAll) {
-      const codeNum = Number(selectedTerminal.replace(/\D/g, '')) || 1;
-      avgAlat = (92.2 + ((codeNum * 1.3) % 2.6)).toFixed(1);
-    } else {
-      avgAlat = '93.6';
-    }
-
-    // e. SLA Keluhan & Pemenuhan Layanan (%)
-    let avgSla = '91.3';
-    if (!isAll) {
-      const bRka = filteredOpkom.length > 0
-        ? filteredOpkom.reduce((a, b) => a + (b.rka || 100), 0) / filteredOpkom.length
-        : 100;
-      avgSla = (89.5 + Math.min(3.5, (bRka / 100) * 2.0)).toFixed(1);
-    }
-
-    return [
-      {
-        title: 'Pendapatan',
-        value: formatRupiahFull(renderRev),
-        comp1: `RKAP ${avgRkaRev}%`,
-        comp1Good: Number(avgRkaRev) >= 100,
-        comp2: `YoY ${Number(avgYoyRev) >= 100 ? '+' : ''}${(Number(avgYoyRev) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyRev) >= 100,
-        rawTarget: formatRupiahFull(Math.round(renderRev / (Number(avgRkaRev) / 100 || 1))),
-        rawRealization: formatRupiahFull(renderRev),
-      },
-      {
-        title: 'Beban biaya',
-        value: formatRupiahFull(renderCost),
-        comp1: `RKAP ${avgRkaCost}%`,
-        comp1Good: Number(avgRkaCost) <= 100,
-        comp2: `YoY ${Number(avgYoyCost) >= 100 ? '+' : ''}${(Number(avgYoyCost) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyCost) <= 100,
-        rawTarget: formatRupiahFull(Math.round(renderCost / (Number(avgRkaCost) / 100 || 1))),
-        rawRealization: formatRupiahFull(renderCost),
-      },
-      {
-        title: 'Laba usaha',
-        value: formatRupiahFull(renderOp),
-        comp1: `RKAP ${avgRkaOp}%`,
-        comp1Good: Number(avgRkaOp) >= 100,
-        comp2: `YoY ${Number(avgYoyOp) >= 100 ? '+' : ''}${(Number(avgYoyOp) - 100).toFixed(1)}%`,
-        comp2Good: Number(avgYoyOp) >= 100,
-        rawTarget: formatRupiahFull(Math.round(renderOp / (Number(avgRkaOp) / 100 || 1))),
-        rawRealization: formatRupiahFull(renderOp),
-      },
-      {
-        title: 'Kesiapan alat',
-        value: `${avgAlat}%`,
-        comp1: 'Target 92,0%',
-        comp1Good: Number(avgAlat) >= 92,
-        comp2: '2025: 92,4%',
-        comp2Good: Number(avgAlat) >= 92.4,
-        rawTarget: '92,0%',
-        rawRealization: `${avgAlat}%`,
-      },
-      {
-        title: 'SLA keluhan',
-        value: `${avgSla}%`,
-        comp1: 'Target 90,0%',
-        comp1Good: Number(avgSla) >= 90,
-        comp2: '2025: 84,6%',
-        comp2Good: Number(avgSla) >= 84.6,
-        rawTarget: '90,0%',
-        rawRealization: `${avgSla}%`,
-      },
-    ];
-  }, [filteredFin, filteredOpkom, filteredPeralatan, isNone, isAll, selectedTerminal]);
-
-  // Combined topKpis (10 items)
-  const topKpis = useMemo(() => {
-    return [...serviceKpis, ...financeKpis];
-  }, [serviceKpis, financeKpis]);
-
-  // 2. Terminal cards list for "Semua Cabang" view - Menampilkan seluruh Cabang Resmi Regional 4 (atau khusus cabang penugasan PIC)
-  const terminalsOverview = useMemo(() => {
-    const branchesSource = (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99')
-      ? OFFICIAL_BRANCHES.filter(b => b.code === currentUser.branch_id)
-      : OFFICIAL_BRANCHES;
-
-    return branchesSource.map(branchInfo => {
-      const code = branchInfo.code;
-      const bOp = opkom.filter(o => o.branchCode === code);
-      const bFin = finansial.filter(f => f.branchCode === code);
-
-      const teusRows = bOp.filter(o => (o.satuan || '').toUpperCase().includes('TEUS'));
-      const tonRows = bOp.filter(o => (o.satuan || '').toUpperCase().includes('TON'));
-      const revRows = bFin.filter(f => (f.rekening || '').toLowerCase().includes('pendapatan'));
-
-      const teusTotal = teusRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-      const tonTotal = tonRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-      const revTotal = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-
-      const avgRka = bOp.length > 0
-        ? Number((bOp.reduce((a, b) => a + (b.rka || 0), 0) / bOp.length).toFixed(1))
-        : (bFin.length > 0 && bFin[0].rka ? Number(bFin[0].rka.toFixed(1)) : 101.5);
-      const avgYoy = bOp.length > 0
-        ? Number((bOp.reduce((a, b) => a + (b.yoy || 0), 0) / bOp.length).toFixed(1))
-        : (bFin.length > 0 && bFin[0].yoy ? Number(bFin[0].yoy.toFixed(1)) : 104.2);
-
-      let subtype = 'Multipurpose';
-      if (code === 'R02' || code === 'R06' || code === 'R07' || code === 'R08' || branchInfo.name.toLowerCase().includes('tpk')) {
-        subtype = 'Petikemas';
-      } else if (code === 'R24') {
-        subtype = 'Petikemas Modern';
-      } else if (code === 'R26') {
-        subtype = 'Petikemas (KKT)';
-      } else if (code === 'R99') {
-        subtype = 'Regional 4 (Konsolidasi)';
-      }
-
-      let valueDisplay = 'Rp 0';
-      if (revTotal > 0) {
-        valueDisplay = formatRupiahFull(revTotal);
-      } else if (teusTotal > 0) {
-        valueDisplay = teusTotal >= 1_000_000
-          ? `${(teusTotal / 1_000_000).toFixed(2)} jt TEUs`
-          : `${(teusTotal / 1_000).toFixed(1)} rb TEUs`;
-      } else if (tonTotal > 0) {
-        valueDisplay = tonTotal >= 1_000_000
-          ? `${(tonTotal / 1_000_000).toFixed(2)} jt ton`
-          : `${(tonTotal / 1_000).toFixed(1)} rb ton`;
-      } else {
-        const totalOpkom = bOp.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-        if (totalOpkom > 0) {
-          valueDisplay = formatRupiahFull(totalOpkom);
-        } else {
-          valueDisplay = 'Rp 0';
-        }
-      }
-
-      const isGood = avgRka >= 100;
-
-      return {
-        id: code,
-        code,
-        name: branchInfo.name || code,
-        subtype,
-        status: isGood ? 'Baik' : 'Waspada',
-        value: valueDisplay,
-        rkap: `RKAP ${avgRka}%`,
-        yoy: `YoY ${avgYoy >= 100 ? '+' : ''}${(avgYoy - 100).toFixed(1)}%`,
-        isGood,
-      };
-    });
-  }, [opkom, finansial, isPicCabang, currentUser?.branch_id]);
-
-  const filteredTerminalsOverview = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      return terminalsOverview.filter(t => t.code === currentUser.branch_id);
-    }
-    if (isNone) return [];
-    let list = terminalsOverview;
-    if (!isAll) {
-      list = terminalsOverview.filter(t => isBranchMatch(selectedTerminal, t.code, t.name));
-    }
-    if (!terminalSearch.trim()) return list;
-    const q = terminalSearch.toLowerCase().trim();
-    return list.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      t.code.toLowerCase().includes(q) ||
-      t.subtype.toLowerCase().includes(q)
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div
+          className="skeleton-shimmer"
+          style={{ height: '48px', borderRadius: 'var(--radius-md)' }}
+        />
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+            gap: '16px',
+          }}
+        >
+          <div
+            className="skeleton-shimmer"
+            style={{ height: '290px', borderRadius: 'var(--radius-md)' }}
+          />
+          <div
+            className="skeleton-shimmer"
+            style={{ height: '290px', borderRadius: 'var(--radius-md)' }}
+          />
+        </div>
+        <div
+          className="skeleton-shimmer"
+          style={{ height: '320px', borderRadius: 'var(--radius-md)' }}
+        />
+      </div>
     );
-  }, [terminalsOverview, terminalSearch, isNone, isAll, selectedTerminal, isPicCabang, currentUser?.branch_id]);
-
-  // 3. Data terpisah masing-masing cabang terpilih (NON-AKUMULASI)
-  const selectedBranchesMetrics = useMemo(() => {
-    if (isNone) return [];
-    const targetCodes = (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99')
-      ? [currentUser.branch_id]
-      : (isAll ? OFFICIAL_BRANCHES.map(b => b.code) : selectedCodes);
-
-    return targetCodes.map(code => {
-      const bInfo = getBranchByCode(code) || OFFICIAL_BRANCHES.find(b => b.code === code) || { code, name: code };
-      const bOp = opkom.filter(o => o.branchCode === code);
-      const bFin = finansial.filter(f => f.branchCode === code);
-      const bAlat = peralatan.filter(p => p.branchCode === code);
-      const bUtil = utilisasi.filter(u => u.branchCode === code);
-
-      // Pendapatan Usaha
-      const revRows = bFin.filter(f => (f.rekening || '').toLowerCase().includes('pendapatan'));
-      let revTotal = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-      if (revTotal === 0) {
-        revTotal = bOp.filter(o => o.satuan === 'Rp').reduce((a, b) => a + (b.jumlahRp || 0), 0);
-      }
-
-      // Laba Usaha
-      const opRows = bFin.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
-      let opTotal = opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-      if (opTotal === 0 && revTotal > 0) {
-        opTotal = Math.round(revTotal * 0.24);
-      }
-
-      // Petikemas (TEUs)
-      const teusRows = bOp.filter(o => (o.satuan || '').toUpperCase().includes('TEUS'));
-      const teusTotal = teusRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-
-      // Kargo/Barang (Ton)
-      const tonRows = bOp.filter(o => (o.satuan || '').toUpperCase().includes('TON'));
-      const tonTotal = tonRows.reduce((a, b) => a + (b.jumlahRp || 0), 0);
-
-      // Capaian RKAP & Pertumbuhan YoY
-      const avgRka = bOp.length > 0
-        ? Number((bOp.reduce((a, b) => a + (b.rka || 0), 0) / bOp.length).toFixed(1))
-        : (bFin.length > 0 && bFin[0].rka ? Number(bFin[0].rka.toFixed(1)) : 100.0);
-      const avgYoy = bOp.length > 0
-        ? Number((bOp.reduce((a, b) => a + (b.yoy || 0), 0) / bOp.length).toFixed(1))
-        : (bFin.length > 0 && bFin[0].yoy ? Number(bFin[0].yoy.toFixed(1)) : 100.0);
-
-      // Kesiapan Alat (RFU %)
-      const validAlat = bAlat.filter(p => (p.availability || 0) > 0);
-      const rfu = validAlat.length > 0
-        ? (validAlat.reduce((a, b) => a + (b.availability || 0), 0) / validAlat.length).toFixed(1)
-        : '93.0';
-
-      // Utilisasi BOR %
-      const bor = bUtil.length > 0 ? (bUtil[0].bor || 0) : 0;
-
-      const isGood = avgRka >= 100;
-
-      return {
-        code,
-        name: bInfo.name,
-        revTotal,
-        opTotal,
-        teusTotal,
-        tonTotal,
-        avgRka,
-        avgYoy,
-        rfu,
-        bor,
-        isGood,
-      };
-    });
-  }, [isNone, isAll, selectedCodes, opkom, finansial, peralatan, utilisasi]);
-
-  // 4. Single Branch Breakdown cards when a specific branch is selected
-  const branchCommoditiesBreakdown = useMemo(() => {
-    if (!isSingle) return [];
-    
-    // Group opkom by layanan for that specific branch
-    const groups: Record<string, { jumlah: number; satuan: string; rka: number[]; yoy: number[] }> = {};
-    const targetRows = filteredOpkom.some(o => o.satuan === 'Rp')
-      ? filteredOpkom.filter(o => o.satuan === 'Rp')
-      : filteredOpkom;
-
-    targetRows.forEach(o => {
-      const lay = o.layanan || 'LAINNYA';
-      if (!groups[lay]) {
-        groups[lay] = { jumlah: 0, satuan: o.satuan || 'Rp', rka: [], yoy: [] };
-      }
-      groups[lay].jumlah += (o.jumlahRp || 0);
-      if (o.rka) groups[lay].rka.push(o.rka);
-      if (o.yoy) groups[lay].yoy.push(o.yoy);
-    });
-
-    return Object.keys(groups).map(lay => {
-      const item = groups[lay];
-      const avgRka = item.rka.length > 0
-        ? Number((item.rka.reduce((a, b) => a + b, 0) / item.rka.length).toFixed(1))
-        : 100.0;
-      const avgYoy = item.yoy.length > 0
-        ? Number((item.yoy.reduce((a, b) => a + b, 0) / item.yoy.length).toFixed(1))
-        : 100.0;
-      const isGood = avgRka >= 100;
-
-      let formattedVal = `${item.jumlah.toLocaleString('id-ID')} ${item.satuan}`;
-      if (item.satuan === 'Rp') {
-        formattedVal = formatRupiahFull(item.jumlah);
-      }
-
-      return {
-        layanan: lay,
-        satuan: item.satuan,
-        value: formattedVal,
-        rkap: `RKAP ${avgRka}%`,
-        yoy: `YoY ${avgYoy >= 100 ? '+' : ''}${(avgYoy - 100).toFixed(1)}%`,
-        isGood,
-      };
-    });
-  }, [isSingle, filteredOpkom]);
-
-  // 4. Dynamic "Perlu Perhatian" alerts with Source Links
-  const attentionItems = useMemo(() => {
-    if (!isAll) {
-      // Find low performing items for this specific branch
-      const alerts: {
-        header: string;
-        desc: string;
-        sourceSheet: string;
-        sourceModule: string;
-        tabId: string;
-        branchCode: string;
-        linkText: string;
-      }[] = [];
-
-      filteredOpkom.filter(o => o.rka && o.rka < 100).slice(0, 3).forEach(o => {
-        alerts.push({
-          header: `${activeBranch?.name || selectedTerminal} - ${o.layanan}`,
-          desc: `Realisasi ${o.layanan} ${o.rka}% RKAP, perubahan ${(o.yoy - 100).toFixed(1)}% YoY`,
-          sourceSheet: 'opkom',
-          sourceModule: 'Opkom (Operasi & Komersial)',
-          tabId: 'opkom',
-          branchCode: selectedTerminal,
-          linkText: `Buka Data Opkom [${selectedTerminal}]`,
-        });
-      });
-
-      if (filteredPeralatan.some(p => p.utilisasi && p.utilisasi < 50)) {
-        const lowAlat = filteredPeralatan.find(p => p.utilisasi && p.utilisasi < 50);
-        if (lowAlat) {
-          alerts.push({
-            header: `${activeBranch?.name || selectedTerminal} - Alat ${lowAlat.nmAlat || lowAlat.kdAlat}`,
-            desc: `Utilisasi alat hanya ${lowAlat.utilisasi}%, perlu optimasi kesiapan operasi`,
-            sourceSheet: 'peralatan',
-            sourceModule: 'Peralatan Pelabuhan',
-            tabId: 'peralatan',
-            branchCode: selectedTerminal,
-            linkText: `Buka Data Peralatan [${selectedTerminal}]`,
-          });
-        }
-      }
-
-      if (alerts.length === 0) {
-        alerts.push({
-          header: `${activeBranch?.name || selectedTerminal} Operasional Prima`,
-          desc: 'Semua target layanan operasional cabang terpantau di atas 100% RKAP.',
-          sourceSheet: 'opkom',
-          sourceModule: 'Opkom (Operasi & Komersial)',
-          tabId: 'opkom',
-          branchCode: selectedTerminal,
-          linkText: `Periksa Data Opkom`,
-        });
-      }
-      return alerts;
-    }
-
-    // Default or dynamically gathered alerts across all branches
-    return [
-      {
-        header: 'Makassar [R01]',
-        desc: 'Petikemas 85,1% RKAP, perlu akselerasi bongkar muat throughput',
-        sourceSheet: 'opkom',
-        sourceModule: 'Opkom (Operasi & Komersial)',
-        tabId: 'opkom',
-        branchCode: 'R01',
-        linkText: 'Lihat Data Opkom [R01]',
-      },
-      {
-        header: 'Pantoloan [R11]',
-        desc: 'Arus barang 93,9% RKAP, turun 2,3% YoY akibat siklus komoditas',
-        sourceSheet: 'opkom',
-        sourceModule: 'Opkom (Operasi & Komersial)',
-        tabId: 'opkom',
-        branchCode: 'R11',
-        linkText: 'Lihat Data Opkom [R11]',
-      },
-      {
-        header: 'RTG TPK Makassar [R02]',
-        desc: '3 unit dalam jadwal pemeliharaan preventif, kesiapan alat 93,6%',
-        sourceSheet: 'peralatan',
-        sourceModule: 'Peralatan Pelabuhan',
-        tabId: 'peralatan',
-        branchCode: 'R02',
-        linkText: 'Lihat Data Alat [R02]',
-      },
-      {
-        header: 'Layanan Pelanggan & SLA',
-        desc: '2 tiket keluhan teknis mendekati batas toleransi SLA (RTG & autogate)',
-        sourceSheet: 'kinerja',
-        sourceModule: 'Kinerja Operasi',
-        tabId: 'kinerja',
-        branchCode: 'R01',
-        linkText: 'Lihat Data Kinerja',
-      },
-    ];
-  }, [isAll, activeBranch, selectedTerminal, filteredOpkom, filteredPeralatan]);
-
-  // Combined Visual Chart Datasets for Executive Dashboard
-  const mainCombinedChartData = useMemo(() => {
-    const parseNominalMiliar = (valStr: string) => {
-      const digits = valStr.replace(/[^\d]/g, '');
-      if (!digits) return 0;
-      const num = Number(digits);
-      return Math.round(num / 1_000_000_000);
-    };
-
-    const parsePercent = (str: string) => {
-      const m = str.match(/[-+]?\d+(\.\d+)?/);
-      return m ? parseFloat(m[0]) : 100;
-    };
-
-    const rev = financeKpis[0];
-    const cost = financeKpis[1];
-    const profit = financeKpis[2];
-
-    return [
-      {
-        kpi: 'Pendapatan',
-        nominalRealisasi: parseNominalMiliar(rev?.value || '0'),
-        nominalTarget: parseNominalMiliar(rev?.rawTarget || '0'),
-        capaianRkap: parsePercent(rev?.comp1 || '102.7'),
-        pertumbuhanYoy: parsePercent(rev?.comp2 || '15.6'),
-        satuan: 'Miliar Rp',
-        isGood: rev?.comp1Good ?? true,
-      },
-      {
-        kpi: 'Beban Biaya',
-        nominalRealisasi: parseNominalMiliar(cost?.value || '0'),
-        nominalTarget: parseNominalMiliar(cost?.rawTarget || '0'),
-        capaianRkap: parsePercent(cost?.comp1 || '94.2'),
-        pertumbuhanYoy: parsePercent(cost?.comp2 || '5.8'),
-        satuan: 'Miliar Rp',
-        isGood: cost?.comp1Good ?? true,
-      },
-      {
-        kpi: 'Laba Usaha',
-        nominalRealisasi: parseNominalMiliar(profit?.value || '0'),
-        nominalTarget: parseNominalMiliar(profit?.rawTarget || '0'),
-        capaianRkap: parsePercent(profit?.comp1 || '112.5'),
-        pertumbuhanYoy: parsePercent(profit?.comp2 || '22.4'),
-        satuan: 'Miliar Rp',
-        isGood: profit?.comp1Good ?? true,
-      },
-    ];
-  }, [financeKpis]);
-
-  const gaugeMetrics = useMemo(() => {
-    const parsePercent = (str: string) => {
-      const m = str.match(/[-+]?\d+(\.\d+)?/);
-      return m ? parseFloat(m[0]) : 100;
-    };
-
-    const rev = financeKpis[0];
-    const cost = financeKpis[1];
-    const profit = financeKpis[2];
-    const rfu = financeKpis[3];
-
-    const rfuVal = parseFloat((rfu?.value || '93.6').replace(/[^\d.]/g, '')) || 93.6;
-
-    return [
-      {
-        title: 'Pendapatan Usaha',
-        realisasi: rev?.value || 'Rp 0',
-        percentage: parsePercent(rev?.comp1 || '102.7'),
-        target: rev?.rawTarget ? `Target: ${rev.rawTarget}` : 'Target RKAP',
-        yoy: rev?.comp2 || 'YoY +15,6%',
-        isGood: rev?.comp1Good ?? true,
-        color: '#0284c7',
-      },
-      {
-        title: 'Pengendalian Biaya',
-        realisasi: cost?.value || 'Rp 0',
-        percentage: parsePercent(cost?.comp1 || '94.2'),
-        target: cost?.rawTarget ? `Target: ${cost.rawTarget}` : 'Target Biaya',
-        yoy: cost?.comp2 || 'YoY +5,8%',
-        isGood: cost?.comp1Good ?? true,
-        color: '#38bdf8',
-      },
-      {
-        title: 'Laba Usaha',
-        realisasi: profit?.value || 'Rp 0',
-        percentage: parsePercent(profit?.comp1 || '112.5'),
-        target: profit?.rawTarget ? `Target: ${profit.rawTarget}` : 'Target Laba',
-        yoy: profit?.comp2 || 'YoY +22,4%',
-        isGood: profit?.comp1Good ?? true,
-        color: '#10b981',
-      },
-      {
-        title: 'Kesiapan Alat (RFU)',
-        realisasi: `${rfuVal}%`,
-        percentage: Number(((rfuVal / 92) * 100).toFixed(1)),
-        target: 'Target 92,0% RFU',
-        yoy: 'YoY +2,1%',
-        isGood: rfuVal >= 92,
-        color: '#f59e0b',
-      },
-    ];
-  }, [financeKpis]);
-
-  const servicesGroupedChartData = useMemo(() => {
-    const parsePercent = (str: string) => {
-      const m = str.match(/[-+]?\d+(\.\d+)?/);
-      return m ? parseFloat(m[0]) : 100;
-    };
-
-    if (isSingle && branchCommoditiesBreakdown.length > 0) {
-      const list = branchCommoditiesBreakdown.map(c => {
-        const rkapPct = parsePercent(c.rkap);
-        const yoyPct = parsePercent(c.yoy);
-        return {
-          layanan: c.layanan.toUpperCase(),
-          nominal: c.value,
-          capaianRkap: rkapPct,
-          pertumbuhanYoy: yoyPct,
-          status: c.isGood ? 'Baik' : 'Waspada',
-          satuan: c.satuan,
-        };
-      });
-
-      if (filteredUtilisasi.length > 0) {
-        list.push({
-          layanan: 'DERMAGA (BOR)',
-          nominal: `${filteredUtilisasi[0]?.bor || 0}%`,
-          capaianRkap: filteredUtilisasi[0]?.bor || 64.5,
-          pertumbuhanYoy: 2.8,
-          status: (filteredUtilisasi[0]?.bor || 0) <= 70 ? 'Baik' : 'Waspada',
-          satuan: '%',
-        });
-      }
-      return list;
-    }
-
-    return serviceKpis.map(k => {
-      const rkapPct = parsePercent(k.comp1);
-      const yoyPct = parsePercent(k.comp2);
-      return {
-        layanan: k.title.split(' ')[0].toUpperCase(),
-        nominal: k.value,
-        capaianRkap: rkapPct,
-        pertumbuhanYoy: yoyPct,
-        status: k.comp1Good ? 'Baik' : 'Waspada',
-        satuan: k.title.includes('(') ? k.title.split('(')[1].replace(')', '') : '',
-      };
-    }).concat([
-      {
-        layanan: 'BOR DERMAGA',
-        nominal: '62,8%',
-        capaianRkap: 89.7,
-        pertumbuhanYoy: 2.5,
-        status: 'Baik',
-        satuan: '%',
-      }
-    ]);
-  }, [isSingle, branchCommoditiesBreakdown, serviceKpis, filteredUtilisasi]);
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -1094,7 +160,7 @@ export default function PortSightBeranda({
                 boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
               }}
             >
-              <Building2 size={16} />
+              <Building2 size={16} strokeWidth={1.75} />
             </div>
             <div>
               <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-title)' }}>
@@ -1108,9 +174,9 @@ export default function PortSightBeranda({
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                 {isPicCabang
-                  ? `Tampilan dashboard, ringkasan eksekutif, dan data operasional disesuaikan khusus untuk cabang penugasan Anda.`
+                  ? 'Tampilan dashboard, ringkasan eksekutif, dan data operasional disesuaikan khusus untuk cabang penugasan Anda.'
                   : isNone
-                  ? `Semua cabang saat ini tidak dicentang. Silakan pilih/centang cabang yang ingin dipantau dari filter cabang di atas.`
+                  ? 'Semua cabang saat ini tidak dicentang. Silakan pilih cabang yang ingin dipantau dari filter cabang di atas.'
                   : isMulti
                   ? `Menampilkan data operasional dan finansial masing-masing cabang terpilih (${selectedCodes.length} cabang, non-akumulasi).`
                   : `Menampilkan performa dan data operasional khusus cabang ${activeBranch?.name || selectedTerminal}.`}
@@ -1134,7 +200,8 @@ export default function PortSightBeranda({
               }}
               title="Informasi terkunci sesuai akun PIC cabang"
             >
-              <span>🔒 Terkunci Sesuai Akun PIC Cabang</span>
+              <Lock size={12} strokeWidth={1.75} />
+              <span>Terkunci Sesuai Akun PIC Cabang</span>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1158,7 +225,7 @@ export default function PortSightBeranda({
                   }}
                   title="Buka Matriks Detail Komparasi Realisasi vs RKAP vs Realisasi 2025"
                 >
-                  <BarChart3 size={12} />
+                  <BarChart3 size={12} strokeWidth={1.75} />
                   <span>Matriks vs RKAP & 2025</span>
                 </button>
               )}
@@ -1181,7 +248,7 @@ export default function PortSightBeranda({
                   }}
                   title="Reset ke akumulasi seluruh 28 cabang"
                 >
-                  <RotateCcw size={12} />
+                  <RotateCcw size={12} strokeWidth={1.75} />
                   <span>Tampilkan Akumulasi Semua Cabang (ALL)</span>
                 </button>
               )}
@@ -1190,7 +257,7 @@ export default function PortSightBeranda({
         </div>
       )}
 
-      {/* View Switcher: Mode Visual Grafik Terpadu vs Mode Kartu Ringkas */}
+      {/* View Switcher & Data Verification Status Filter */}
       <div
         style={{
           display: 'flex',
@@ -1204,7 +271,7 @@ export default function PortSightBeranda({
           border: '1px solid var(--border-subtle)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span
             style={{
               fontSize: '11px',
@@ -1217,8 +284,8 @@ export default function PortSightBeranda({
               gap: '6px',
             }}
           >
-            <Activity size={14} />
-            Executive Performance Overview
+            <Activity size={14} strokeWidth={1.75} />
+            Ikhtisar Kinerja Eksekutif
           </span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             • {isNone
@@ -1229,6 +296,57 @@ export default function PortSightBeranda({
                 ? `Cabang: ${activeBranch?.name || selectedTerminal}`
                 : `${selectedCodes.length} Cabang Terpilih`}
           </span>
+          <button
+            type="button"
+            onClick={() => setVerifiedOnly(prev => !prev)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '3px 10px',
+              borderRadius: '999px',
+              fontSize: '10.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: verifiedOnly
+                ? '1px solid rgba(16, 185, 129, 0.45)'
+                : '1px solid rgba(245, 158, 11, 0.45)',
+              backgroundColor: verifiedOnly
+                ? 'rgba(16, 185, 129, 0.12)'
+                : 'rgba(245, 158, 11, 0.12)',
+              color: verifiedOnly ? '#10b981' : '#f59e0b',
+            }}
+            title={
+              verifiedOnly
+                ? 'Menampilkan hanya data yang telah diverifikasi resmi (klik untuk menyertakan data menunggu verifikasi)'
+                : 'Menampilkan seluruh data termasuk yang masih menunggu verifikasi (klik untuk memfilter hanya data terverifikasi)'
+            }
+          >
+            <CheckCircle2 size={12} strokeWidth={1.75} />
+            <span>
+              {verifiedOnly ? 'Filter: Data Terverifikasi Resmi' : 'Filter: Semua Status (Termasuk Pending)'}
+            </span>
+          </button>
+          {verificationSummary.pendingCount > 0 && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                fontSize: '10.5px',
+                fontWeight: 700,
+                backgroundColor: 'rgba(245, 158, 11, 0.14)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                color: '#f59e0b',
+              }}
+              title="Terdapat data input baru yang sedang menunggu persetujuan Admin Regional"
+            >
+              <AlertTriangle size={11} strokeWidth={1.75} />
+              <span className="tabular-nums">{verificationSummary.pendingCount} Menunggu Verifikasi</span>
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-inner)', padding: '3px', borderRadius: '8px' }}>
@@ -1250,7 +368,7 @@ export default function PortSightBeranda({
               transition: 'all 0.15s ease',
             }}
           >
-            <BarChart3 size={13} />
+            <BarChart3 size={13} strokeWidth={1.75} />
             <span>Grafik Terpadu</span>
           </button>
           <button
@@ -1271,7 +389,7 @@ export default function PortSightBeranda({
               transition: 'all 0.15s ease',
             }}
           >
-            <Layers size={13} />
+            <Layers size={13} strokeWidth={1.75} />
             <span>Kartu Metrik</span>
           </button>
         </div>
@@ -1301,7 +419,7 @@ export default function PortSightBeranda({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <DollarSign size={16} style={{ color: '#38bdf8' }} />
+                  <DollarSign size={16} strokeWidth={1.75} style={{ color: '#38bdf8' }} />
                   <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
                     Kinerja Finansial (Pendapatan, Beban, Laba Usaha)
                   </span>
@@ -1350,7 +468,7 @@ export default function PortSightBeranda({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Gauge size={16} style={{ color: '#10b981' }} />
+                  <Gauge size={16} strokeWidth={1.75} style={{ color: '#10b981' }} />
                   <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
                     KPI Gauge & Kesiapan Alat (RFU)
                   </span>
@@ -1385,6 +503,7 @@ export default function PortSightBeranda({
                         flexDirection: 'column',
                         justifyContent: 'space-between',
                       }}
+                      title={`${g.title}: ${g.fullRealisasi || g.realisasi} (${g.target})`}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
@@ -1415,7 +534,7 @@ export default function PortSightBeranda({
                           />
                         </svg>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-title)' }}>
+                          <div className="tabular-nums" style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-title)' }}>
                             {g.percentage}%
                           </div>
                           <div style={{ fontSize: '9.5px', color: 'var(--text-muted)' }}>
@@ -1425,10 +544,14 @@ export default function PortSightBeranda({
                       </div>
 
                       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px' }}>
-                        <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--text-title)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          className="tabular-nums"
+                          style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--text-title)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={g.fullRealisasi || g.realisasi}
+                        >
                           {g.realisasi}
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
                           <span>{g.target}</span>
                           <span className={g.isGood ? 'text-positive' : 'text-alert'}>{g.yoy}</span>
                         </div>
@@ -1454,7 +577,7 @@ export default function PortSightBeranda({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Ship size={16} style={{ color: 'var(--accent-cyan)' }} />
+                <Ship size={16} strokeWidth={1.75} style={{ color: 'var(--accent-cyan)' }} />
                 <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
                   Kinerja Layanan {isSingle ? `Cabang [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}` : 'Pelabuhan Terintegrasi'} & BOR
                 </span>
@@ -1486,7 +609,7 @@ export default function PortSightBeranda({
                       color: 'var(--text-main)',
                     }}
                     formatter={(val: any, name: any, item: any) => [
-                      `${val}% (${item.payload.nominal})`,
+                      `${val}% (${item.payload.fullNominal || item.payload.nominal})`,
                       name === 'capaianRkap' ? 'Pencapaian RKAP' : 'Pertumbuhan YoY'
                     ]}
                   />
@@ -1523,6 +646,7 @@ export default function PortSightBeranda({
                     borderRadius: '6px',
                     padding: '8px 10px',
                   }}
+                  title={`${s.layanan}: ${s.fullNominal || s.nominal}`}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)' }}>
@@ -1532,10 +656,10 @@ export default function PortSightBeranda({
                       {s.status}
                     </span>
                   </div>
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', marginTop: '2px' }}>
+                  <div className="tabular-nums" style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', marginTop: '2px' }}>
                     {s.nominal}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
                     <span>RKAP {s.capaianRkap}%</span>
                     <span className={s.pertumbuhanYoy >= 0 ? 'text-positive' : 'text-alert'}>
                       {s.pertumbuhanYoy >= 0 ? '+' : ''}{s.pertumbuhanYoy}%
@@ -1568,7 +692,7 @@ export default function PortSightBeranda({
                     border: '1px solid rgba(2, 132, 199, 0.25)',
                   }}
                 >
-                  <Ship size={13} />
+                  <Ship size={13} strokeWidth={1.75} />
                   Kinerja Operasional Semua Layanan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
                 </span>
               </div>
@@ -1590,10 +714,11 @@ export default function PortSightBeranda({
                   className="kpi-summary-box"
                   onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
                   style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
+                  title={`${kpi.title}: ${kpi.fullValue || kpi.value} (Target: ${kpi.rawTarget})`}
                 >
                   <div className="kpi-header-label">{kpi.title}</div>
-                  <div className="kpi-huge-number">{kpi.value}</div>
-                  <div className="kpi-comparison-rows">
+                  <div className="kpi-huge-number tabular-nums">{kpi.value}</div>
+                  <div className="kpi-comparison-rows tabular-nums">
                     {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
                       <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
                         <strong>{kpi.comp1}</strong>
@@ -1630,7 +755,7 @@ export default function PortSightBeranda({
                     border: '1px solid rgba(56, 189, 248, 0.25)',
                   }}
                 >
-                  <DollarSign size={13} />
+                  <DollarSign size={13} strokeWidth={1.75} />
                   Kinerja Finansial, Efisiensi Beban Biaya & Mutu Operasi
                 </span>
               </div>
@@ -1646,10 +771,11 @@ export default function PortSightBeranda({
                   className="kpi-summary-box"
                   onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
                   style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
+                  title={`${kpi.title}: ${kpi.fullValue || kpi.value} (Target: ${kpi.rawTarget})`}
                 >
                   <div className="kpi-header-label">{kpi.title}</div>
-                  <div className="kpi-huge-number">{kpi.value}</div>
-                  <div className="kpi-comparison-rows">
+                  <div className="kpi-huge-number tabular-nums">{kpi.value}</div>
+                  <div className="kpi-comparison-rows tabular-nums">
                     {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
                       <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
                         <strong>{kpi.comp1}</strong>
@@ -1695,9 +821,13 @@ export default function PortSightBeranda({
                     padding: '2px 8px',
                     borderRadius: 'var(--radius-pill)',
                     border: '1px solid rgba(56, 189, 248, 0.3)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
                   }}
                 >
-                  🔒 Cabang PIC Terkunci
+                  <Lock size={11} strokeWidth={1.75} />
+                  <span>Cabang PIC Terkunci</span>
                 </span>
               ) : (isAll || isMulti) && (
                 <span
@@ -1719,7 +849,7 @@ export default function PortSightBeranda({
             {(isAll || isMulti) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <Search size={13} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)' }} />
+                  <Search size={13} strokeWidth={1.75} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
                     value={terminalSearch}
@@ -1753,7 +883,7 @@ export default function PortSightBeranda({
                       }}
                       title="Hapus pencarian"
                     >
-                      <X size={12} />
+                      <X size={12} strokeWidth={1.75} />
                     </button>
                   )}
                 </div>
@@ -1791,13 +921,13 @@ export default function PortSightBeranda({
                   color: '#ef4444',
                 }}
               >
-                <RotateCcw size={22} />
+                <RotateCcw size={22} strokeWidth={1.75} />
               </div>
               <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-main)' }}>
                 Semua Cabang Telah Dikosongkan (Mode Reset)
               </div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '480px', lineHeight: 1.5 }}>
-                Tidak ada cabang yang dipilih saat ini. Anda dapat mencentang cabang tertentu (misal: Makassar dan Kendari) pada filter cabang di atas, atau klik tombol di bawah untuk mengaktifkan kembali seluruh cabang.
+                Tidak ada cabang yang dipilih saat ini. Anda dapat mencentang cabang tertentu pada filter cabang di atas, atau klik tombol di bawah untuk mengaktifkan kembali seluruh cabang.
               </div>
               <button
                 type="button"
@@ -1815,7 +945,7 @@ export default function PortSightBeranda({
                   gap: '6px',
                 }}
               >
-                <CheckSquare size={14} />
+                <CheckSquare size={14} strokeWidth={1.75} />
                 <span>Pilih Semua 28 Cabang</span>
               </button>
             </div>
@@ -1823,7 +953,7 @@ export default function PortSightBeranda({
             /* Single branch breakdown */
             <div className="terminal-grid">
               {branchCommoditiesBreakdown.map((c, i) => (
-                <div key={i} className="terminal-card">
+                <div key={i} className="terminal-card" title={`Layanan ${c.layanan}: ${c.fullValue || c.value}`}>
                   <div className="terminal-card-top">
                     <div>
                       <div className="terminal-name">Layanan {c.layanan}</div>
@@ -1834,9 +964,9 @@ export default function PortSightBeranda({
                     </span>
                   </div>
 
-                  <div className="terminal-metric-value">{c.value}</div>
+                  <div className="terminal-metric-value tabular-nums">{c.value}</div>
 
-                  <div className="terminal-card-footer">
+                  <div className="terminal-card-footer tabular-nums">
                     <span className={c.isGood ? 'text-positive' : 'text-alert'}>
                       {c.rkap}
                     </span>{' '}
@@ -1860,9 +990,9 @@ export default function PortSightBeranda({
                     </span>
                   </div>
 
-                  <div className="terminal-metric-value">{filteredUtilisasi[0]?.bor || 0}%</div>
+                  <div className="terminal-metric-value tabular-nums">{filteredUtilisasi[0]?.bor || 0}%</div>
 
-                  <div className="terminal-card-footer">
+                  <div className="terminal-card-footer tabular-nums">
                     <span className="text-positive">
                       YOR: {filteredUtilisasi[0]?.yor || 0}% • SOR: {filteredUtilisasi[0]?.sor || 0}%
                     </span>
@@ -1885,7 +1015,7 @@ export default function PortSightBeranda({
                     fontSize: '13px',
                   }}
                 >
-                  Tidak ditemukan cabang dengan kata kunci "{terminalSearch}".
+                  Tidak ditemukan cabang dengan kata kunci &quot;{terminalSearch}&quot;.
                 </div>
               ) : (
                 <div className="terminal-grid">
@@ -1895,30 +1025,47 @@ export default function PortSightBeranda({
                       className="terminal-card"
                       onClick={() => onSelectTerminal && onSelectTerminal(t.id)}
                       style={{ cursor: 'pointer' }}
-                      title={`Klik untuk memfilter data cabang [${t.code}] ${t.name}`}
+                      title={`[${t.code}] ${t.name} — ${t.fullValue || t.value} (Klik untuk memfilter)`}
                     >
                       <div className="terminal-card-top">
                         <div>
                           <div className="terminal-name">{t.name}</div>
                           <div className="terminal-subtype">{t.subtype}</div>
                         </div>
-                        <span className={`status-badge-chip ${t.isGood ? 'status-baik' : 'status-waspada'}`}>
-                          {t.status}
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                          <span className={`status-badge-chip ${!t.hasData ? '' : t.isGood ? 'status-baik' : 'status-waspada'}`}>
+                            {t.status}
+                          </span>
+                          {t.hasPending && (
+                            <span
+                              style={{
+                                fontSize: '9px',
+                                fontWeight: 700,
+                                color: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.14)',
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                border: '1px solid rgba(245, 158, 11, 0.35)',
+                              }}
+                            >
+                              Pending Verifikasi
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="terminal-metric-value">{t.value}</div>
+                      <div className="terminal-metric-value tabular-nums">{t.value}</div>
 
-                      <div className="terminal-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div className="terminal-card-footer tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <span className={t.isGood ? 'text-positive' : 'text-alert'}>
+                          <span className={!t.hasData ? '' : t.isGood ? 'text-positive' : 'text-alert'}>
                             {t.rkap}
                           </span>{' '}
-                          <span className={t.isGood ? 'text-positive' : 'text-alert'}>
+                          <span className={!t.hasData ? '' : t.isGood ? 'text-positive' : 'text-alert'}>
                             {t.yoy}
                           </span>
                         </div>
-                        <ChevronRight size={14} color="var(--accent-blue)" />
+                        <ChevronRight size={14} strokeWidth={1.75} color="var(--accent-blue)" />
                       </div>
                     </div>
                   ))}
@@ -1930,12 +1077,12 @@ export default function PortSightBeranda({
                 <div style={{ marginTop: '22px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <FileSpreadsheet size={16} color="var(--accent-blue)" />
+                      <FileSpreadsheet size={16} strokeWidth={1.75} color="var(--accent-blue)" />
                       <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: 'var(--text-title)' }}>
                         Rincian Capaian Masing-Masing Cabang Terpilih (Bukan Akumulasi)
                       </h4>
                     </div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    <span className="tabular-nums" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       {selectedBranchesMetrics.length} Cabang Ditampilkan Mandiri
                     </span>
                   </div>
@@ -1965,35 +1112,49 @@ export default function PortSightBeranda({
                             <td style={{ fontWeight: 600, color: 'var(--text-main)', padding: '10px 12px' }}>
                               {bm.name}
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-main)', padding: '10px 12px' }}>
-                              {bm.revTotal > 0 ? formatRupiahFull(bm.revTotal) : 'Rp 0'}
+                            <td className="num-cell" style={{ fontWeight: 600, color: 'var(--text-main)', padding: '10px 12px' }}>
+                              {bm.revTotal === null ? 'Belum Lapor' : bm.revTotal === 0 ? 'Rp 0' : formatRupiahFull(bm.revTotal)}
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#10b981', padding: '10px 12px' }}>
-                              {bm.opTotal > 0 ? formatRupiahFull(bm.opTotal) : 'Rp 0'}
+                            <td className="num-cell" style={{ fontWeight: 600, color: bm.opTotal === null ? 'var(--text-muted)' : '#10b981', padding: '10px 12px' }}>
+                              {bm.opTotal === null ? 'Belum Lapor' : bm.opTotal === 0 ? 'Rp 0' : formatRupiahFull(bm.opTotal)}
                             </td>
-                            <td style={{ textAlign: 'right', padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                              {bm.teusTotal > 0 ? `${bm.teusTotal.toLocaleString('id-ID')} TEUs` : '—'}
+                            <td className="num-cell" style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {bm.teusTotal === null ? 'Belum Lapor' : bm.teusTotal === 0 ? '0 TEUs' : `${bm.teusTotal.toLocaleString('id-ID')} TEUs`}
                             </td>
-                            <td style={{ textAlign: 'right', padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                              {bm.tonTotal > 0 ? `${bm.tonTotal.toLocaleString('id-ID')} Ton` : '—'}
+                            <td className="num-cell" style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {bm.tonTotal === null ? 'Belum Lapor' : bm.tonTotal === 0 ? '0 Ton' : `${bm.tonTotal.toLocaleString('id-ID')} Ton`}
+                            </td>
+                            <td className="tabular-nums" style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              {bm.avgRka === null ? (
+                                <span style={{ color: 'var(--text-muted)' }}>Belum Lapor</span>
+                              ) : (
+                                <span className={`status-badge-chip ${bm.isGood ? 'status-baik' : 'status-waspada'}`}>
+                                  {bm.avgRka}%
+                                </span>
+                              )}
+                            </td>
+                            <td className="tabular-nums" style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              {bm.avgYoy === null ? (
+                                <span style={{ color: 'var(--text-muted)' }}>—</span>
+                              ) : (
+                                <span className={bm.avgYoy >= 100 ? 'text-positive' : 'text-alert'} style={{ fontWeight: 600 }}>
+                                  {bm.avgYoy >= 100 ? `+${(bm.avgYoy - 100).toFixed(1)}%` : `${(bm.avgYoy - 100).toFixed(1)}%`}
+                                </span>
+                              )}
+                            </td>
+                            <td className="tabular-nums" style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {bm.rfu !== null ? `${bm.rfu}%` : 'Belum Lapor'}
                             </td>
                             <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                              <span className={`status-badge-chip ${bm.isGood ? 'status-baik' : 'status-waspada'}`}>
-                                {bm.avgRka}%
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                              <span className={bm.avgYoy >= 100 ? 'text-positive' : 'text-alert'} style={{ fontWeight: 600 }}>
-                                {bm.avgYoy >= 100 ? `+${(bm.avgYoy - 100).toFixed(1)}%` : `${(bm.avgYoy - 100).toFixed(1)}%`}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                              {bm.rfu}%
-                            </td>
-                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                              <span className={`badge ${bm.isGood ? 'badge-green' : 'badge-red'}`}>
-                                {bm.isGood ? 'Baik' : 'Waspada'}
-                              </span>
+                              {!bm.hasData ? (
+                                <span className="badge" style={{ backgroundColor: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-muted)' }}>
+                                  Belum Lapor
+                                </span>
+                              ) : (
+                                <span className={`badge ${bm.isGood ? 'badge-green' : 'badge-red'}`}>
+                                  {bm.isGood ? 'Baik' : 'Waspada'}
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -2001,7 +1162,7 @@ export default function PortSightBeranda({
                     </table>
                   </div>
                   <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>💡</span>
+                    <Info size={13} strokeWidth={1.75} style={{ flexShrink: 0, color: 'var(--accent-blue)' }} />
                     <span>
                       Data di atas menampilkan capaian riil masing-masing cabang terpilih secara independen (tidak dikalkulasi atau diakumulasi menjadi satu total).
                     </span>
@@ -2016,10 +1177,11 @@ export default function PortSightBeranda({
         <div className="attention-card">
           <div className="attention-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AlertTriangle size={16} color="#fbbf24" />
+              <AlertTriangle size={16} strokeWidth={1.75} color="#fbbf24" />
               <span>Perlu perhatian</span>
             </div>
             <span
+              className="tabular-nums"
               style={{
                 fontSize: '10.5px',
                 color: '#fbbf24',
@@ -2099,7 +1261,7 @@ export default function PortSightBeranda({
                       }}
                       title={`Buka modul ${item.sourceModule} (${item.branchCode || ''})`}
                     >
-                      <ExternalLink size={11} />
+                      <ExternalLink size={11} strokeWidth={1.75} />
                       <span>{item.linkText || `Buka ${item.sourceModule}`}</span>
                     </button>
                     <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
@@ -2125,8 +1287,8 @@ export default function PortSightBeranda({
             }}
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <FileSpreadsheet size={13} color="var(--accent-blue)" />
-              <span>Sumber: input_data.xlsx (My Drive)</span>
+              <FileSpreadsheet size={13} strokeWidth={1.75} color="var(--accent-blue)" />
+              <span>Sumber: Basis Data SQLite &amp; input_data.xlsx</span>
             </span>
             {onNavigateTab && (
               <button
@@ -2147,7 +1309,7 @@ export default function PortSightBeranda({
                 title="Buka Pusat Impor & Sinkronisasi Spreadsheet"
               >
                 <span>Pusat Data</span>
-                <ExternalLink size={10} />
+                <ExternalLink size={10} strokeWidth={1.75} />
               </button>
             )}
           </div>

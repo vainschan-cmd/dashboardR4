@@ -1,8 +1,23 @@
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "PELINDO R4 PortDash – Monitoring Kinerja Pelabuhan",
+  title: "PELINDO R4 PortDash | Monitoring Kinerja Pelabuhan",
   description: "Aplikasi monitoring, konsolidasi, analisis, dan penyajian kinerja Regional 4 serta seluruh cabang pelabuhan.",
   keywords: ["Pelabuhan", "Dashboard Eksekutif", "Monitoring Kinerja", "Regional", "Pelindo", "Port Analytics"],
   authors: [{ name: "Regional Port Authority" }],
@@ -32,7 +47,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" data-theme="light" suppressHydrationWarning>
+    <html
+      lang="id"
+      data-theme="light"
+      className={`${plusJakartaSans.variable} ${jetBrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <link rel="icon" href="/favicon.ico?v=2" sizes="any" />
         <link rel="icon" href="/pelindo-logo.png?v=2" type="image/png" sizes="256x256" />
@@ -50,7 +70,9 @@ export default function RootLayout({
                   } else {
                     document.documentElement.setAttribute('data-theme', 'light');
                   }
-                } catch (e) {}
+                } catch (e) {
+                  document.documentElement.setAttribute('data-theme', 'light');
+                }
               })();
             `,
           }}

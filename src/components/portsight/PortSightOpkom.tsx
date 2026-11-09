@@ -50,22 +50,28 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    const abortController = new AbortController();
     async function loadData() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/modules-data`);
+        const res = await fetch(`/api/modules-data`, { signal: abortController.signal });
         const json = await res.json();
         if (json.success && json.opkom) {
           setData(json.opkom);
         }
-      } catch (e) {
-        console.error(e);
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') {
+          console.error(e);
+        }
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
     loadData();
-  }, []);
+    return () => abortController.abort();
+  }, [selectedTerminal]);
 
   // Filter based on selected terminal and commodity
   const filteredData = data.filter(d => {
