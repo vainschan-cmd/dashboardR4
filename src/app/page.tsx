@@ -619,6 +619,21 @@ export default function DashboardHome() {
         {activeTab === 'audit_trail' && (
           <AuditTrailView />
         )}
+
+        {/* Footer */}
+        <footer
+          style={{
+            marginTop: 'auto',
+            padding: '16px 24px',
+            textAlign: 'center',
+            fontSize: '11.5px',
+            color: 'var(--text-muted)',
+            borderTop: '1px solid var(--border-subtle)',
+            backgroundColor: 'var(--bg-surface)',
+          }}
+        >
+          © 2026 | ICT PT. Pelabuhan Indonesia (Persero) Regional 4. All Rights Reserved
+        </footer>
       </main>
       </div>
 
