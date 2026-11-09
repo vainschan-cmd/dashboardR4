@@ -890,7 +890,7 @@ export default function LoginScreen({
           zIndex: 10,
         }}
       >
-        PT Pelabuhan Indonesia (Persero) Regional 4 • 28 Cabang Pelabuhan Terintegrasi • PortDash Enterprise Dashboard
+        © 2026 | ICT PT. Pelabuhan Indonesia (Persero) Regional 4. All Rights Reserved
       </footer>
     </div>
   );
