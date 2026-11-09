@@ -130,21 +130,101 @@ html, body {
   background: var(--border-focus);
 }
 
-/* App Header */
+/* App Header (Collapsible Vertikal) */
 .portsight-header {
   height: 52px;
+  min-height: 52px;
   background-color: var(--bg-header);
   border-bottom: 1px solid var(--border-subtle);
   box-shadow: var(--header-shadow);
   padding: 0 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   position: sticky;
   top: 0;
   z-index: 50;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease, padding 0.25s ease;
   width: 100%;
+}
+
+.portsight-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 52px;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Collapsed Header (Efek Lipat / Slide Up) */
+.portsight-header.collapsed {
+  height: 3px !important;
+  min-height: 3px !important;
+  padding: 0 !important;
+  box-shadow: none;
+}
+
+.portsight-header.collapsed .portsight-header-content {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Central Bottom Toggle Tab (^ / v) */
+.navbar-toggle-container {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.portsight-header.collapsed .navbar-toggle-container {
+  bottom: -15px;
+}
+
+.navbar-toggle-btn {
+  width: 42px;
+  height: 16px;
+  border-radius: 0 0 10px 10px;
+  background-color: var(--bg-header);
+  border: 1px solid var(--border-subtle);
+  border-top: none;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.navbar-toggle-btn:hover {
+  background-color: var(--bg-card);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  height: 18px;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+[data-theme="light"] .navbar-toggle-btn {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: #64748b;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .navbar-toggle-btn:hover {
+  color: #0284c7;
+  border-color: #0284c7;
 }
 
 /* PortSight Main Layout (CSS Flexbox: Sidebar Left, Content Right) */
@@ -1498,6 +1578,109 @@ select option {
 [data-theme="light"] [style*="border-color: rgba(255, 255, 255, 0.1)"],
 [data-theme="light"] [style*="border-color: #1e3557"] {
   border-color: #e2e8f0 !important;
+}
+
+/* Dashboard Chart & Gauge Cards Visual Styles */
+.chart-container-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color 0.15s ease;
+}
+
+.kpi-gauge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 1200px) {
+  .kpi-gauge-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .kpi-gauge-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kpi-gauge-card {
+  background-color: var(--bg-inner);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  cursor: pointer;
+}
+
+.kpi-gauge-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.15);
+}
+
+.services-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1380px) {
+  .services-kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 768px) {
+  .services-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .services-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.service-kpi-card {
+  background-color: var(--bg-inner);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.service-kpi-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-blue);
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.15);
+}
+
+.status-badge-baik {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 /* Sembunyikan Next.js Development Indicator / Logo "N" Badge */

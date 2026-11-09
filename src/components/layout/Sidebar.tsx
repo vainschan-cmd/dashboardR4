@@ -333,42 +333,6 @@ export default function Sidebar({
               </div>
             </div>
           )}
-
-          {/* Quick Manual Input Action (Hidden for BOD) */}
-          {onOpenManualInput && !isBod && (
-            <div style={{ marginTop: isCollapsed ? '10px' : '16px', padding: isCollapsed ? '0' : '0 2px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onCloseMobile) onCloseMobile();
-                  onOpenManualInput();
-                }}
-                onMouseEnter={(e) => handleMouseEnter(e, 'Input Data Manual')}
-                onMouseLeave={handleMouseLeave}
-                className="btn-primary"
-                title={isCollapsed ? 'Input Data Manual' : undefined}
-                style={{
-                  width: '100%',
-                  padding: isCollapsed ? '8px 0' : '9px 12px',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: isCollapsed ? '0' : '6px',
-                  borderRadius: 'var(--radius-md)',
-                  fontWeight: 700,
-                  backgroundColor: 'var(--accent-orange, #f97316)',
-                  borderColor: 'var(--accent-orange, #f97316)',
-                  color: '#ffffff',
-                  boxShadow: '0 2px 8px rgba(249, 115, 22, 0.35)',
-                  cursor: 'pointer',
-                }}
-              >
-                <PlusCircle size={16} />
-                {!isCollapsed && <span>+ Input Data Manual</span>}
-              </button>
-            </div>
-          )}
         </nav>
 
         {/* Sidebar Footer */}

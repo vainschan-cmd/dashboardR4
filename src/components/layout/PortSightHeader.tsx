@@ -5,6 +5,7 @@ import {
   Download,
   Printer,
   ChevronDown,
+  ChevronUp,
   Layers,
   Database,
   FileSpreadsheet,
@@ -92,6 +93,26 @@ export default function PortSightHeader({
 }: PortSightHeaderProps) {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isNavbarCollapsed, setIsNavbarCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('portsight_navbar_collapsed');
+      if (saved === 'true') {
+        setIsNavbarCollapsed(true);
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleToggleNavbar = () => {
+    setIsNavbarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('portsight_navbar_collapsed', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
   const [internalCompMode, setInternalCompMode] = useState<string>('all');
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [branchSearchQuery, setBranchSearchQuery] = useState('');
@@ -286,9 +307,10 @@ export default function PortSightHeader({
 
   return (
     <>
-      {/* 1. TOP HEADER BAR: Brand, Tools, User, Mobile Toggle */}
-      <header className="portsight-header">
-        {/* Brand Left */}
+      {/* 1. TOP HEADER BAR (Collapsible): Brand, Tools, User, Mobile Toggle */}
+      <header className={`portsight-header ${isNavbarCollapsed ? 'collapsed' : ''}`}>
+        <div className="portsight-header-content">
+          {/* Brand Left */}
         <div
           className="brand-wrapper"
           onClick={() => handleSelectTab('beranda')}
@@ -527,6 +549,20 @@ export default function PortSightHeader({
                 }}
               />
             )}
+          </button>
+        </div>
+        </div>
+
+        {/* 1. Tombol Trigger Panah: Chevron Up / Down di Bagian Tengah Bawah Navbar */}
+        <div className="navbar-toggle-container">
+          <button
+            type="button"
+            className="navbar-toggle-btn"
+            onClick={handleToggleNavbar}
+            title={isNavbarCollapsed ? "Tampilkan Seluruh Navbar (v)" : "Ciutkan Navbar ke Atas (^)"}
+            aria-label={isNavbarCollapsed ? "Tampilkan Navbar" : "Ciutkan Navbar"}
+          >
+            {isNavbarCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
           </button>
         </div>
       </header>
