@@ -77,10 +77,10 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
           message: `Gagal memuat data dari spreadsheet: ${data.error}`,
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSyncStatus({
         type: 'error',
-        message: `Gagal memuat data: ${e.message}`,
+        message: `Gagal memuat data: ${e instanceof Error ? e.message : 'Kesalahan jaringan'}`,
       });
     } finally {
       setPullingDrive(false);
@@ -110,10 +110,10 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
           message: `Gagal mengekspor ke berkas spreadsheet: ${data.error}`,
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSyncStatus({
         type: 'error',
-        message: `Gagal mengekspor data: ${e.message}`,
+        message: `Gagal mengekspor data: ${e instanceof Error ? e.message : 'Kesalahan jaringan'}`,
       });
     } finally {
       setPushingDrive(false);
@@ -149,10 +149,10 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
           message: `Gagal mengimpor berkas: ${data.error}`,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSyncStatus({
         type: 'error',
-        message: `Gagal mengunggah berkas: ${err.message}`,
+        message: `Gagal mengunggah berkas: ${err instanceof Error ? err.message : 'Kesalahan jaringan'}`,
       });
     } finally {
       setPullingDrive(false);
@@ -217,8 +217,8 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
         if (onRefreshUsers) onRefreshUsers();
         setTimeout(() => setSyncStatus(null), 4500);
       }
-    } catch (err: any) {
-      setEditError(err.message || 'Terjadi kesalahan sistem.');
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Terjadi kesalahan sistem.');
     } finally {
       setEditSaving(false);
     }
@@ -243,10 +243,10 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
           message: data.error || 'Gagal menghapus akun pengguna.',
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSyncStatus({
         type: 'error',
-        message: e.message || 'Gagal menghapus akun pengguna.',
+        message: e instanceof Error ? e.message : 'Gagal menghapus akun pengguna.',
       });
     } finally {
       setDeleting(false);
@@ -506,7 +506,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
             {users.length === 0 && (
               <tr>
                 <td colSpan={8} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                  Belum ada data PIC yang terdaftar. Pilih tombol "Tambah PIC Baru" untuk mendaftarkan akun.
+                  Belum ada data PIC yang terdaftar. Pilih tombol &ldquo;Tambah PIC Baru&rdquo; untuk mendaftarkan akun.
                 </td>
               </tr>
             )}
@@ -519,6 +519,9 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
         <div className="modal-overlay" onClick={() => !deleting && setPendingDeleteUser(null)}>
           <div
             className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Konfirmasi Penghapusan Akun PIC"
             style={{ maxWidth: '420px', width: '100%', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -528,6 +531,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
               </h3>
               <button
                 type="button"
+                aria-label="Tutup konfirmasi penghapusan"
                 onClick={() => setPendingDeleteUser(null)}
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
               >

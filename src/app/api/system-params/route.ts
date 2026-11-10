@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import {
   dbQueries,
   getDbPath,
@@ -8,11 +10,10 @@ import {
 } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
 import { requireAuth } from '@/lib/rbac';
-import fs from 'fs';
-import path from 'path';
+import { systemParamsPayloadSchema, parseWithSchema } from '@/lib/validation';
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'system_params:read' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     const activeDbPath = getDbPath();
     const relativeDbPath = path.relative(process.cwd(), activeDbPath);
-    let dbStats: any = null;
+    let dbStats: Record<string, unknown> | null = null;
     if (fs.existsSync(activeDbPath)) {
       try {
         const stat = fs.statSync(activeDbPath);
@@ -34,7 +35,9 @@ export async function GET(req: NextRequest) {
           lastModified: stat.mtime.toISOString(),
           absolutePath: relativeDbPath,
         };
-      } catch (e) {}
+      } catch {
+        dbStats = { exists: true, absolutePath: relativeDbPath };
+      }
     } else {
       dbStats = {
         exists: false,
@@ -50,29 +53,38 @@ export async function GET(req: NextRequest) {
       activeDbPath: relativeDbPath,
       dbStats,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memuat parameter sistem.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin'] });
+  const auth = await requireAuth(req, { requiredPermission: 'system_params:manage' });
   if (!auth.authorized) return auth.response;
 
   try {
-    const body = await req.json();
+    const rawBody = await req.json();
+    const parsed = parseWithSchema(systemParamsPayloadSchema, rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error },
+        { status: 400 }
+      );
+    }
+    const body = parsed.data;
 
     // 1. Action: Validasi Path Database (Strictly confined to ./data directory)
     if (body.action === 'validate_db_path') {
       const targetPath = body.sqlite_path?.trim();
       if (!targetPath) {
-        return NextResponse.json({
-          success: false,
-          error: 'Lokasi path database tidak boleh kosong.',
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Lokasi path database tidak boleh kosong.',
+          },
+          { status: 400 }
+        );
       }
 
       const { safeRelativePath, resolvedAbsolutePath } = sanitizeSafeDataFilePath(
@@ -96,7 +108,9 @@ export async function POST(req: NextRequest) {
       if (exists) {
         try {
           sizeBytes = fs.statSync(resolvedAbsolutePath).size;
-        } catch (e) {}
+        } catch {
+          sizeBytes = 0;
+        }
       }
 
       return NextResponse.json({
@@ -125,21 +139,24 @@ export async function POST(req: NextRequest) {
     if (body.dbConfig) {
       const dbCfg = body.dbConfig;
       const { safeRelativePath } = sanitizeSafeDataFilePath(
-        dbCfg.sqlite_path,
+        typeof dbCfg.sqlite_path === 'string' ? dbCfg.sqlite_path : undefined,
         'ed_dashboard.db',
         ['.db', '.sqlite', '.sqlite3']
       );
-      updatedDbConfig = dbQueries.saveDbConfig({
-        engine: dbCfg.engine || 'sqlite',
-        sqlite_path: safeRelativePath,
-        pg_host: dbCfg.pg_host || 'localhost',
-        pg_port: Number(dbCfg.pg_port) || 5432,
-        pg_database: dbCfg.pg_database || 'ed_dashboard',
-        pg_user: dbCfg.pg_user || 'postgres',
-        pg_password: dbCfg.pg_password,
-        pg_ssl: Boolean(dbCfg.pg_ssl),
-        max_connections: Number(dbCfg.max_connections) || 10,
-      }, userName);
+      updatedDbConfig = dbQueries.saveDbConfig(
+        {
+          engine: dbCfg.engine === 'postgres' ? 'postgres' : 'sqlite',
+          sqlite_path: safeRelativePath,
+          pg_host: typeof dbCfg.pg_host === 'string' && dbCfg.pg_host ? dbCfg.pg_host : 'localhost',
+          pg_port: Number(dbCfg.pg_port) || 5432,
+          pg_database: typeof dbCfg.pg_database === 'string' && dbCfg.pg_database ? dbCfg.pg_database : 'ed_dashboard',
+          pg_user: typeof dbCfg.pg_user === 'string' && dbCfg.pg_user ? dbCfg.pg_user : 'postgres',
+          pg_password: typeof dbCfg.pg_password === 'string' ? dbCfg.pg_password : undefined,
+          pg_ssl: Boolean(dbCfg.pg_ssl),
+          max_connections: Number(dbCfg.max_connections) || 10,
+        },
+        userName
+      );
 
       try {
         dbQueries.createAuditLog({
@@ -152,26 +169,42 @@ export async function POST(req: NextRequest) {
           details: `Pembaruan Konfigurasi Database: Engine: ${updatedDbConfig.engine}, Path SQLite: ${updatedDbConfig.sqlite_path}, Host PG: ${updatedDbConfig.pg_host}:${updatedDbConfig.pg_port}/${updatedDbConfig.pg_database}`,
           ip_address: clientIp,
         });
-      } catch (e) {}
+      } catch {
+        // ignore non-fatal audit error
+      }
     }
 
     // 3. Simpan Kredensial & Integrasi (Google Drive, Sheets, API Gateway)
     if (body.credentials) {
       const creds = body.credentials;
       const { safeRelativePath: safeExcelPath } = sanitizeSafeDataFilePath(
-        creds.google_drive_file_path,
+        typeof creds.google_drive_file_path === 'string' ? creds.google_drive_file_path : undefined,
         'input_data.xlsx',
         ['.xlsx', '.xls', '.csv']
       );
-      updatedCredentials = dbQueries.saveIntegrationCredentials({
-        google_drive_email: creds.google_drive_email ? creds.google_drive_email.trim() : 'regdashr@gmail.com',
-        google_drive_file_path: safeExcelPath,
-        google_sheets_id: creds.google_sheets_id ? creds.google_sheets_id.trim() : '',
-        google_sheets_name: creds.google_sheets_name ? creds.google_sheets_name.trim() : 'Input_Kinerja_Bulanan',
-        google_api_key: creds.google_api_key,
-        api_gateway_url: creds.api_gateway_url || 'https://api.pelindo.co.id/v1/r4',
-        api_gateway_token: creds.api_gateway_token,
-      }, userName);
+      updatedCredentials = dbQueries.saveIntegrationCredentials(
+        {
+          google_drive_email:
+            typeof creds.google_drive_email === 'string' && creds.google_drive_email.trim()
+              ? creds.google_drive_email.trim()
+              : 'regdashr@gmail.com',
+          google_drive_file_path: safeExcelPath,
+          google_sheets_id:
+            typeof creds.google_sheets_id === 'string' ? creds.google_sheets_id.trim() : '',
+          google_sheets_name:
+            typeof creds.google_sheets_name === 'string' && creds.google_sheets_name.trim()
+              ? creds.google_sheets_name.trim()
+              : 'Input_Kinerja_Bulanan',
+          google_api_key: typeof creds.google_api_key === 'string' ? creds.google_api_key : undefined,
+          api_gateway_url:
+            typeof creds.api_gateway_url === 'string' && creds.api_gateway_url
+              ? creds.api_gateway_url
+              : 'https://api.pelindo.co.id/v1/r4',
+          api_gateway_token:
+            typeof creds.api_gateway_token === 'string' ? creds.api_gateway_token : undefined,
+        },
+        userName
+      );
 
       try {
         dbQueries.createAuditLog({
@@ -184,7 +217,9 @@ export async function POST(req: NextRequest) {
           details: `Pembaruan Kredensial Integrasi: Google Drive Email: ${updatedCredentials.google_drive_email}, Path Excel: ${updatedCredentials.google_drive_file_path}, Sheet ID: ${updatedCredentials.google_sheets_id}`,
           ip_address: clientIp,
         });
-      } catch (e) {}
+      } catch {
+        // ignore non-fatal audit error
+      }
     }
 
     // 4. Simpan System & Session Parameters
@@ -219,7 +254,9 @@ export async function POST(req: NextRequest) {
           details: `Pembaruan Parameter Sistem: Timeout Sesi ${timeout} menit, Auto-logout idle: ${autoLogout ? 'Aktif' : 'Non-aktif'}, Peringatan: ${warning} menit, Tema Default: ${defaultTheme}`,
           ip_address: clientIp,
         });
-      } catch (e) {}
+      } catch {
+        // ignore non-fatal audit error
+      }
     }
 
     return NextResponse.json({
@@ -229,10 +266,8 @@ export async function POST(req: NextRequest) {
       credentials: toSafeIntegrationCredentials(updatedCredentials || dbQueries.getIntegrationCredentials()),
       message: 'Konfigurasi parameter sistem, kredensial, dan database telah disimpan.',
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal menyimpan parameter sistem.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

@@ -1,8 +1,9 @@
 import { getDb } from './db';
 import { hashPassword } from './auth';
-import { Branch, Department, User, KPIIndicator, TemplateConfig, KPIDirection, StatusColor } from './types';
+import { Branch, Department, User, KPIIndicator, StatusColor } from './types';
 
-export function runSeed(force = false) {
+export function runSeed(_force = false) {
+  void _force;
   const db = getDb();
 
   console.log('Seeding official Pelindo Regional 4 (R4 PortDash) Master & Simulation Data...');
@@ -385,7 +386,7 @@ export function runSeed(force = false) {
       
       // Special verification statuses in Month 9 for realistic simulation
       let cargoStatus = 'verified';
-      let cargoRevision: string | null = null;
+      const cargoRevision: string | null = null;
       let cargoVerifier: string | null = 'bod_regional';
       let cargoVerifiedAt: string | null = '2026-10-01T10:00:00Z';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sliders, Plus, Trash2, Save, Download, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Sliders, Plus, Trash2, Save, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Department, TemplateConfig, TemplateColumnDef, UserRole } from '@/lib/types';
 
 interface TemplateMappingProps {
@@ -39,7 +39,11 @@ export default function TemplateMapping({
     }
   };
 
-  const handleUpdateColumn = (index: number, field: keyof TemplateColumnDef, val: any) => {
+  const handleUpdateColumn = (
+    index: number,
+    field: keyof TemplateColumnDef,
+    val: TemplateColumnDef[keyof TemplateColumnDef]
+  ) => {
     const updated = [...currentCols];
     updated[index] = { ...updated[index], [field]: val };
     setCurrentCols(updated);
@@ -92,8 +96,8 @@ export default function TemplateMapping({
 
       setMessage({ type: 'success', text: 'Konfigurasi template mapping dinamis berhasil disimpan tanpa mengubah kode!' });
       onTemplateUpdated();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Gagal menyimpan template mapping.' });
     } finally {
       setIsSaving(false);
     }

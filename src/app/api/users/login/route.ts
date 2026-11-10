@@ -7,32 +7,29 @@ import {
   issueSessionCookies,
   getClientIp,
 } from '@/lib/auth';
+import { loginSchema, parseWithSchema } from '@/lib/validation';
 
 export async function POST(req: NextRequest) {
   const clientIp = getClientIp(req);
 
   try {
-    const body = await req.json();
-    const { nipp, username, password } = body;
+    const body = (await req.json()) as Record<string, unknown>;
+    const normalizedPayload = {
+      nipp: String(body?.nipp || body?.username || '').trim(),
+      password: String(body?.password || '').trim(),
+    };
 
-    const inputNipp = String(nipp || username || '').trim();
-    const inputPassword = String(password || '').trim();
-
-    if (!inputNipp) {
+    const parsed = parseWithSchema(loginSchema, normalizedPayload);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Silakan masukkan NIPP Anda.' },
+        { success: false, error: parsed.error },
         { status: 400 }
       );
     }
 
-    if (!inputPassword) {
-      return NextResponse.json(
-        { success: false, error: 'Silakan masukkan kata sandi Anda.' },
-        { status: 400 }
-      );
-    }
+    const { nipp: inputNipp, password: inputPassword } = parsed.data;
 
-    // 1. Check Brute-Force Rate Limit (IP + NIPP)
+    // 1. Check Brute-Force Rate Limit (Persistent SQLite WAL storage by IP + NIPP)
     const rateLimit = checkLoginRateLimit(clientIp, inputNipp);
     if (!rateLimit.allowed) {
       try {
@@ -46,7 +43,9 @@ export async function POST(req: NextRequest) {
           details: `Percobaan login diblokir sementara (Rate Limit). Coba lagi dalam ${rateLimit.retryAfterSeconds} detik.`,
           ip_address: clientIp,
         });
-      } catch {}
+      } catch {
+        // ignore non-fatal audit error
+      }
 
       return NextResponse.json(
         {
@@ -63,7 +62,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Authenticate User against scrypt password hash (No universal bypass)
+    // 2. Authenticate User against scrypt password hash
     const user = dbQueries.authenticateUser(inputNipp, inputPassword);
 
     if (!user) {
@@ -79,9 +78,10 @@ export async function POST(req: NextRequest) {
           details: `Gagal autentikasi untuk NIPP ${inputNipp}: kredensial tidak sesuai.`,
           ip_address: clientIp,
         });
-      } catch {}
+      } catch {
+        // ignore non-fatal audit error
+      }
 
-      // Uniform error message to prevent NIPP enumeration
       return NextResponse.json(
         {
           success: false,
@@ -103,7 +103,9 @@ export async function POST(req: NextRequest) {
           details: `Percobaan login ditolak: akun NIPP ${user.nipp} berstatus nonaktif.`,
           ip_address: clientIp,
         });
-      } catch {}
+      } catch {
+        // ignore non-fatal audit error
+      }
 
       return NextResponse.json(
         {
@@ -150,15 +152,18 @@ export async function POST(req: NextRequest) {
         action: 'LOGIN',
         entity: 'AuthSession',
         entity_id: safeUser.nipp,
-        details: `Login sesi JWT berhasil untuk ${safeUser.name} (NIPP: ${safeUser.nipp}, Role: ${safeUser.role}, Cabang: ${safeUser.branch_id || 'R99'}).`,
+        details: `Login berhasil ke PortSight untuk ${safeUser.name} (NIPP: ${safeUser.nipp}, Role: ${safeUser.role}).`,
         ip_address: clientIp,
       });
-    } catch {}
+    } catch {
+      // ignore non-fatal audit error
+    }
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Terjadi kesalahan saat memproses autentikasi.';
     return NextResponse.json(
-      { success: false, error: error.message || 'Terjadi kesalahan saat memproses autentikasi.' },
+      { success: false, error: message },
       { status: 500 }
     );
   }

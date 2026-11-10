@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dbQueries } from '@/lib/db';
+import fs from 'fs';
+import { dbQueries, toSafeUser } from '@/lib/db';
 import { requireAuth } from '@/lib/rbac';
+import { MAX_UPLOAD_FILE_BYTES } from '@/lib/validation';
 import {
   exportUsersToSpreadsheet,
   importUsersFromSpreadsheet,
   findLatestMasterUserSpreadsheet,
   getMasterUserSpreadsheetPath,
   DRIVE_ACCOUNT,
-  MASTER_USER_FILE
+  MASTER_USER_FILE,
 } from '@/lib/userPicSync';
-import fs from 'fs';
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'users:manage' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -26,6 +27,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { success: false, error: 'File Excel tidak ditemukan dalam request.' },
           { status: 400 }
+        );
+      }
+      if (file.size > MAX_UPLOAD_FILE_BYTES) {
+        return NextResponse.json(
+          { success: false, error: 'Ukuran berkas Excel melebihi batas maksimum 5 MB.' },
+          { status: 413 }
         );
       }
       const arrayBuffer = await file.arrayBuffer();
@@ -48,14 +55,16 @@ export async function POST(req: NextRequest) {
     // JSON payload or plain request
     let action = 'push';
     try {
-      const body = await req.json();
-      if (body && (body.action || body.direction)) {
-        action = (body.action || body.direction).toLowerCase();
+      const body = (await req.json()) as { action?: string; direction?: string };
+      const rawAction = body?.action || body?.direction;
+      if (typeof rawAction === 'string') {
+        action = rawAction.toLowerCase();
       }
-    } catch {}
+    } catch {
+      // default to push
+    }
 
     if (action === 'pull' || action === 'import' || action === 'ambil') {
-      // Pull data from spreadsheet (Downloads or data folder)
       const result = importUsersFromSpreadsheet();
 
       return NextResponse.json({
@@ -72,8 +81,7 @@ export async function POST(req: NextRequest) {
         syncedAt: new Date().toISOString(),
       });
     } else {
-      // Default: Push data to spreadsheet (My Drive)
-      const users = dbQueries.getUsers();
+      const users = dbQueries.getUsers().map(toSafeUser);
       const filePath = exportUsersToSpreadsheet(users);
       const stat = fs.statSync(filePath);
 
@@ -88,16 +96,14 @@ export async function POST(req: NextRequest) {
         syncedAt: new Date().toISOString(),
       });
     }
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal menyinkronkan data pengguna.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'users:manage' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -125,10 +131,8 @@ export async function GET(req: NextRequest) {
       latestSource: latest?.source,
       latestModified: latest?.mtime.toISOString(),
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memeriksa status berkas sinkronisasi.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

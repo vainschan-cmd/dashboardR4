@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
-import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
+import {
+  requireAuth,
+  enforceBranchFilterForRead,
+  enforceDepartmentFilterForRead,
+} from '@/lib/rbac';
 import { verificationSchema, parseWithSchema } from '@/lib/validation';
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
+  const auth = await requireAuth(req, { requiredPermission: 'verification:read' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -13,11 +17,13 @@ export async function GET(req: NextRequest) {
     const month = searchParams.get('month') ? parseInt(searchParams.get('month')!, 10) : undefined;
     const year = searchParams.get('year') ? parseInt(searchParams.get('year')!, 10) : undefined;
     const rawBranch = searchParams.get('branch_id') || undefined;
+    const rawDept = searchParams.get('department_id') || undefined;
     const branch_id = enforceBranchFilterForRead(auth.session, rawBranch);
+    const department_id = enforceDepartmentFilterForRead(auth.session, rawDept);
 
-    // Fetch records needing attention (scoped by branch for pic_cabang)
     const pendingRecords = dbQueries.getMonthlyRecords({
       branch_id,
+      department_id,
       month,
       year,
       verification_status: 'pending_verification',
@@ -25,18 +31,21 @@ export async function GET(req: NextRequest) {
 
     const revisionRecords = dbQueries.getMonthlyRecords({
       branch_id,
+      department_id,
       month,
       year,
       verification_status: 'revision_needed',
     });
 
-    // Generate completeness summary matrix for the selected period
     const allBranches = dbQueries.getBranches();
     const branches = branch_id
       ? allBranches.filter(b => b.id === branch_id || b.code.toUpperCase() === branch_id.toUpperCase())
       : allBranches;
-    const departments = dbQueries.getDepartments();
-    const allRecords = dbQueries.getMonthlyRecords({ branch_id, month, year });
+    const allDepartments = dbQueries.getDepartments();
+    const departments = department_id
+      ? allDepartments.filter(d => d.id === department_id)
+      : allDepartments;
+    const allRecords = dbQueries.getMonthlyRecords({ branch_id, department_id, month, year });
 
     const matrix = branches.map(b => {
       const deptStatuses = departments.map(d => {
@@ -94,17 +103,14 @@ export async function GET(req: NextRequest) {
       revisionRecords,
       matrix,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, message: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memuat status verifikasi.';
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
-  // Server-side RBAC: Only super_admin or admin_regional can verify or request revisions
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'verification:approve' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -162,12 +168,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Status verifikasi berhasil diperbarui menjadi ${statusLabel}.`,
-      updatedCount: recordIds.length,
+      message: `${recordIds.length} data telah diubah menjadi ${statusLabel}.`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memproses verifikasi.';
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: `Gagal memproses verifikasi: ${message}` },
       { status: 500 }
     );
   }

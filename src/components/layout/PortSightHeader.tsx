@@ -97,14 +97,17 @@ export default function PortSightHeader({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('portsight_navbar_collapsed');
-      if (saved === 'true') {
-        setIsNavbarCollapsed(true);
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem('portsight_navbar_collapsed');
+        if (saved === 'true') {
+          setIsNavbarCollapsed(true);
+        }
+      } catch (e) {
+        console.warn('[PortSightHeader] Failed to read navbar collapse state:', e);
       }
-    } catch (e) {
-      console.warn('[PortSightHeader] Failed to read navbar collapse state:', e);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -164,28 +167,29 @@ export default function PortSightHeader({
   const mainTabs = MAIN_NAVIGATION_TABS;
 
   const effectiveRole = currentUser?.role || userRole;
+  const userBranchId = currentUser?.branch_id;
   const isBod = effectiveRole === 'viewer';
-  const isPicCabang = effectiveRole === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99';
+  const isPicCabang = effectiveRole === 'pic_cabang' && !!userBranchId && userBranchId !== 'R99';
   const canManageUsers = effectiveRole === 'super_admin' || effectiveRole === 'admin_regional';
-  const assignedBranch = currentUser?.branch_id ? OFFICIAL_BRANCHES.find(b => b.code === currentUser?.branch_id) : undefined;
+  const assignedBranch = userBranchId ? OFFICIAL_BRANCHES.find(b => b.code === userBranchId) : undefined;
   const currentBranchName = OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal)?.name;
   const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
   const selectedBranchTitle = isPicCabang
-    ? `[${currentUser?.branch_id}] ${assignedBranch?.name || currentUser?.branch_id}`
+    ? `[${userBranchId}] ${assignedBranch?.name || userBranchId}`
     : isAll
       ? 'Regional 4 (Konsolidasi 28 Cabang)'
       : getSelectedBranchLabel(selectedTerminal);
 
   const selectedBranchCodes = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      return [currentUser.branch_id];
+    if (isPicCabang && userBranchId && userBranchId !== 'R99') {
+      return [userBranchId];
     }
     if (selectedTerminal === 'NONE') return [];
     if (!selectedTerminal || selectedTerminal === 'ALL') {
       return OFFICIAL_BRANCHES.map(b => b.code);
     }
     return parseSelectedBranches(selectedTerminal);
-  }, [isPicCabang, currentUser?.branch_id, selectedTerminal]);
+  }, [isPicCabang, userBranchId, selectedTerminal]);
 
   const isAllSelected = !isPicCabang && (selectedTerminal === 'ALL' || (selectedBranchCodes.length === OFFICIAL_BRANCHES.length && selectedTerminal !== 'NONE'));
 
@@ -229,8 +233,8 @@ export default function PortSightHeader({
   };
 
   const filteredBranchesForPicker = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      const b = OFFICIAL_BRANCHES.find(x => x.code === currentUser.branch_id);
+    if (isPicCabang && userBranchId && userBranchId !== 'R99') {
+      const b = OFFICIAL_BRANCHES.find(x => x.code === userBranchId);
       return b ? [b] : (assignedBranch ? [assignedBranch] : []);
     }
     if (!branchSearchQuery.trim()) return OFFICIAL_BRANCHES;
@@ -238,7 +242,7 @@ export default function PortSightHeader({
     return OFFICIAL_BRANCHES.filter(
       b => b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q)
     );
-  }, [isPicCabang, currentUser?.branch_id, assignedBranch, branchSearchQuery]);
+  }, [isPicCabang, userBranchId, assignedBranch, branchSearchQuery]);
 
   const getRoleLabel = () => {
     if (userRole === 'super_admin') return 'Super Admin';

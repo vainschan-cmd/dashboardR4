@@ -66,11 +66,6 @@ export default function ManualDataInputModal({
   currentUser,
   onSuccess,
 }: ManualDataInputModalProps) {
-  // BOD / Viewer role is prohibited from manual input
-  if (!isOpen || currentUser?.role === 'viewer' || currentUser?.nipp === '10000' || String(currentUser?.name).toLowerCase().includes('bod')) {
-    return null;
-  }
-
   const [activeModule, setActiveModule] = useState<ModuleType>(defaultModule);
 
   // Common fields
@@ -137,15 +132,29 @@ export default function ManualDataInputModal({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    setActiveModule(defaultModule);
-    if (currentUser?.role === 'pic_cabang' && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      setBranchCode(currentUser.branch_id);
-    } else if (selectedTerminal && selectedTerminal !== 'ALL') {
-      setBranchCode(selectedTerminal);
-    }
-  }, [defaultModule, selectedTerminal, currentUser, isOpen]);
+    if (!isOpen) return;
+    const timer = window.setTimeout(() => {
+      setActiveModule(defaultModule);
+      if (currentUser?.role === 'pic_cabang' && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
+        setBranchCode(currentUser.branch_id);
+      } else if (selectedTerminal && selectedTerminal !== 'ALL') {
+        setBranchCode(selectedTerminal);
+      }
+    }, 0);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [defaultModule, selectedTerminal, currentUser, isOpen, onClose]);
 
-  if (!isOpen) return null;
+  // BOD / Viewer role is prohibited from manual input
+  if (!isOpen || currentUser?.role === 'viewer' || currentUser?.nipp === '10000' || String(currentUser?.name).toLowerCase().includes('bod')) {
+    return null;
+  }
 
   // Selected branch helper
   const branchObj = getBranchByCode(branchCode);
@@ -160,7 +169,7 @@ export default function ManualDataInputModal({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    let payloadData: Record<string, any> = {
+    let payloadData: Record<string, string | number> = {
       TAHUN: year,
       BULAN: month,
       KODE_CBG: branchCode,
@@ -251,8 +260,8 @@ export default function ManualDataInputModal({
           onClose();
         }, 1200);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Terjadi kesalahan jaringan.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {
       setLoading(false);
     }
@@ -262,6 +271,9 @@ export default function ManualDataInputModal({
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
       <div
         className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Input Data Manual Operasional dan Keuangan"
         style={{ maxWidth: '680px', width: '100%', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -292,7 +304,9 @@ export default function ManualDataInputModal({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Tutup modal input manual"
             style={{
               background: 'transparent',
               border: 'none',

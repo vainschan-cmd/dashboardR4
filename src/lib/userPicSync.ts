@@ -1,9 +1,11 @@
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { randomBytes } from 'node:crypto';
 import * as xlsx from 'xlsx';
 import { User, UserRole } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
+import { dbQueries } from './db';
 
 export const MASTER_USER_FILE = 'master_user_pic.xlsx';
 export const DRIVE_ACCOUNT = 'regdashr@gmail.com';
@@ -151,7 +153,7 @@ export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
   },
 ];
 
-export function normalizeRole(raw: any): UserRole {
+export function normalizeRole(raw: unknown): UserRole {
   if (!raw) return 'pic_cabang';
   const str = String(raw).trim().toLowerCase();
   if (str.includes('super') || str === 'super_admin' || str === 'superadmin') return 'super_admin';
@@ -162,7 +164,7 @@ export function normalizeRole(raw: any): UserRole {
   return 'pic_cabang';
 }
 
-export function normalizeBranch(raw: any): string {
+export function normalizeBranch(raw: unknown): string {
   if (!raw) return 'R99';
   const str = String(raw).trim();
   const codeMatch = str.match(/\b(R\d{2})\b/i);
@@ -367,12 +369,11 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
     throw new Error(`Sheet ${sheetName} tidak ditemukan dalam file spreadsheet.`);
   }
 
-  const rawRows: any[] = xlsx.utils.sheet_to_json(sheet);
+  const rawRows: Record<string, unknown>[] = xlsx.utils.sheet_to_json(sheet);
   if (!rawRows || rawRows.length === 0) {
     throw new Error('Spreadsheet kosong atau tidak memiliki data pengguna pada sheet pertama.');
   }
 
-  const { dbQueries } = require('./db');
   let createdCount = 0;
   let updatedCount = 0;
 
@@ -419,6 +420,11 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
       });
       updatedCount++;
     } else {
+      const rawPwd = row['PASSWORD'] || row['password'] || row['KATA SANDI'];
+      const initialPassword =
+        rawPwd && String(rawPwd).trim().length >= 8
+          ? String(rawPwd).trim()
+          : randomBytes(16).toString('base64url');
       dbQueries.createUser({
         nipp,
         name,
@@ -427,7 +433,7 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
         role,
         branch_id,
         email,
-        password: 'password123',
+        password: initialPassword,
       });
       createdCount++;
     }
@@ -449,7 +455,7 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
 /**
  * Read users from spreadsheet
  */
-export function readUsersFromSpreadsheet(): any[] {
+export function readUsersFromSpreadsheet(): Record<string, unknown>[] {
   const filePath = ensureMasterUserSpreadsheet();
   const fileBuffer = fs.readFileSync(filePath);
   const wb = xlsx.read(fileBuffer, { type: 'buffer' });

@@ -229,3 +229,111 @@ export interface IntegrationCredentials {
   updated_at?: string;
   updated_by?: string;
 }
+
+export interface ValidationErrorItem {
+  row: number;
+  column?: string;
+  field?: string;
+  value?: unknown;
+  message: string;
+}
+
+export interface ValidationSummary {
+  isValid: boolean;
+  totalRows: number;
+  validRowsCount: number;
+  errorRowsCount: number;
+  errors: ValidationErrorItem[];
+  parsedRecords: MonthlyRecord[];
+}
+
+export interface FinansialRecord {
+  id?: string;
+  year?: number;
+  month?: number;
+  branchCode?: string;
+  branchName?: string;
+  rekening?: string;
+  cabangRp?: number;
+  pmtRp?: number;
+  ptpRp?: number;
+  pslRp?: number;
+  pjmRp?: number;
+  eliminasiRp?: number;
+  konsolidasiRp?: number;
+  rka?: number;
+  yoy?: number;
+  verificationStatus?: VerificationStatus;
+  hasPendingUpdate?: boolean;
+  [key: string]: unknown;
+}
+
+export interface OpkomRecord {
+  id?: string;
+  year?: number;
+  month?: number;
+  branchCode?: string;
+  branchName?: string;
+  layanan?: string;
+  satuan?: string;
+  jumlahRp?: number;
+  rka?: number;
+  yoy?: number;
+  verificationStatus?: VerificationStatus;
+  hasPendingUpdate?: boolean;
+  [key: string]: unknown;
+}
+
+export interface PeralatanRecord {
+  id?: string;
+  branchCode?: string;
+  branchName?: string;
+  kdAlat?: string;
+  nmAlat?: string;
+  singkatanAlat?: string;
+  jnsAlat?: string;
+  jumlah?: number;
+  utilisasi?: number;
+  availability?: number;
+  statusKesiapan?: string;
+  verificationStatus?: VerificationStatus;
+  hasPendingUpdate?: boolean;
+  [key: string]: unknown;
+}
+
+export interface KinerjaRecord {
+  id?: string;
+  branchCode?: string;
+  branchName?: string;
+  kdKine?: string;
+  nmKine?: string;
+  satuan?: string;
+  nilai?: number;
+  [key: string]: unknown;
+}
+
+export interface UtilisasiRecord {
+  id?: string;
+  branchCode?: string;
+  branchName?: string;
+  dermaga?: string;
+  bor?: number;
+  yor?: number;
+  sor?: number;
+  [key: string]: unknown;
+}
+
+export interface FasilitasRecord {
+  id?: string;
+  branchCode?: string;
+  branchName?: string;
+  nmPasfel?: string;
+  jnsFaspel?: string;
+  satuan?: string;
+  panjang?: number;
+  lebar?: number;
+  mLws?: number;
+  nilai?: number;
+  ket?: string;
+  [key: string]: unknown;
+}

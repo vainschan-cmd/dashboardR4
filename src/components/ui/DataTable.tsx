@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, ArrowUpDown, ChevronRight, Eye } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Eye } from 'lucide-react';
 import { MonthlyRecord } from '@/lib/types';
 import StatusBadge from './StatusBadge';
 
@@ -29,6 +29,22 @@ export default function DataTable({
     }
   };
 
+  const renderSortIcon = (field: keyof MonthlyRecord) => {
+    if (sortField !== field) {
+      return <ArrowUpDown size={12} aria-hidden="true" style={{ opacity: 0.55 }} />;
+    }
+    return sortAsc ? (
+      <ArrowUp size={12} aria-hidden="true" color="var(--blue-500)" />
+    ) : (
+      <ArrowDown size={12} aria-hidden="true" color="var(--blue-500)" />
+    );
+  };
+
+  const getAriaSort = (field: keyof MonthlyRecord): 'ascending' | 'descending' | 'none' => {
+    if (sortField !== field) return 'none';
+    return sortAsc ? 'ascending' : 'descending';
+  };
+
   const filtered = records.filter((r) => {
     const text = `${r.indicator_code || ''} ${r.indicator_name || ''} ${r.branch_name || ''} ${r.department_name || ''} ${r.notes || ''}`.toLowerCase();
     return text.includes(searchTerm.toLowerCase());
@@ -45,13 +61,28 @@ export default function DataTable({
       : String(valB).localeCompare(String(valA));
   });
 
+  const sortBtnStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    background: 'transparent',
+    border: 'none',
+    padding: '2px 4px',
+    margin: '-2px -4px',
+    font: 'inherit',
+    color: 'inherit',
+    cursor: 'pointer',
+    borderRadius: '4px',
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ position: 'relative', minWidth: '260px' }}>
-          <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '11px' }} />
+          <Search size={16} color="#94a3b8" aria-hidden="true" style={{ position: 'absolute', left: '12px', top: '11px' }} />
           <input
             type="text"
+            aria-label="Cari indikator, cabang, atau kode"
             className="form-input"
             style={{ paddingLeft: '36px', height: '38px', fontSize: '13px' }}
             placeholder="Cari indikator, cabang, kode..."
@@ -69,27 +100,74 @@ export default function DataTable({
         <table className="data-table">
           <thead>
             <tr>
-              <th onClick={() => handleSort('indicator_code')} style={{ cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <th aria-sort={getAriaSort('indicator_code')}>
+                <button
+                  type="button"
+                  onClick={() => handleSort('indicator_code')}
+                  style={sortBtnStyle}
+                  aria-label={`Urutkan berdasarkan Kode (${sortField === 'indicator_code' ? (sortAsc ? 'naik' : 'turun') : 'belum diurutkan'})`}
+                >
                   <span>Kode</span>
-                  <ArrowUpDown size={12} />
-                </div>
+                  {renderSortIcon('indicator_code')}
+                </button>
               </th>
-              <th onClick={() => handleSort('indicator_name')} style={{ cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <th aria-sort={getAriaSort('indicator_name')}>
+                <button
+                  type="button"
+                  onClick={() => handleSort('indicator_name')}
+                  style={sortBtnStyle}
+                  aria-label={`Urutkan berdasarkan Nama Indikator (${sortField === 'indicator_name' ? (sortAsc ? 'naik' : 'turun') : 'belum diurutkan'})`}
+                >
                   <span>Nama Indikator</span>
-                  <ArrowUpDown size={12} />
-                </div>
+                  {renderSortIcon('indicator_name')}
+                </button>
               </th>
-              {showBranchColumn && <th>Cabang</th>}
-              <th style={{ textAlign: 'right' }}>Target</th>
-              <th style={{ textAlign: 'right' }}>Realisasi</th>
+              {showBranchColumn && (
+                <th aria-sort={getAriaSort('branch_name')}>
+                  <button
+                    type="button"
+                    onClick={() => handleSort('branch_name')}
+                    style={sortBtnStyle}
+                    aria-label={`Urutkan berdasarkan Cabang (${sortField === 'branch_name' ? (sortAsc ? 'naik' : 'turun') : 'belum diurutkan'})`}
+                  >
+                    <span>Cabang</span>
+                    {renderSortIcon('branch_name')}
+                  </button>
+                </th>
+              )}
+              <th style={{ textAlign: 'right' }} aria-sort={getAriaSort('target')}>
+                <button
+                  type="button"
+                  onClick={() => handleSort('target')}
+                  style={{ ...sortBtnStyle, justifyContent: 'flex-end', width: '100%' }}
+                  aria-label={`Urutkan berdasarkan Target (${sortField === 'target' ? (sortAsc ? 'naik' : 'turun') : 'belum diurutkan'})`}
+                >
+                  <span>Target</span>
+                  {renderSortIcon('target')}
+                </button>
+              </th>
+              <th style={{ textAlign: 'right' }} aria-sort={getAriaSort('realization')}>
+                <button
+                  type="button"
+                  onClick={() => handleSort('realization')}
+                  style={{ ...sortBtnStyle, justifyContent: 'flex-end', width: '100%' }}
+                  aria-label={`Urutkan berdasarkan Realisasi (${sortField === 'realization' ? (sortAsc ? 'naik' : 'turun') : 'belum diurutkan'})`}
+                >
+                  <span>Realisasi</span>
+                  {renderSortIcon('realization')}
+                </button>
+              </th>
               <th style={{ textAlign: 'center' }}>Satuan</th>
-              <th style={{ textAlign: 'right' }} onClick={() => handleSort('achievement_pct')}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+              <th style={{ textAlign: 'right' }} aria-sort={getAriaSort('achievement_pct')}>
+                <button
+                  type="button"
+                  onClick={() => handleSort('achievement_pct')}
+                  style={{ ...sortBtnStyle, justifyContent: 'flex-end', width: '100%' }}
+                  aria-label={`Urutkan berdasarkan Capaian (${sortField === 'achievement_pct' ? (sortAsc ? 'naik' : 'turun') : 'belum diurutkan'})`}
+                >
                   <span>Capaian (%)</span>
-                  <ArrowUpDown size={12} />
-                </div>
+                  {renderSortIcon('achievement_pct')}
+                </button>
               </th>
               <th style={{ textAlign: 'center' }}>Status KPI</th>
               <th style={{ textAlign: 'center' }}>Verifikasi</th>
@@ -127,9 +205,16 @@ export default function DataTable({
                     {r.unit}
                   </td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                    <span style={{
-                      color: r.status_color === 'green' ? '#059669' : r.status_color === 'yellow' ? '#d97706' : '#dc2626'
-                    }}>
+                    <span
+                      style={{
+                        color:
+                          r.status_color === 'green'
+                            ? '#059669'
+                            : r.status_color === 'yellow'
+                              ? '#d97706'
+                              : '#dc2626',
+                      }}
+                    >
                       {r.achievement_pct}%
                     </span>
                   </td>
@@ -142,12 +227,14 @@ export default function DataTable({
                   <td style={{ textAlign: 'center' }}>
                     {onSelectRecord && (
                       <button
+                        type="button"
                         onClick={() => onSelectRecord(r)}
                         className="btn btn-secondary btn-sm"
                         style={{ padding: '2px 8px', height: '28px' }}
                         title="Lihat Detail & Audit"
+                        aria-label={`Lihat detail dan audit untuk ${r.indicator_name || r.indicator_code}`}
                       >
-                        <Eye size={13} />
+                        <Eye size={13} aria-hidden="true" />
                         <span>Detail</span>
                       </button>
                     )}

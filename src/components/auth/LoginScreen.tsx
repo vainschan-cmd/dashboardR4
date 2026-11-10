@@ -11,12 +11,11 @@ import {
   Sun,
   Moon,
   ArrowRight,
-  Anchor,
   KeyRound,
   User as UserIcon,
   Clock,
 } from 'lucide-react';
-import { User, UserRole } from '@/lib/types';
+import { User } from '@/lib/types';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
 
 interface LoginScreenProps {
@@ -46,7 +45,6 @@ export default function LoginScreen({
   const [regDepartemen, setRegDepartemen] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
-  const [regRole, setRegRole] = useState<UserRole>('pic_cabang');
   const [regBranch, setRegBranch] = useState('R01');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
@@ -90,8 +88,8 @@ export default function LoginScreen({
           onLoginSuccess(data.user);
         }, 500);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Terjadi kesalahan jaringan.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {
       setLoading(false);
     }
@@ -146,8 +144,8 @@ export default function LoginScreen({
           onLoginSuccess(data.user);
         }, 800);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal menghubungi server.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gagal menghubungi server.');
     } finally {
       setLoading(false);
     }
@@ -516,187 +514,187 @@ export default function LoginScreen({
 
                 {/* Quick Role & Branch Selector for Development / Demo Evaluation */}
                 {showDemoQuickLogin && (
-                <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: 'var(--text-muted)',
-                      marginBottom: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <span>Akses Evaluasi Role & Cabang (Mode Demo):</span>
-                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Sesi JWT Aktif</span>
+                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: 'var(--text-muted)',
+                        marginBottom: '8px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span>Akses Evaluasi Role & Cabang (Mode Demo):</span>
+                      <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Sesi JWT Aktif</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+                      {/* PIC Cabang Makassar [R01] */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginNipp('10004');
+                          setLoginPassword('password123');
+                          submitLogin('10004', 'password123');
+                        }}
+                        className="btn-dark"
+                        style={{
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          borderRadius: 'var(--radius-sm)',
+                          borderColor: 'var(--border-subtle)',
+                          backgroundColor: 'var(--bg-inner)',
+                          cursor: 'pointer',
+                        }}
+                        title="Login sebagai PIC Cabang Makassar - Nuka (10004)"
+                      >
+                        <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R01]</span>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Nuka (Makassar) • 10004</span>
+                      </button>
+
+                      {/* PIC Cabang Balikpapan [R04] */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginNipp('10008');
+                          setLoginPassword('password123');
+                          submitLogin('10008', 'password123');
+                        }}
+                        className="btn-dark"
+                        style={{
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          borderRadius: 'var(--radius-sm)',
+                          borderColor: 'var(--border-subtle)',
+                          backgroundColor: 'var(--bg-inner)',
+                          cursor: 'pointer',
+                        }}
+                        title="Login sebagai PIC Cabang Balikpapan - Fachruddin (10008)"
+                      >
+                        <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R04]</span>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Fachruddin (Balikpapan) • 10008</span>
+                      </button>
+
+                      {/* Super Admin */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginNipp('10001');
+                          setLoginPassword('password123');
+                          submitLogin('10001', 'password123');
+                        }}
+                        className="btn-dark"
+                        style={{
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          borderRadius: 'var(--radius-sm)',
+                          borderColor: 'var(--border-subtle)',
+                          backgroundColor: 'var(--bg-inner)',
+                          cursor: 'pointer',
+                        }}
+                        title="Login sebagai Super Admin - M Mansyur (10001)"
+                      >
+                        <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Super Admin</span>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M Mansyur • 10001</span>
+                      </button>
+
+                      {/* Admin Regional 4 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginNipp('10002');
+                          setLoginPassword('password123');
+                          submitLogin('10002', 'password123');
+                        }}
+                        className="btn-dark"
+                        style={{
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          borderRadius: 'var(--radius-sm)',
+                          borderColor: 'var(--border-subtle)',
+                          backgroundColor: 'var(--bg-inner)',
+                          cursor: 'pointer',
+                        }}
+                        title="Login sebagai Admin Regional 4 - Asqar (10002)"
+                      >
+                        <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Admin Regional 4</span>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Asqar • 10002</span>
+                      </button>
+
+                      {/* PIC Dept Operasi */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginNipp('10003');
+                          setLoginPassword('password123');
+                          submitLogin('10003', 'password123');
+                        }}
+                        className="btn-dark"
+                        style={{
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          borderRadius: 'var(--radius-sm)',
+                          borderColor: 'var(--border-subtle)',
+                          backgroundColor: 'var(--bg-inner)',
+                          cursor: 'pointer',
+                        }}
+                        title="Login sebagai PIC Dept Operasi Regional - Heiruddin (10003)"
+                      >
+                        <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Dept Operasi</span>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Heiruddin • 10003</span>
+                      </button>
+
+                      {/* BOD Regional 4 (Viewer) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginNipp('10000');
+                          setLoginPassword('password123');
+                          submitLogin('10000', 'password123');
+                        }}
+                        className="btn-dark"
+                        style={{
+                          padding: '8px 10px',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          borderRadius: 'var(--radius-sm)',
+                          borderColor: 'var(--border-subtle)',
+                          backgroundColor: 'var(--bg-inner)',
+                          cursor: 'pointer',
+                        }}
+                        title="Login sebagai BOD Regional 4 (Viewer) - Akhirman (10000)"
+                      >
+                        <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>BOD Regional 4</span>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Akhirman (BOD) • 10000</span>
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
-                    {/* PIC Cabang Makassar [R01] */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginNipp('10004');
-                        setLoginPassword('password123');
-                        submitLogin('10004', 'password123');
-                      }}
-                      className="btn-dark"
-                      style={{
-                        padding: '8px 10px',
-                        fontSize: '11px',
-                        textAlign: 'left',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                        borderRadius: 'var(--radius-sm)',
-                        borderColor: 'var(--border-subtle)',
-                        backgroundColor: 'var(--bg-inner)',
-                        cursor: 'pointer',
-                      }}
-                      title="Login sebagai PIC Cabang Makassar - Nuka (10004)"
-                    >
-                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R01]</span>
-                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Nuka (Makassar) • 10004</span>
-                    </button>
-
-                    {/* PIC Cabang Balikpapan [R04] */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginNipp('10008');
-                        setLoginPassword('password123');
-                        submitLogin('10008', 'password123');
-                      }}
-                      className="btn-dark"
-                      style={{
-                        padding: '8px 10px',
-                        fontSize: '11px',
-                        textAlign: 'left',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                        borderRadius: 'var(--radius-sm)',
-                        borderColor: 'var(--border-subtle)',
-                        backgroundColor: 'var(--bg-inner)',
-                        cursor: 'pointer',
-                      }}
-                      title="Login sebagai PIC Cabang Balikpapan - Fachruddin (10008)"
-                    >
-                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R04]</span>
-                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Fachruddin (Balikpapan) • 10008</span>
-                    </button>
-
-                    {/* Super Admin */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginNipp('10001');
-                        setLoginPassword('password123');
-                        submitLogin('10001', 'password123');
-                      }}
-                      className="btn-dark"
-                      style={{
-                        padding: '8px 10px',
-                        fontSize: '11px',
-                        textAlign: 'left',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                        borderRadius: 'var(--radius-sm)',
-                        borderColor: 'var(--border-subtle)',
-                        backgroundColor: 'var(--bg-inner)',
-                        cursor: 'pointer',
-                      }}
-                      title="Login sebagai Super Admin - M Mansyur (10001)"
-                    >
-                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Super Admin</span>
-                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M Mansyur • 10001</span>
-                    </button>
-
-                    {/* Admin Regional 4 */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginNipp('10002');
-                        setLoginPassword('password123');
-                        submitLogin('10002', 'password123');
-                      }}
-                      className="btn-dark"
-                      style={{
-                        padding: '8px 10px',
-                        fontSize: '11px',
-                        textAlign: 'left',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                        borderRadius: 'var(--radius-sm)',
-                        borderColor: 'var(--border-subtle)',
-                        backgroundColor: 'var(--bg-inner)',
-                        cursor: 'pointer',
-                      }}
-                      title="Login sebagai Admin Regional 4 - Asqar (10002)"
-                    >
-                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Admin Regional 4</span>
-                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Asqar • 10002</span>
-                    </button>
-
-                    {/* PIC Dept Operasi */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginNipp('10003');
-                        setLoginPassword('password123');
-                        submitLogin('10003', 'password123');
-                      }}
-                      className="btn-dark"
-                      style={{
-                        padding: '8px 10px',
-                        fontSize: '11px',
-                        textAlign: 'left',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                        borderRadius: 'var(--radius-sm)',
-                        borderColor: 'var(--border-subtle)',
-                        backgroundColor: 'var(--bg-inner)',
-                        cursor: 'pointer',
-                      }}
-                      title="Login sebagai PIC Dept Operasi Regional - Heiruddin (10003)"
-                    >
-                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Dept Operasi</span>
-                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Heiruddin • 10003</span>
-                    </button>
-
-                    {/* BOD Regional 4 (Viewer) */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginNipp('10000');
-                        setLoginPassword('password123');
-                        submitLogin('10000', 'password123');
-                      }}
-                      className="btn-dark"
-                      style={{
-                        padding: '8px 10px',
-                        fontSize: '11px',
-                        textAlign: 'left',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                        borderRadius: 'var(--radius-sm)',
-                        borderColor: 'var(--border-subtle)',
-                        backgroundColor: 'var(--bg-inner)',
-                        cursor: 'pointer',
-                      }}
-                      title="Login sebagai BOD Regional 4 (Viewer) - Akhirman (10000)"
-                    >
-                      <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>BOD Regional 4</span>
-                      <span style={{ fontSize: '10.5px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Akhirman (BOD) • 10000</span>
-                    </button>
-                  </div>
-                </div>
                 )}
               </form>
             ) : (

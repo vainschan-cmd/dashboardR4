@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar,
   RefreshCw,
@@ -170,15 +170,18 @@ export default function PortSightPeriode({
 
   // Synchronize branch filter if parent changes (unless PIC Cabang)
   useEffect(() => {
-    if (isPicCabang && currentUser?.branch_id) {
-      setBranchFilter(currentUser.branch_id);
-    } else if (selectedTerminal) {
-      setBranchFilter(selectedTerminal);
-    }
+    const timer = window.setTimeout(() => {
+      if (isPicCabang && currentUser?.branch_id) {
+        setBranchFilter(currentUser.branch_id);
+      } else if (selectedTerminal) {
+        setBranchFilter(selectedTerminal);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [selectedTerminal, isPicCabang, currentUser?.branch_id]);
 
   // Build query string based on active filterMode
-  const buildQueryString = () => {
+  const buildQueryString = useCallback(() => {
     const params = new URLSearchParams();
     if (branchFilter && branchFilter !== 'ALL') {
       params.append('branchCode', branchFilter);
@@ -200,9 +203,9 @@ export default function PortSightPeriode({
     }
 
     return params.toString();
-  };
+  }, [branchFilter, filterMode, presetPeriod, singleMonth, singleYear, startMonth, startYear, endMonth, endYear, startDate, endDate]);
 
-  const fetchData = async (signal?: AbortSignal) => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       const query = buildQueryString();
@@ -216,8 +219,8 @@ export default function PortSightPeriode({
         setPeralatan(json.peralatan || []);
         setFasilitas(json.fasilitas || []);
       }
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
+    } catch (e: unknown) {
+      if (!(e instanceof Error && e.name === 'AbortError')) {
         console.error('Error fetching period data:', e);
       }
     } finally {
@@ -225,13 +228,18 @@ export default function PortSightPeriode({
         setLoading(false);
       }
     }
-  };
+  }, [buildQueryString]);
 
   useEffect(() => {
     const abortController = new AbortController();
-    fetchData(abortController.signal);
-    return () => abortController.abort();
-  }, [filterMode, presetPeriod, singleMonth, singleYear, startMonth, startYear, endMonth, endYear, startDate, endDate, branchFilter]);
+    const timer = window.setTimeout(() => {
+      void fetchData(abortController.signal);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      abortController.abort();
+    };
+  }, [fetchData]);
 
   // Derived summaries
   const summary = useMemo(() => {

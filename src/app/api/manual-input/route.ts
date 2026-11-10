@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveManualInputRecord, ModuleType } from '@/lib/manualInputService';
+import { saveManualInputRecord, getModuleDepartmentId, ModuleType } from '@/lib/manualInputService';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
 import {
   requireAuth,
@@ -7,15 +7,6 @@ import {
   validateDepartmentWriteAccess,
 } from '@/lib/rbac';
 import { manualInputSchema, parseWithSchema } from '@/lib/validation';
-
-const MODULE_DEPARTMENT_MAP: Record<ModuleType, string> = {
-  finansial: 'dept_keu',
-  opkom: 'dept_ops',
-  kinerja: 'dept_ops',
-  utilisasi: 'dept_ops',
-  peralatan: 'dept_tek',
-  fasilitas: 'dept_tek',
-};
 
 const MODULE_OPTIONS = {
   finansial: {
@@ -92,10 +83,11 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { module, data } = parsed.data as { module: ModuleType; data: Record<string, any> };
+    const { module, data } = parsed.data;
 
     // 1. Enforce Server-Side Branch Scope (Row-Level Security for pic_cabang)
-    const requestedBranch = data.kodeCabang || data.branchCode || data.KODE_CBG;
+    const rawRequestedBranch = data.kodeCabang || data.branchCode || data.KODE_CBG;
+    const requestedBranch = typeof rawRequestedBranch === 'string' ? rawRequestedBranch : undefined;
     const branchCheck = validateBranchWriteAccess(auth.session, requestedBranch);
     if (!branchCheck.allowed) {
       return NextResponse.json(
@@ -105,7 +97,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Enforce Server-Side Department Scope (Row-Level Security for pic_dept_regional)
-    const targetDeptId = MODULE_DEPARTMENT_MAP[module as ModuleType];
+    const targetDeptId = getModuleDepartmentId(module as ModuleType);
     const deptCheck = validateDepartmentWriteAccess(auth.session, targetDeptId);
     if (!deptCheck.allowed) {
       return NextResponse.json(
@@ -115,7 +107,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Lock branch code in payload to validated branch
-    const scopedData = {
+    const scopedData: Record<string, unknown> = {
       ...data,
       kodeCabang: branchCheck.canonicalCode,
     };
@@ -140,10 +132,11 @@ export async function POST(req: NextRequest) {
       monthlyRecordId: result.monthlyRecordId,
       record: result.record,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal menyimpan data manual.';
     console.error('Error in POST /api/manual-input:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }

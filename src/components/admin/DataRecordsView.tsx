@@ -1,18 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Database,
   Search,
-  Filter,
   CheckCircle2,
   Clock,
   AlertTriangle,
   RefreshCw,
-  Building2,
-  Layers,
-  ArrowUpDown,
-  FileSpreadsheet
 } from 'lucide-react';
 import { MonthlyRecord, Branch, Department, User, UserRole } from '@/lib/types';
 import StatusBadge from '../ui/StatusBadge';
@@ -30,7 +25,6 @@ export default function DataRecordsView({
   departments,
   userRole,
   currentUser,
-  onRefreshNeeded,
 }: DataRecordsViewProps) {
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +44,7 @@ export default function DataRecordsView({
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchRecords = async () => {
+  const fetchRecords = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/records');
@@ -63,11 +57,14 @@ export default function DataRecordsView({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchRecords();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void fetchRecords();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchRecords]);
 
   // Filtered records
   const filteredRecords = records.filter((r) => {

@@ -1,21 +1,30 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
   Clock,
   FileCheck,
   Send,
-  MessageSquare,
-  Search,
   RefreshCw,
   Layers,
-  Building2,
-  UserCheck
 } from 'lucide-react';
-import { MonthlyRecord, UserRole } from '@/lib/types';
+import { MonthlyRecord, UserRole, VerificationStatus } from '@/lib/types';
 import StatusBadge from '../ui/StatusBadge';
+
+interface MatrixDepartmentStatus {
+  department_id: string;
+  department_code: string;
+  status: VerificationStatus;
+}
+
+interface MatrixBranchRow {
+  branch_id: string;
+  branch_name: string;
+  region: string;
+  departments: MatrixDepartmentStatus[];
+}
 
 interface VerificationQueueProps {
   selectedMonth: number;
@@ -34,7 +43,7 @@ export default function VerificationQueue({
 }: VerificationQueueProps) {
   const [activeTab, setActiveTab] = useState<'queue' | 'matrix'>('queue');
   const [pendingRecords, setPendingRecords] = useState<MonthlyRecord[]>([]);
-  const [matrixData, setMatrixData] = useState<any[]>([]);
+  const [matrixData, setMatrixData] = useState<MatrixBranchRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const [revisionModalOpen, setRevisionModalOpen] = useState(false);
@@ -42,7 +51,7 @@ export default function VerificationQueue({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const fetchVerificationData = async () => {
+  const fetchVerificationData = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/verification?month=${selectedMonth}&year=${selectedYear}`);
@@ -56,11 +65,14 @@ export default function VerificationQueue({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
-    fetchVerificationData();
-  }, [selectedMonth, selectedYear]);
+    const timer = window.setTimeout(() => {
+      void fetchVerificationData();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchVerificationData]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -99,8 +111,8 @@ export default function VerificationQueue({
       setSelectedRecordIds([]);
       fetchVerificationData();
       onVerificationDone();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Gagal memverifikasi data.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -132,8 +144,8 @@ export default function VerificationQueue({
       setSelectedRecordIds([]);
       fetchVerificationData();
       onVerificationDone();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Gagal mengirim permintaan revisi.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -328,7 +340,7 @@ export default function VerificationQueue({
                   <tr>
                     <th>Cabang Pelabuhan</th>
                     <th>Wilayah</th>
-                    {matrixData[0]?.departments?.map((d: any) => (
+                    {matrixData[0]?.departments?.map((d: MatrixDepartmentStatus) => (
                       <th key={d.department_id} style={{ textAlign: 'center' }}>
                         {d.department_code}
                       </th>
@@ -336,11 +348,11 @@ export default function VerificationQueue({
                   </tr>
                 </thead>
                 <tbody>
-                  {matrixData.map((row: any) => (
+                  {matrixData.map((row: MatrixBranchRow) => (
                     <tr key={row.branch_id}>
                       <td style={{ fontWeight: 700, color: '#ffffff' }}>{row.branch_name}</td>
                       <td style={{ fontSize: '12px', color: '#94a3b8' }}>{row.region}</td>
-                      {row.departments.map((d: any) => (
+                      {row.departments.map((d: MatrixDepartmentStatus) => (
                         <td key={d.department_id} style={{ textAlign: 'center' }}>
                           <StatusBadge type="verification" verificationStatus={d.status} />
                         </td>
@@ -356,15 +368,29 @@ export default function VerificationQueue({
 
       {/* Revision Modal Dialog */}
       {revisionModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '520px' }}>
+        <div className="modal-overlay" onClick={() => setRevisionModalOpen(false)}>
+          <div
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Minta Revisi Data Kinerja"
+            style={{ maxWidth: '520px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
               <h3 className="modal-title">Minta Revisi Data Kinerja</h3>
-              <button onClick={() => setRevisionModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+              <button
+                type="button"
+                aria-label="Tutup dialog revisi"
+                onClick={() => setRevisionModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '14px' }}>
-                Anda akan mengembalikan <strong>{selectedRecordIds.length}</strong> indikator ke status <strong>'Perlu Revisi'</strong>. Masukkan alasan atau catatan perbaikan yang wajib ditindaklanjuti oleh PIC cabang:
+                Anda akan mengembalikan <strong>{selectedRecordIds.length}</strong> indikator ke status <strong>&ldquo;Perlu Revisi&rdquo;</strong>. Masukkan alasan atau catatan perbaikan yang wajib ditindaklanjuti oleh PIC cabang:
               </p>
               <textarea
                 className="form-textarea"

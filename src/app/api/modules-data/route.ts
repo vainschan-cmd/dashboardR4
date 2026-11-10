@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from '@/lib/constants';
 import { getDb } from '@/lib/db';
 import { ingestInputData } from '@/lib/ingestInputData';
-import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
+import {
+  requireAuth,
+  enforceBranchFilterForRead,
+  enforceVerificationFilterForRead,
+} from '@/lib/rbac';
 
 function canonicalRekeningCategory(rekening: string): string {
   const lower = String(rekening || '').trim().toLowerCase();
@@ -51,7 +55,7 @@ function ensureModuleTablesPopulated() {
   }
 }
 
-function resolveVerificationRow<T extends Record<string, any>>(
+function resolveVerificationRow<T extends Record<string, unknown>>(
   rawRow: T,
   verifiedOnly: boolean,
   counters: { verified: number; pending: number; revision: number }
@@ -81,7 +85,7 @@ function resolveVerificationRow<T extends Record<string, any>>(
   // restore its last verified snapshot so BOD sees verified numbers while knowing an update is pending.
   if (rawRow.verified_snapshot_json) {
     try {
-      const snapshot = JSON.parse(String(rawRow.verified_snapshot_json));
+      const snapshot = JSON.parse(String(rawRow.verified_snapshot_json)) as Record<string, unknown>;
       return {
         ...rawRow,
         ...snapshot,
@@ -127,11 +131,9 @@ export async function GET(req: NextRequest) {
       return targetBranches.includes(code.toUpperCase());
     };
 
-    // Default verifiedOnly = true for BOD viewer role unless explicitly overridden via ?verifiedOnly=false
-    const isBodViewer = auth.session.role === 'viewer';
-    const verifiedOnlyParam = searchParams.get('verifiedOnly');
-    const verifiedOnly =
-      verifiedOnlyParam !== null ? verifiedOnlyParam === 'true' : isBodViewer;
+    // Enforce verifiedOnly = true for BOD viewer role even if query parameters are manipulated
+    const verifiedOnlyParam = searchParams.get('verifiedOnly') ?? searchParams.get('verified_only');
+    const verifiedOnly = enforceVerificationFilterForRead(auth.session, verifiedOnlyParam);
 
     // Period filters
     const exactYearParam = searchParams.get('year') ? Number(searchParams.get('year')) : undefined;
@@ -190,21 +192,21 @@ export async function GET(req: NextRequest) {
     // 1. Finansial from SQLite module_finansial
     const rawFinRows = db
       .prepare('SELECT * FROM module_finansial ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+      .all() as Array<Record<string, unknown>>;
 
     const allFinMapped = rawFinRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
+        const code = getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || ''));
+        const branchName = getBranchNameByCode(code) || String(r.branch_name || '');
         const cabang = Number(r.cabang_rp || 0);
         const konsolidasi = Number(r.konsolidasi_rp || 0);
         const yoy = Number(r.yoy || 0);
         const rka = Number(r.rka || 0);
         return {
-          id: r.id,
-          monthlyRecordId: r.monthly_record_id,
+          id: String(r.id || ''),
+          monthlyRecordId: r.monthly_record_id ? String(r.monthly_record_id) : null,
           year: Number(r.year),
           month: Number(r.month),
           branchCode: code,
@@ -223,8 +225,8 @@ export async function GET(req: NextRequest) {
           rka: Number(rka.toFixed(1)),
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
-          uploadedBy: r.uploaded_by,
-          uploadedAt: r.uploaded_at,
+          uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
+          uploadedAt: r.uploaded_at ? String(r.uploaded_at) : null,
         };
       });
 
@@ -262,20 +264,20 @@ export async function GET(req: NextRequest) {
     // 2. Opkom from SQLite module_opkom
     const rawOpkomRows = db
       .prepare('SELECT * FROM module_opkom ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+      .all() as Array<Record<string, unknown>>;
 
     const opkom = rawOpkomRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
+        const code = getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || ''));
+        const branchName = getBranchNameByCode(code) || String(r.branch_name || '');
         const jumlahRp = Number(r.jumlah_rp || 0);
         const yoy = Number(r.yoy || 0);
         const rka = Number(r.rka || 0);
         return {
-          id: r.id,
-          monthlyRecordId: r.monthly_record_id,
+          id: String(r.id || ''),
+          monthlyRecordId: r.monthly_record_id ? String(r.monthly_record_id) : null,
           year: Number(r.year),
           month: Number(r.month),
           branchCode: code,
@@ -288,8 +290,8 @@ export async function GET(req: NextRequest) {
           rka: Number(rka.toFixed(1)),
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
-          uploadedBy: r.uploaded_by,
-          uploadedAt: r.uploaded_at,
+          uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
+          uploadedAt: r.uploaded_at ? String(r.uploaded_at) : null,
         };
       })
       .filter(r => {
@@ -300,17 +302,17 @@ export async function GET(req: NextRequest) {
     // 3. Kinerja from SQLite module_kinerja
     const rawKinerjaRows = db
       .prepare('SELECT * FROM module_kinerja ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+      .all() as Array<Record<string, unknown>>;
 
     const kinerja = rawKinerjaRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
+        const code = getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || ''));
+        const branchName = getBranchNameByCode(code) || String(r.branch_name || '');
         return {
-          id: r.id,
-          monthlyRecordId: r.monthly_record_id,
+          id: String(r.id || ''),
+          monthlyRecordId: r.monthly_record_id ? String(r.monthly_record_id) : null,
           year: Number(r.year),
           month: Number(r.month),
           branchCode: code,
@@ -321,8 +323,8 @@ export async function GET(req: NextRequest) {
           nilai: Number(r.nilai || 0),
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
-          uploadedBy: r.uploaded_by,
-          uploadedAt: r.uploaded_at,
+          uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
+          uploadedAt: r.uploaded_at ? String(r.uploaded_at) : null,
         };
       })
       .filter(r => {
@@ -333,17 +335,17 @@ export async function GET(req: NextRequest) {
     // 4. Utilisasi from SQLite module_utilisasi
     const rawUtilRows = db
       .prepare('SELECT * FROM module_utilisasi ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+      .all() as Array<Record<string, unknown>>;
 
     const utilisasi = rawUtilRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
+        const code = getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || ''));
+        const branchName = getBranchNameByCode(code) || String(r.branch_name || '');
         return {
-          id: r.id,
-          monthlyRecordId: r.monthly_record_id,
+          id: String(r.id || ''),
+          monthlyRecordId: r.monthly_record_id ? String(r.monthly_record_id) : null,
           year: Number(r.year),
           month: Number(r.month),
           branchCode: code,
@@ -355,8 +357,8 @@ export async function GET(req: NextRequest) {
           sor: Number(r.sor || 0),
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
-          uploadedBy: r.uploaded_by,
-          uploadedAt: r.uploaded_at,
+          uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
+          uploadedAt: r.uploaded_at ? String(r.uploaded_at) : null,
         };
       })
       .filter(r => {
@@ -367,17 +369,17 @@ export async function GET(req: NextRequest) {
     // 5. Peralatan from SQLite module_peralatan
     const rawAlatRows = db
       .prepare('SELECT * FROM module_peralatan ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+      .all() as Array<Record<string, unknown>>;
 
     const peralatan = rawAlatRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
+        const code = getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || ''));
+        const branchName = getBranchNameByCode(code) || String(r.branch_name || '');
         return {
-          id: r.id,
-          monthlyRecordId: r.monthly_record_id,
+          id: String(r.id || ''),
+          monthlyRecordId: r.monthly_record_id ? String(r.monthly_record_id) : null,
           year: Number(r.year),
           month: Number(r.month),
           branchCode: code,
@@ -391,8 +393,8 @@ export async function GET(req: NextRequest) {
           utilisasi: Number(r.utilisasi || 0),
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
-          uploadedBy: r.uploaded_by,
-          uploadedAt: r.uploaded_at,
+          uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
+          uploadedAt: r.uploaded_at ? String(r.uploaded_at) : null,
         };
       })
       .filter(r => {
@@ -403,17 +405,17 @@ export async function GET(req: NextRequest) {
     // 6. Fasilitas from SQLite module_fasilitas
     const rawFasRows = db
       .prepare('SELECT * FROM module_fasilitas ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+      .all() as Array<Record<string, unknown>>;
 
     const fasilitas = rawFasRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
+        const code = getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || ''));
+        const branchName = getBranchNameByCode(code) || String(r.branch_name || '');
         return {
-          id: r.id,
-          monthlyRecordId: r.monthly_record_id,
+          id: String(r.id || ''),
+          monthlyRecordId: r.monthly_record_id ? String(r.monthly_record_id) : null,
           year: Number(r.year),
           month: Number(r.month),
           branchCode: code,
@@ -429,8 +431,8 @@ export async function GET(req: NextRequest) {
           keterangan: r.keterangan ? String(r.keterangan).trim() : '',
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
-          uploadedBy: r.uploaded_by,
-          uploadedAt: r.uploaded_at,
+          uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
+          uploadedAt: r.uploaded_at ? String(r.uploaded_at) : null,
         };
       })
       .filter(r => {
@@ -440,7 +442,7 @@ export async function GET(req: NextRequest) {
 
     // 7. Equipment Catalog from SQLite equipment_catalog
     const equipmentCatalog = (
-      db.prepare('SELECT code, name, acronym, category FROM equipment_catalog WHERE active = 1 ORDER BY code ASC').all() as any[]
+      db.prepare('SELECT code, name, acronym, category FROM equipment_catalog WHERE active = 1 ORDER BY code ASC').all() as Array<Record<string, unknown>>
     ).map(r => ({
       code: String(r.code).trim(),
       name: String(r.name).trim(),
@@ -457,28 +459,33 @@ export async function GET(req: NextRequest) {
         JOIN branches b ON r.branch_id = b.id
         WHERE r.indicator_id IN ('kpi_rfu', 'kpi_sla', 'kpi_csat')
       `)
-      .all() as any[];
+      .all() as Array<Record<string, unknown>>;
 
     const kpiRecords = rawKpiRecords
       .filter(r => {
         if (verifiedOnly && r.verification_status !== 'verified') return false;
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
+        const code = getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || ''));
         if (!matchesBranch(code)) return false;
         return matchesPeriod(Number(r.year), Number(r.month), exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
       })
       .map(r => ({
-        id: r.id,
-        indicatorId: r.indicator_id,
+        id: String(r.id || ''),
+        indicatorId: String(r.indicator_id || ''),
         year: Number(r.year),
         month: Number(r.month),
-        branchCode: getCanonicalBranchCode(r.branch_code, r.branch_name),
-        branchName: r.branch_name,
+        branchCode: getCanonicalBranchCode(String(r.branch_code || ''), String(r.branch_name || '')),
+        branchName: String(r.branch_name || ''),
         target: Number(r.target),
         realization: Number(r.realization),
-        unit: r.unit,
+        unit: String(r.unit || ''),
         achievementPct: Number(r.achievement_pct),
-        verificationStatus: r.verification_status,
+        verificationStatus: String(r.verification_status || 'verified'),
       }));
+
+    const scopedOfficialBranches =
+      auth.session.role === 'pic_cabang' && auth.session.branch_id && auth.session.branch_id !== 'R99'
+        ? OFFICIAL_BRANCHES.filter(b => b.code.toUpperCase() === auth.session.branch_id!.toUpperCase())
+        : OFFICIAL_BRANCHES;
 
     return NextResponse.json({
       success: true,
@@ -486,10 +493,10 @@ export async function GET(req: NextRequest) {
       verifiedOnly,
       verificationSummary: {
         verifiedCount: counters.verified,
-        pendingCount: counters.pending,
-        revisionCount: counters.revision,
+        pendingCount: auth.session.role === 'viewer' ? 0 : counters.pending,
+        revisionCount: auth.session.role === 'viewer' ? 0 : counters.revision,
       },
-      branches: OFFICIAL_BRANCHES,
+      branches: scopedOfficialBranches,
       finansial,
       opkom,
       kinerja,
@@ -499,8 +506,9 @@ export async function GET(req: NextRequest) {
       equipmentCatalog,
       kpiRecords,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memuat data modul.';
     console.error('Error in /api/modules-data:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

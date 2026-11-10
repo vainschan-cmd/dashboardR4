@@ -1,11 +1,13 @@
 import { dbQueries } from './db';
 import { MonthlyRecord, StatusColor } from './types';
+import type { JwtSessionPayload } from './auth';
+import { validateBranchWriteAccess, validateDepartmentWriteAccess } from './rbac';
 
 export interface ValidationErrorItem {
   row: number;
   column?: string;
   field?: string;
-  value?: any;
+  value?: unknown;
   message: string;
   severity: 'error' | 'warning';
 }
@@ -17,12 +19,17 @@ export interface ValidationResult {
   errorRowsCount: number;
   errors: ValidationErrorItem[];
   warnings: ValidationErrorItem[];
-  previewRows: Array<Record<string, any>>;
-  parsedRecords: Array<Omit<MonthlyRecord, 'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'>>;
+  previewRows: Array<Record<string, unknown>>;
+  parsedRecords: Array<
+    Omit<
+      MonthlyRecord,
+      'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'
+    >
+  >;
 }
 
 export function validateSpreadsheetRows(
-  rows: Array<Record<string, any>>,
+  rows: Array<Record<string, unknown>>,
   options: {
     departmentId?: string;
     targetMonth?: number;
@@ -30,6 +37,7 @@ export function validateSpreadsheetRows(
     uploaderUsername: string;
     sourceType: 'upload_xlsx' | 'upload_csv' | 'google_sheets';
     batchId: string;
+    session?: JwtSessionPayload;
   }
 ): ValidationResult {
   const branches = dbQueries.getBranches();
@@ -44,7 +52,12 @@ export function validateSpreadsheetRows(
 
   const errors: ValidationErrorItem[] = [];
   const warnings: ValidationErrorItem[] = [];
-  const parsedRecords: Array<Omit<MonthlyRecord, 'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'>> = [];
+  const parsedRecords: Array<
+    Omit<
+      MonthlyRecord,
+      'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'
+    >
+  > = [];
   const seenKeys = new Set<string>();
 
   const totalRows = rows.length;
@@ -53,7 +66,7 @@ export function validateSpreadsheetRows(
     const rowNum = index + 2; // header is row 1, data starts at row 2
 
     // Helper to find key case-insensitively
-    const getVal = (candidates: string[]): any => {
+    const getVal = (candidates: string[]): unknown => {
       for (const k of Object.keys(row)) {
         const cleaned = k.toLowerCase().replace(/[^a-z0-9]/g, '');
         for (const c of candidates) {
@@ -71,7 +84,6 @@ export function validateSpreadsheetRows(
     const rawMonth = getVal(['Bulan', 'Month', 'Periode Bulan', 'PeriodeBulan']);
     const rawYear = getVal(['Tahun', 'Year', 'Periode Tahun', 'PeriodeTahun']);
     const rawIndCode = getVal(['Kode Indikator', 'KodeIndikator', 'IndicatorCode', 'Indikator']);
-    const rawIndName = getVal(['Nama Indikator', 'NamaIndikator', 'IndicatorName']);
     const rawTarget = getVal(['Target', 'Rencana', 'Anggaran']);
     const rawReal = getVal(['Realisasi', 'Aktual', 'Actual', 'Nilai']);
     const rawUnit = getVal(['Satuan', 'Unit']);
@@ -79,7 +91,7 @@ export function validateSpreadsheetRows(
 
     let rowHasError = false;
 
-    // 1. Branch Validation
+    // 1. Branch Validation & ABAC Scope Check
     let branch = rawBranchCode ? branchByCode.get(String(rawBranchCode).toUpperCase().trim()) : null;
     if (!branch && rawBranchName) {
       branch = branchByName.get(String(rawBranchName).toLowerCase().trim()) || null;
@@ -91,12 +103,25 @@ export function validateSpreadsheetRows(
         field: 'branch',
         value: rawBranchCode || rawBranchName,
         message: `Cabang '${rawBranchCode || rawBranchName || '(kosong)'}' tidak terdaftar pada Master Cabang.`,
-        severity: 'error'
+        severity: 'error',
       });
       rowHasError = true;
+    } else if (options.session) {
+      const branchScopeCheck = validateBranchWriteAccess(options.session, branch.code);
+      if (!branchScopeCheck.allowed) {
+        errors.push({
+          row: rowNum,
+          column: 'Kode Cabang',
+          field: 'branch_scope',
+          value: branch.code,
+          message: branchScopeCheck.error || `Anda tidak memiliki otorisasi untuk cabang ${branch.code}.`,
+          severity: 'error',
+        });
+        rowHasError = true;
+      }
     }
 
-    // 2. Department Validation
+    // 2. Department Validation & ABAC Scope Check
     let dept = rawDeptCode ? deptByCode.get(String(rawDeptCode).toUpperCase().trim()) : null;
     if (!dept && options.departmentId) {
       dept = departments.find(d => d.id === options.departmentId) || null;
@@ -108,13 +133,26 @@ export function validateSpreadsheetRows(
         field: 'department',
         value: rawDeptCode,
         message: `Departemen '${rawDeptCode || '(kosong)'}' tidak valid.`,
-        severity: 'error'
+        severity: 'error',
       });
       rowHasError = true;
+    } else if (options.session) {
+      const deptScopeCheck = validateDepartmentWriteAccess(options.session, dept.id);
+      if (!deptScopeCheck.allowed) {
+        errors.push({
+          row: rowNum,
+          column: 'Departemen',
+          field: 'department_scope',
+          value: dept.code,
+          message: deptScopeCheck.error || `Anda tidak memiliki otorisasi untuk departemen ${dept.code}.`,
+          severity: 'error',
+        });
+        rowHasError = true;
+      }
     }
 
     // 3. Indicator Validation
-    let indicator = rawIndCode ? indByCode.get(String(rawIndCode).toUpperCase().trim()) : null;
+    const indicator = rawIndCode ? indByCode.get(String(rawIndCode).toUpperCase().trim()) : null;
     if (!indicator) {
       errors.push({
         row: rowNum,
@@ -122,7 +160,7 @@ export function validateSpreadsheetRows(
         field: 'indicator',
         value: rawIndCode,
         message: `Kode Indikator '${rawIndCode || '(kosong)'}' tidak ditemukan dalam Master Indikator.`,
-        severity: 'error'
+        severity: 'error',
       });
       rowHasError = true;
     } else if (dept && indicator.department_id !== dept.id) {
@@ -132,13 +170,13 @@ export function validateSpreadsheetRows(
         field: 'indicator_dept_mismatch',
         value: rawIndCode,
         message: `Indikator '${indicator.name}' biasanya berada di bawah departemen lain.`,
-        severity: 'warning'
+        severity: 'warning',
       });
     }
 
     // 4. Period (Month & Year) Validation
-    const month = parseInt(rawMonth, 10);
-    const year = parseInt(rawYear, 10);
+    const month = parseInt(String(rawMonth ?? ''), 10);
+    const year = parseInt(String(rawYear ?? ''), 10);
 
     if (isNaN(month) || month < 1 || month > 12) {
       errors.push({
@@ -147,7 +185,7 @@ export function validateSpreadsheetRows(
         field: 'month',
         value: rawMonth,
         message: `Format bulan '${rawMonth}' tidak valid (wajib angka 1 - 12).`,
-        severity: 'error'
+        severity: 'error',
       });
       rowHasError = true;
     }
@@ -159,13 +197,13 @@ export function validateSpreadsheetRows(
         field: 'year',
         value: rawYear,
         message: `Format tahun '${rawYear}' tidak valid (misal: 2024, 2025, 2026).`,
-        severity: 'error'
+        severity: 'error',
       });
       rowHasError = true;
     }
 
     // 5. Target & Realization Numeric Validation
-    const cleanNum = (val: any): number => {
+    const cleanNum = (val: unknown): number => {
       if (val === undefined || val === null || val === '') return NaN;
       if (typeof val === 'number') return val;
       const str = String(val).replace(/,/g, '.').replace(/[^0-9.-]/g, '');
@@ -182,7 +220,7 @@ export function validateSpreadsheetRows(
         field: 'target',
         value: rawTarget,
         message: `Nilai target '${rawTarget}' harus berupa angka numerik valid.`,
-        severity: 'error'
+        severity: 'error',
       });
       rowHasError = true;
     }
@@ -194,7 +232,7 @@ export function validateSpreadsheetRows(
         field: 'realization',
         value: rawReal,
         message: `Nilai realisasi '${rawReal}' harus berupa angka numerik valid.`,
-        severity: 'error'
+        severity: 'error',
       });
       rowHasError = true;
     }
@@ -209,7 +247,7 @@ export function validateSpreadsheetRows(
           field: 'duplicate',
           value: duplicateKey,
           message: `Duplikasi data ditemukan pada baris ini untuk Cabang '${branch.name}', Indikator '${indicator.name}', Periode ${month}/${year}.`,
-          severity: 'error'
+          severity: 'error',
         });
         rowHasError = true;
       } else {
@@ -219,7 +257,6 @@ export function validateSpreadsheetRows(
 
     // If completely valid, construct parsed record
     if (!rowHasError && branch && dept && indicator) {
-      // Calculate Achievement & Traffic Light
       let achievementPct = 100;
       let statusColor: StatusColor = 'green';
 
@@ -257,7 +294,7 @@ export function validateSpreadsheetRows(
         uploaded_at: new Date().toISOString(),
         verified_by: null,
         verified_at: null,
-        is_simulated: true, // marked as simulated until official department guidelines
+        is_simulated: false,
       });
     }
   });

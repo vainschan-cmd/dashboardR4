@@ -37,14 +37,14 @@ import {
 import { getSelectedBranchLabel } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
 import { User, UserRole } from '@/lib/types';
-import { useBerandaAnalytics } from '@/hooks/useBerandaAnalytics';
+import { useBerandaAnalytics, BerandaKpiItem } from '@/hooks/useBerandaAnalytics';
 
 interface PortSightBerandaProps {
   selectedTerminal?: string;
   selectedPeriod?: string;
   onSelectTerminal?: (terminalId: string) => void;
   onNavigateTab?: (tabId: string, branchCode?: string) => void;
-  onOpenDrilldown?: (item: any) => void;
+  onOpenDrilldown?: (item: BerandaKpiItem | Record<string, unknown>) => void;
   currentUser?: User | null;
   userRole?: UserRole;
   comparisonMode?: string;
@@ -608,8 +608,8 @@ export default function PortSightBeranda({
                       fontSize: '12px',
                       color: 'var(--text-main)',
                     }}
-                    formatter={(val: any, name: any, item: any) => [
-                      `${val}% (${item.payload.fullNominal || item.payload.nominal})`,
+                    formatter={(val: unknown, name: unknown, item: { payload?: { fullNominal?: string; nominal?: string } }) => [
+                      `${String(val ?? '')}% (${item.payload?.fullNominal || item.payload?.nominal || ''})`,
                       name === 'capaianRkap' ? 'Pencapaian RKAP' : 'Pertumbuhan YoY'
                     ]}
                   />

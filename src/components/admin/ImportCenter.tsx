@@ -6,15 +6,12 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
-  FileText,
   Download,
   Link as LinkIcon,
   RefreshCw,
   Clock,
-  Layers,
-  ArrowRight
 } from 'lucide-react';
-import { Branch, Department, ImportBatch, UserRole } from '@/lib/types';
+import { Branch, Department, ImportBatch, UserRole, ValidationSummary, ValidationErrorItem, MonthlyRecord } from '@/lib/types';
 
 interface ImportCenterProps {
   branches: Branch[];
@@ -25,7 +22,6 @@ interface ImportCenterProps {
 }
 
 export default function ImportCenter({
-  branches,
   departments,
   userRole,
   username,
@@ -38,7 +34,7 @@ export default function ImportCenter({
   const [selectedDeptId, setSelectedDeptId] = useState<string>(departments[0]?.id || '');
   const [isValidating, setIsValidating] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [validationResult, setValidationResult] = useState<any | null>(null);
+  const [validationResult, setValidationResult] = useState<ValidationSummary | null>(null);
   const [batchId, setBatchId] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -102,8 +98,8 @@ export default function ImportCenter({
           text: `Ditemukan ${data.validation.errors.length} kesalahan validasi pada spreadsheet. Harap perbaiki sebelum menyimpan.`
         });
       }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Validasi spreadsheet gagal.' });
     } finally {
       setIsValidating(false);
     }
@@ -143,8 +139,8 @@ export default function ImportCenter({
       setFile(null);
       setValidationResult(null);
       onImportSuccess();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Gagal menyimpan data.' });
     } finally {
       setIsCommitting(false);
     }
@@ -177,8 +173,8 @@ export default function ImportCenter({
         type: 'info',
         text: `${data.message} Ditemukan ${data.validation.validRowsCount} baris valid.`
       });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Gagal menyinkronkan Google Sheets.' });
     } finally {
       setIsSyncingGsheets(false);
     }
@@ -205,10 +201,10 @@ export default function ImportCenter({
           message: data.error || 'Gagal sinkronisasi data dari drive.'
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setDriveSyncStatus({
         success: false,
-        message: e.message || 'Terjadi kesalahan jaringan saat sinkronisasi.'
+        message: e instanceof Error ? e.message : 'Terjadi kesalahan jaringan saat sinkronisasi.'
       });
     } finally {
       setIsSyncingDrive(false);
@@ -233,10 +229,10 @@ export default function ImportCenter({
           message: data.error || 'Gagal menyinkronkan master_user_pic.xlsx.'
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setUserPicSyncStatus({
         success: false,
-        message: e.message || 'Terjadi kesalahan jaringan saat sinkronisasi PIC.'
+        message: e instanceof Error ? e.message : 'Terjadi kesalahan jaringan saat sinkronisasi PIC.'
       });
     } finally {
       setIsSyncingUserPic(false);
@@ -715,7 +711,7 @@ export default function ImportCenter({
                     </tr>
                   </thead>
                   <tbody>
-                    {validationResult.errors.map((err: any, idx: number) => (
+                    {validationResult.errors.map((err: ValidationErrorItem & { field?: string }, idx: number) => (
                       <tr key={idx}>
                         <td style={{ fontWeight: 700, color: '#dc2626' }}>Baris {err.row}</td>
                         <td style={{ fontWeight: 600 }}>{err.column || err.field}</td>
@@ -750,7 +746,7 @@ export default function ImportCenter({
                   </tr>
                 </thead>
                 <tbody>
-                  {validationResult.parsedRecords.slice(0, 15).map((r: any, idx: number) => (
+                  {validationResult.parsedRecords.slice(0, 15).map((r: MonthlyRecord, idx: number) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 600 }}>{r.branch_id}</td>
                       <td>{r.department_id}</td>

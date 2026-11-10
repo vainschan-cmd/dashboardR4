@@ -1,14 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Lock,
-  UserCheck,
   UserPlus,
-  Shield,
-  Building2,
-  Layers,
   Eye,
   EyeOff,
   CheckCircle2,
@@ -58,6 +54,15 @@ export default function AuthModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const showDemoQuickLogin =
@@ -90,8 +95,8 @@ export default function AuthModal({
           onClose();
         }, 600);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Terjadi kesalahan jaringan.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {
       setLoading(false);
     }
@@ -147,8 +152,8 @@ export default function AuthModal({
           onClose();
         }, 1200);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Terjadi kesalahan sistem saat mendaftar.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan sistem saat mendaftar.');
     } finally {
       setLoading(false);
     }
@@ -158,6 +163,9 @@ export default function AuthModal({
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label={mode === 'login' ? 'Masuk ke Pelindo R4 PortDash' : 'Daftar Akun Baru PIC / Pengguna'}
         style={{ maxWidth: '540px', width: '100%', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -190,6 +198,8 @@ export default function AuthModal({
             </div>
           </div>
           <button
+            type="button"
+            aria-label="Tutup dialog autentikasi"
             onClick={onClose}
             style={{
               background: 'transparent',

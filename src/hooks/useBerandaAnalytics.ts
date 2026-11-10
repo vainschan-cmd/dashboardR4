@@ -8,7 +8,7 @@ import {
   parseSelectedBranches,
 } from '@/lib/constants';
 import { formatRupiahFull, formatRupiahCompact } from '@/lib/formatters';
-import { User, UserRole } from '@/lib/types';
+import { User, UserRole, FinansialRecord, OpkomRecord, PeralatanRecord, KinerjaRecord, UtilisasiRecord, MonthlyRecord } from '@/lib/types';
 
 export interface BerandaKpiItem {
   title: string;
@@ -22,6 +22,7 @@ export interface BerandaKpiItem {
   rawRealization: string;
   hasData: boolean;
   hasPending: boolean;
+  [key: string]: unknown;
 }
 
 export function useBerandaAnalytics({
@@ -38,13 +39,14 @@ export function useBerandaAnalytics({
   terminalSearch?: string;
 }) {
   const isBodViewer = userRole === 'viewer' || currentUser?.role === 'viewer';
+  const currentUserBranchId = currentUser?.branch_id;
   const [loading, setLoading] = useState<boolean>(true);
-  const [finansial, setFinansial] = useState<any[]>([]);
-  const [opkom, setOpkom] = useState<any[]>([]);
-  const [peralatan, setPeralatan] = useState<any[]>([]);
-  const [kinerja, setKinerja] = useState<any[]>([]);
-  const [utilisasi, setUtilisasi] = useState<any[]>([]);
-  const [kpiRecords, setKpiRecords] = useState<any[]>([]);
+  const [finansial, setFinansial] = useState<FinansialRecord[]>([]);
+  const [opkom, setOpkom] = useState<OpkomRecord[]>([]);
+  const [peralatan, setPeralatan] = useState<PeralatanRecord[]>([]);
+  const [kinerja, setKinerja] = useState<KinerjaRecord[]>([]);
+  const [utilisasi, setUtilisasi] = useState<UtilisasiRecord[]>([]);
+  const [kpiRecords, setKpiRecords] = useState<MonthlyRecord[]>([]);
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(isBodViewer);
   const [verificationSummary, setVerificationSummary] = useState<{
     verifiedCount: number;
@@ -53,7 +55,10 @@ export function useBerandaAnalytics({
   }>({ verifiedCount: 0, pendingCount: 0, revisionCount: 0 });
 
   useEffect(() => {
-    setVerifiedOnly(userRole === 'viewer' || currentUser?.role === 'viewer');
+    const timer = window.setTimeout(() => {
+      setVerifiedOnly(userRole === 'viewer' || currentUser?.role === 'viewer');
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [userRole, currentUser?.role]);
 
   useEffect(() => {
@@ -82,8 +87,8 @@ export function useBerandaAnalytics({
             setVerificationSummary(json.verificationSummary);
           }
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.name === 'AbortError')) {
           console.error('Error loading beranda data:', e);
         }
       } finally {
@@ -98,32 +103,32 @@ export function useBerandaAnalytics({
 
   const isPicCabang =
     userRole === 'pic_cabang' ||
-    (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
-  const assignedBranch = currentUser?.branch_id
-    ? OFFICIAL_BRANCHES.find((b) => b.code === currentUser?.branch_id)
+    (currentUser?.role === 'pic_cabang' && !!currentUserBranchId && currentUserBranchId !== 'R99');
+  const assignedBranch = currentUserBranchId
+    ? OFFICIAL_BRANCHES.find((b) => b.code === currentUserBranchId)
     : undefined;
   const isNone = !isPicCabang && selectedTerminal === 'NONE';
   const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
 
   const selectedCodes = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      return [currentUser.branch_id];
+    if (isPicCabang && currentUserBranchId && currentUserBranchId !== 'R99') {
+      return [currentUserBranchId];
     }
     if (isNone) return [];
     if (isAll) return OFFICIAL_BRANCHES.map((b) => b.code);
     return parseSelectedBranches(selectedTerminal);
-  }, [isPicCabang, currentUser?.branch_id, isNone, isAll, selectedTerminal]);
+  }, [isPicCabang, currentUserBranchId, isNone, isAll, selectedTerminal]);
 
   const isSingle = isPicCabang || (!isAll && !isNone && selectedCodes.length === 1);
   const isMulti = !isPicCabang && !isAll && !isNone && selectedCodes.length > 1;
 
   const activeBranch = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id) {
-      return assignedBranch || getBranchByCode(currentUser.branch_id) || null;
+    if (isPicCabang && currentUserBranchId) {
+      return assignedBranch || getBranchByCode(currentUserBranchId) || null;
     }
     if (!isSingle) return null;
     return getBranchByCode(selectedCodes[0]) || OFFICIAL_BRANCHES.find((b) => b.code === selectedCodes[0]);
-  }, [isPicCabang, currentUser?.branch_id, assignedBranch, isSingle, selectedCodes]);
+  }, [isPicCabang, currentUserBranchId, assignedBranch, isSingle, selectedCodes]);
 
   const filteredFin = useMemo(() => {
     if (isNone) return [];
@@ -158,7 +163,7 @@ export function useBerandaAnalytics({
   const filteredKpiRecords = useMemo(() => {
     if (isNone) return [];
     if (isAll) return kpiRecords;
-    return kpiRecords.filter((r) => isBranchMatch(selectedTerminal, r.branchCode, r.branchName));
+    return kpiRecords.filter((r) => isBranchMatch(selectedTerminal, r.branch_code || r.branch_id, r.branch_name));
   }, [isNone, isAll, selectedTerminal, kpiRecords]);
 
   const serviceKpis: BerandaKpiItem[] = useMemo(() => {
@@ -205,7 +210,7 @@ export function useBerandaAnalytics({
 
     const buildServiceMetric = (
       title: string,
-      rows: any[],
+      rows: OpkomRecord[],
       unit: string,
       isRupiah = false,
       suffixJt?: string,
@@ -378,7 +383,7 @@ export function useBerandaAnalytics({
       ];
     }
 
-    const buildFinMetric = (title: string, rows: any[], isCostAccount = false): BerandaKpiItem => {
+    const buildFinMetric = (title: string, rows: FinansialRecord[], isCostAccount = false): BerandaKpiItem => {
       const hasData = rows.length > 0;
       const hasPending = rows.some((r) => r.verificationStatus === 'pending_verification' || r.hasPendingUpdate);
       if (!hasData) {
@@ -429,7 +434,7 @@ export function useBerandaAnalytics({
     const opRows = filteredFin.filter((f) => (f.rekening || '').toLowerCase() === 'laba usaha');
 
     const validAvailAlat = filteredPeralatan.filter((p) => Number(p.availability || 0) > 0);
-    const rfuKpiRows = filteredKpiRecords.filter((r) => r.indicatorId === 'kpi_rfu');
+    const rfuKpiRows = filteredKpiRecords.filter((r) => r.indicator_id === 'kpi_rfu');
     let alatMetric: BerandaKpiItem;
 
     if (validAvailAlat.length > 0) {
@@ -466,7 +471,7 @@ export function useBerandaAnalytics({
         rawTarget: `${avgTargetVal.toFixed(1)}%`,
         rawRealization: `${avgRfuStr}%`,
         hasData: true,
-        hasPending: rfuKpiRows.some((r) => r.verificationStatus === 'pending_verification'),
+        hasPending: rfuKpiRows.some((r) => r.verification_status === 'pending_verification'),
       };
     } else {
       alatMetric = {
@@ -484,7 +489,7 @@ export function useBerandaAnalytics({
       };
     }
 
-    const slaKpiRows = filteredKpiRecords.filter((r) => r.indicatorId === 'kpi_sla');
+    const slaKpiRows = filteredKpiRecords.filter((r) => r.indicator_id === 'kpi_sla');
     let slaMetric: BerandaKpiItem;
     if (slaKpiRows.length > 0) {
       const avgSlaVal = slaKpiRows.reduce((a, b) => a + Number(b.realization || 0), 0) / slaKpiRows.length;
@@ -501,7 +506,7 @@ export function useBerandaAnalytics({
         rawTarget: `${avgTargetVal.toFixed(1)}%`,
         rawRealization: `${avgSlaStr}%`,
         hasData: true,
-        hasPending: slaKpiRows.some((r) => r.verificationStatus === 'pending_verification'),
+        hasPending: slaKpiRows.some((r) => r.verification_status === 'pending_verification'),
       };
     } else {
       slaMetric = {
@@ -630,11 +635,11 @@ export function useBerandaAnalytics({
         hasPending,
       };
     });
-  }, [opkom, finansial, isPicCabang, currentUser?.branch_id]);
+  }, [opkom, finansial, isPicCabang, currentUserBranchId]);
 
   const filteredTerminalsOverview = useMemo(() => {
-    if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      return terminalsOverview.filter((t) => t.code === currentUser.branch_id);
+    if (isPicCabang && currentUserBranchId && currentUserBranchId !== 'R99') {
+      return terminalsOverview.filter((t) => t.code === currentUserBranchId);
     }
     if (isNone) return [];
     let list = terminalsOverview;
@@ -656,14 +661,14 @@ export function useBerandaAnalytics({
     isAll,
     selectedTerminal,
     isPicCabang,
-    currentUser?.branch_id,
+    currentUserBranchId,
   ]);
 
   const selectedBranchesMetrics = useMemo(() => {
     if (isNone) return [];
     const targetCodes =
-      isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99'
-        ? [currentUser.branch_id]
+      isPicCabang && currentUserBranchId && currentUserBranchId !== 'R99'
+        ? [currentUserBranchId]
         : isAll
           ? OFFICIAL_BRANCHES.map((b) => b.code)
           : selectedCodes;
@@ -675,7 +680,7 @@ export function useBerandaAnalytics({
       const bFin = finansial.filter((f) => f.branchCode === code);
       const bAlat = peralatan.filter((p) => p.branchCode === code);
       const bUtil = utilisasi.filter((u) => u.branchCode === code);
-      const bKpi = kpiRecords.filter((r) => r.branchCode === code);
+      const bKpi = kpiRecords.filter((r) => (r.branch_code || r.branch_id) === code);
 
       const revRows = bFin.filter((f) => (f.rekening || '').toLowerCase().includes('pendapatan'));
       const opRpRows = bOp.filter((o) => o.satuan === 'Rp');
@@ -710,7 +715,7 @@ export function useBerandaAnalytics({
             : null;
 
       const validAlat = bAlat.filter((p) => (p.availability || 0) > 0);
-      const rfuRows = bKpi.filter((r) => r.indicatorId === 'kpi_rfu');
+      const rfuRows = bKpi.filter((r) => r.indicator_id === 'kpi_rfu');
       const rfu =
         validAlat.length > 0
           ? (validAlat.reduce((a, b) => a + (b.availability || 0), 0) / validAlat.length).toFixed(1)
@@ -748,7 +753,7 @@ export function useBerandaAnalytics({
     utilisasi,
     kpiRecords,
     isPicCabang,
-    currentUser?.branch_id,
+    currentUserBranchId,
   ]);
 
   const branchCommoditiesBreakdown = useMemo(() => {
@@ -823,8 +828,8 @@ export function useBerandaAnalytics({
         sourceSheet: 'module_opkom',
         sourceModule: 'Operasi & Komersial',
         tabId: 'opkom',
-        branchCode: o.branchCode,
-        linkText: `Buka Data Opkom [${o.branchCode}]`,
+        branchCode: o.branchCode || 'R01',
+        linkText: `Buka Data Opkom [${o.branchCode || 'R01'}]`,
       });
     });
 
@@ -833,13 +838,13 @@ export function useBerandaAnalytics({
     );
     if (lowAlat) {
       alerts.push({
-        header: `${lowAlat.branchName || lowAlat.branchCode} [${lowAlat.branchCode}] - ${lowAlat.nmAlat || lowAlat.kdAlat}`,
-        desc: `Utilisasi ${lowAlat.singkatan || lowAlat.kdAlat} tercatat ${lowAlat.utilisasi}% (${lowAlat.jumlah} unit operasional).`,
+        header: `${lowAlat.branchName || lowAlat.branchCode || 'Cabang'} [${lowAlat.branchCode || 'R01'}] - ${lowAlat.nmAlat || lowAlat.kdAlat}`,
+        desc: `Utilisasi ${lowAlat.singkatanAlat || lowAlat.kdAlat} tercatat ${lowAlat.utilisasi}% (${lowAlat.jumlah} unit operasional).`,
         sourceSheet: 'module_peralatan',
         sourceModule: 'Peralatan Pelabuhan',
         tabId: 'peralatan',
-        branchCode: lowAlat.branchCode,
-        linkText: `Buka Data Peralatan [${lowAlat.branchCode}]`,
+        branchCode: lowAlat.branchCode || 'R01',
+        linkText: `Buka Data Peralatan [${lowAlat.branchCode || 'R01'}]`,
       });
     }
 

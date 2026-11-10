@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -22,7 +23,7 @@ function runTunnel() {
 
     if (text.includes('Unauthorized: Tunnel not found') || text.includes('failed to request quick Tunnel')) {
       console.log('[Cloudflare Watcher] Sesi tunnel habis atau error server side. Merestart...');
-      try { child.kill('SIGTERM'); } catch (e) {}
+      try { child.kill('SIGTERM'); } catch {}
     }
   };
 

@@ -62,14 +62,17 @@ export default function Sidebar({
 
   // Restore saved collapse preference from localStorage
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('portsight_sidebar_collapsed');
-      if (saved === 'true') {
-        setIsCollapsed(true);
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem('portsight_sidebar_collapsed');
+        if (saved === 'true') {
+          setIsCollapsed(true);
+        }
+      } catch (e) {
+        console.warn('[Sidebar] Failed to read collapse preference:', e);
       }
-    } catch (e) {
-      console.warn('[Sidebar] Failed to read collapse preference:', e);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {

@@ -29,7 +29,8 @@ import {
   CartesianGrid
 } from 'recharts';
 import { formatRupiahFull } from '@/lib/formatters';
-import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode, isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
+import { isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
+import { FinansialRecord, OpkomRecord } from '@/lib/types';
 
 interface ComparisonModalProps {
   isOpen: boolean;
@@ -97,7 +98,7 @@ export default function ComparisonModal({
           const items: MetricComparisonItem[] = [];
 
           // 1. Process Finansial
-          const finRows: any[] = json.finansial || [];
+          const finRows: FinansialRecord[] = json.finansial || [];
           const targetFinRows = finRows.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
 
           // If multi-branch, keep branches separate; if ALL, aggregate
@@ -136,7 +137,7 @@ export default function ComparisonModal({
           });
 
           // 2. Process Opkom
-          const opRows: any[] = json.opkom || [];
+          const opRows: OpkomRecord[] = json.opkom || [];
           const targetOpRows = opRows.filter(o => isBranchMatch(selectedTerminal, o.branchCode, o.branchName));
 
           const opMap: Record<string, { real: number; satuan: string; rkaArr: number[]; yoyArr: number[]; layName: string; branchName: string }> = {};
@@ -215,12 +216,24 @@ export default function ComparisonModal({
     window.print();
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
       <div
         className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Matriks Komparasi Realisasi 2026 vs RKAP vs Realisasi 2025"
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: '1060px',
@@ -368,15 +381,16 @@ export default function ComparisonModal({
                 }}
               >
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  {[
+                  {([
                     { id: 'all', label: 'Semua Indikator' },
                     { id: 'opkom', label: 'Pendapatan Layanan Opkom' },
                     { id: 'finansial', label: 'Keuangan (Finance)' },
                     { id: 'operasional', label: 'Volume Trafik Operasional' },
-                  ].map(tab => (
+                  ] as const).map(tab => (
                     <button
                       key={tab.id}
-                      onClick={() => setCategoryFilter(tab.id as any)}
+                      type="button"
+                      onClick={() => setCategoryFilter(tab.id)}
                       style={{
                         padding: '6px 12px',
                         fontSize: '11.5px',

@@ -58,8 +58,8 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
         if (json.success && json.finansial) {
           setData(json.finansial);
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.name === 'AbortError')) {
           console.error(e);
         }
       } finally {
@@ -244,7 +244,7 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
-                  formatter={(val: any, name: any, item: any) => [formatRupiahFull(item.payload.revenueRp), 'Pendapatan']}
+                  formatter={(_val: unknown, _name: unknown, item: { payload?: { revenueRp?: number } }) => [formatRupiahFull(item.payload?.revenueRp || 0), 'Pendapatan']}
                 />
                 <Bar dataKey="revenueM" fill="#38bdf8" radius={[4, 4, 0, 0]} />
               </BarChart>

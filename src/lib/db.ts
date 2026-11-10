@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { randomBytes } from 'node:crypto';
 import path from 'path';
 import fs from 'fs';
 import type {
@@ -19,6 +20,7 @@ import type {
 } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
 import { hashPassword, verifyPassword, isPasswordHashed } from './auth';
+import { exportUsersToSpreadsheet, INITIAL_OFFICIAL_PICS } from './userPicSync';
 
 export const SECRET_MASK = '••••••••';
 
@@ -55,14 +57,16 @@ export function sanitizeSafeDataFilePath(
 /**
  * Strip password hash/plaintext from a User record before returning to callers or API responses.
  */
-export function toSafeUser(raw: any): User {
-  if (!raw) return raw;
-  const { password: _removedPassword, ...rest } = raw;
+export function toSafeUser(raw: Record<string, unknown> | User): User {
+  if (!raw) return raw as User;
+  const rawRecord = raw as Record<string, unknown>;
+  const { password: _removedPassword, ...rest } = rawRecord;
+  void _removedPassword;
   return {
-    ...rest,
-    nipp: raw.nipp || raw.username,
-    username: raw.username || raw.nipp,
-    active: Boolean(raw.active),
+    ...(rest as unknown as User),
+    nipp: String(rawRecord.nipp || rawRecord.username || ''),
+    username: String(rawRecord.username || rawRecord.nipp || ''),
+    active: Boolean(rawRecord.active),
   };
 }
 
@@ -377,6 +381,14 @@ function initSchema(db: DatabaseSync) {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS auth_rate_limits (
+      rate_key TEXT PRIMARY KEY,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      first_failed_at INTEGER NOT NULL DEFAULT 0,
+      locked_until INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
     -- Structured SQLite Module Tables (Single Source of Truth for all 6 modules)
     CREATE TABLE IF NOT EXISTS module_finansial (
       id TEXT PRIMARY KEY,
@@ -578,7 +590,6 @@ function initSchema(db: DatabaseSync) {
   try {
     const existing = db.prepare("SELECT COUNT(*) as count FROM users WHERE nipp IS NOT NULL AND nipp != ''").get() as { count: number };
     if (!existing || existing.count === 0) {
-      const { INITIAL_OFFICIAL_PICS, exportUsersToSpreadsheet } = require('./userPicSync');
       const insertStmt = db.prepare(`
         INSERT OR REPLACE INTO users (id, username, nipp, name, email, divisi, departemen, password, role, branch_id, department_id, active, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -601,7 +612,7 @@ function initSchema(db: DatabaseSync) {
           u.created_at || new Date().toISOString()
         );
       }
-      const allUsers = (db.prepare("SELECT * FROM users ORDER BY nipp ASC").all() as any[]).map(toSafeUser);
+      const allUsers = db.prepare("SELECT * FROM users ORDER BY nipp ASC").all().map(toSafeUser);
       exportUsersToSpreadsheet(allUsers);
     } else {
       // Automatically migrate any legacy unhashed passwords in the database to scrypt hashes
@@ -630,58 +641,58 @@ export function isDatabaseEmpty(): boolean {
 export const dbQueries = {
   // Branches
   getBranches: (): Branch[] => {
-    const rows = getDb().prepare('SELECT * FROM branches ORDER BY order_seq ASC, code ASC').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM branches ORDER BY order_seq ASC, code ASC').all();
     return rows.map(r => ({
-      ...r,
+      ...(r as unknown as Branch),
       active: Boolean(r.active),
-      facilities: r.facilities ? JSON.parse(r.facilities) : {}
+      facilities: typeof r.facilities === 'string' && r.facilities ? JSON.parse(r.facilities) : {}
     }));
   },
   getBranchById: (id: string): Branch | null => {
-    const r = getDb().prepare('SELECT * FROM branches WHERE id = ?').get(id) as any;
+    const r = getDb().prepare('SELECT * FROM branches WHERE id = ?').get(id);
     if (!r) return null;
     return {
-      ...r,
+      ...(r as unknown as Branch),
       active: Boolean(r.active),
-      facilities: r.facilities ? JSON.parse(r.facilities) : {}
+      facilities: typeof r.facilities === 'string' && r.facilities ? JSON.parse(r.facilities) : {}
     };
   },
 
   // Departments
   getDepartments: (): Department[] => {
-    const rows = getDb().prepare('SELECT * FROM departments ORDER BY code ASC').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM departments ORDER BY code ASC').all();
     return rows.map(r => ({
-      ...r,
+      ...(r as unknown as Department),
       active: Boolean(r.active)
     }));
   },
 
   // Equipment Catalog
   getEquipmentCatalog: (): EquipmentItem[] => {
-    const rows = getDb().prepare('SELECT * FROM equipment_catalog ORDER BY code ASC').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM equipment_catalog ORDER BY code ASC').all();
     return rows.map(r => ({
-      ...r,
+      ...(r as unknown as EquipmentItem),
       active: Boolean(r.active)
     }));
   },
 
   // Users / PIC (Always sanitized via toSafeUser so password hash is never exposed)
   getUsers: (): User[] => {
-    const rows = getDb().prepare('SELECT * FROM users ORDER BY nipp ASC, name ASC').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM users ORDER BY nipp ASC, name ASC').all();
     return rows.map(toSafeUser);
   },
   getUserByNipp: (nipp: string): User | null => {
-    const r = getDb().prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(nipp, nipp) as any;
+    const r = getDb().prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(nipp, nipp);
     if (!r) return null;
     return toSafeUser(r);
   },
   getUserByUsername: (username: string): User | null => {
-    const r = getDb().prepare('SELECT * FROM users WHERE username = ? OR nipp = ?').get(username, username) as any;
+    const r = getDb().prepare('SELECT * FROM users WHERE username = ? OR nipp = ?').get(username, username);
     if (!r) return null;
     return toSafeUser(r);
   },
   getUserById: (id: string): User | null => {
-    const r = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    const r = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id);
     if (!r) return null;
     return toSafeUser(r);
   },
@@ -690,7 +701,7 @@ export const dbQueries = {
     name: string;
     divisi: string;
     departemen: string;
-    password?: string;
+    password: string;
     role?: UserRole;
     email?: string;
     branch_id?: string | null;
@@ -698,10 +709,14 @@ export const dbQueries = {
   }): User => {
     const db = getDb();
     const cleanNipp = String(data.nipp).trim();
+    const rawPassword = String(data.password || '').trim();
+    if (!rawPassword || rawPassword.length < 8) {
+      throw new Error('Kata sandi wajib diisi dengan minimal 8 karakter.');
+    }
     const id = `usr_${cleanNipp}_${Date.now()}`;
     const role: UserRole = data.role || 'pic_cabang';
     const email = data.email || `${cleanNipp}@pelindo.co.id`;
-    const hashedPassword = hashPassword(data.password || 'password123');
+    const hashedPassword = hashPassword(rawPassword);
     const createdAt = new Date().toISOString();
 
     const stmt = db.prepare(`
@@ -740,7 +755,6 @@ export const dbQueries = {
 
     // Automatically sync master spreadsheet in My Drive
     try {
-      const { exportUsersToSpreadsheet } = require('./userPicSync');
       exportUsersToSpreadsheet(dbQueries.getUsers());
     } catch (e) {
       console.error('Failed to sync to spreadsheet on createUser:', e);
@@ -750,24 +764,25 @@ export const dbQueries = {
   },
   updateUser: (id: string, data: Partial<User>): User | null => {
     const db = getDb();
-    const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Record<string, unknown> | undefined;
     if (!existing) return null;
 
-    const name = data.name !== undefined ? data.name : existing.name;
-    const cleanNipp = data.nipp !== undefined ? String(data.nipp).trim() : (existing.nipp || existing.username);
-    const divisi = data.divisi !== undefined ? data.divisi : existing.divisi;
-    const departemen = data.departemen !== undefined ? data.departemen : existing.departemen;
-    const role = data.role !== undefined ? data.role : existing.role;
-    const branch_id = data.branch_id !== undefined ? data.branch_id : existing.branch_id;
-    const department_id = data.department_id !== undefined ? data.department_id : existing.department_id;
-    const email = data.email !== undefined ? data.email : (existing.email || `${cleanNipp}@pelindo.co.id`);
-    const active = data.active !== undefined ? (data.active ? 1 : 0) : existing.active;
+    const name = data.name !== undefined ? data.name : String(existing.name || '');
+    const cleanNipp = data.nipp !== undefined ? String(data.nipp).trim() : String(existing.nipp || existing.username || '');
+    const divisi = data.divisi !== undefined ? data.divisi : String(existing.divisi || '');
+    const departemen = data.departemen !== undefined ? data.departemen : String(existing.departemen || '');
+    const role = (data.role !== undefined ? data.role : existing.role) as UserRole;
+    const branch_id = data.branch_id !== undefined ? data.branch_id : (existing.branch_id as string | null);
+    const department_id = data.department_id !== undefined ? data.department_id : (existing.department_id as string | null);
+    const email = data.email !== undefined ? data.email : (String(existing.email || '') || `${cleanNipp}@pelindo.co.id`);
+    const active = data.active !== undefined ? (data.active ? 1 : 0) : Number(existing.active ?? 1);
+    const existingPwd = String(existing.password || '');
     const password =
       data.password && data.password.trim().length > 0
         ? hashPassword(data.password.trim())
-        : isPasswordHashed(existing.password)
-          ? existing.password
-          : hashPassword(existing.password || 'password123');
+        : isPasswordHashed(existingPwd)
+          ? existingPwd
+          : hashPassword(existingPwd || randomBytes(16).toString('hex'));
 
     db.prepare(`
       UPDATE users 
@@ -776,7 +791,6 @@ export const dbQueries = {
     `).run(name, cleanNipp, cleanNipp, divisi, departemen, role, branch_id, department_id, email, active, password, id);
 
     try {
-      const { exportUsersToSpreadsheet } = require('./userPicSync');
       exportUsersToSpreadsheet(dbQueries.getUsers());
     } catch (e) {
       console.warn('[DB] Gagal mengekspor daftar pengguna ke spreadsheet pada updateUser:', e);
@@ -788,7 +802,6 @@ export const dbQueries = {
     const db = getDb();
     db.prepare('DELETE FROM users WHERE id = ?').run(id);
     try {
-      const { exportUsersToSpreadsheet } = require('./userPicSync');
       exportUsersToSpreadsheet(dbQueries.getUsers());
     } catch (e) {
       console.warn('[DB] Gagal mengekspor daftar pengguna ke spreadsheet pada deleteUser:', e);
@@ -800,10 +813,10 @@ export const dbQueries = {
     if (!cleanNipp || !password) return null;
 
     const db = getDb();
-    const rawRow = db.prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(cleanNipp, cleanNipp) as any;
+    const rawRow = db.prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(cleanNipp, cleanNipp);
     if (!rawRow) return null;
 
-    const storedPassword = rawRow.password || '';
+    const storedPassword = String(rawRow.password || '');
     if (!verifyPassword(password, storedPassword)) {
       return null;
     }
@@ -811,7 +824,7 @@ export const dbQueries = {
     // Upgrade to scrypt hash if row was somehow not yet hashed
     if (!isPasswordHashed(storedPassword)) {
       try {
-        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(password), rawRow.id);
+        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(password), String(rawRow.id));
       } catch (e) {
         console.warn('[DB] Gagal memutakhirkan hash kata sandi:', e);
       }
@@ -823,14 +836,14 @@ export const dbQueries = {
   // Indicators
   getIndicators: (departmentId?: string): KPIIndicator[] => {
     const db = getDb();
-    let rows: any[];
+    let rows: Record<string, unknown>[];
     if (departmentId) {
       rows = db.prepare('SELECT * FROM kpi_indicators WHERE department_id = ? ORDER BY code ASC').all(departmentId);
     } else {
       rows = db.prepare('SELECT * FROM kpi_indicators ORDER BY department_id ASC, code ASC').all();
     }
     return rows.map(r => ({
-      ...r,
+      ...(r as unknown as KPIIndicator),
       is_core_kpi: Boolean(r.is_core_kpi),
       active: Boolean(r.active)
     }));
@@ -838,18 +851,18 @@ export const dbQueries = {
 
   // Templates
   getTemplates: (): TemplateConfig[] => {
-    const rows = getDb().prepare('SELECT * FROM templates ORDER BY department_id ASC').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM templates ORDER BY department_id ASC').all();
     return rows.map(r => ({
-      ...r,
-      columns: JSON.parse(r.columns)
+      ...(r as unknown as TemplateConfig),
+      columns: JSON.parse(String(r.columns || '[]'))
     }));
   },
   getTemplateByDept: (deptId: string): TemplateConfig | null => {
-    const r = getDb().prepare('SELECT * FROM templates WHERE department_id = ?').get(deptId) as any;
+    const r = getDb().prepare('SELECT * FROM templates WHERE department_id = ?').get(deptId);
     if (!r) return null;
     return {
-      ...r,
-      columns: JSON.parse(r.columns)
+      ...(r as unknown as TemplateConfig),
+      columns: JSON.parse(String(r.columns || '[]'))
     };
   },
   saveTemplate: (template: TemplateConfig) => {
@@ -896,7 +909,7 @@ export const dbQueries = {
   }): MonthlyRecord[] => {
     const db = getDb();
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: Array<string | number> = [];
 
     if (filter.branch_id && filter.branch_id !== 'ALL') {
       if (filter.branch_id === 'NONE') {
@@ -951,9 +964,9 @@ export const dbQueries = {
       ORDER BY r.year DESC, r.month DESC, b.code ASC, k.code ASC
     `;
 
-    const rows = db.prepare(sql).all(...params) as any[];
+    const rows = db.prepare(sql).all(...params);
     return rows.map(r => ({
-      ...r,
+      ...(r as unknown as MonthlyRecord),
       is_simulated: Boolean(r.is_simulated)
     }));
   },
@@ -964,9 +977,9 @@ export const dbQueries = {
     const placeholders = recordIds.map(() => '?').join(', ');
     const rows = db
       .prepare(`SELECT * FROM monthly_records WHERE id IN (${placeholders})`)
-      .all(...recordIds) as any[];
+      .all(...recordIds);
     return rows.map(r => ({
-      ...r,
+      ...(r as unknown as MonthlyRecord),
       is_simulated: Boolean(r.is_simulated),
     }));
   },
@@ -1085,10 +1098,10 @@ export const dbQueries = {
     );
   },
   getImportBatches: (): ImportBatch[] => {
-    const rows = getDb().prepare('SELECT * FROM import_batches ORDER BY uploaded_at DESC LIMIT 50').all() as any[];
+    const rows = getDb().prepare('SELECT * FROM import_batches ORDER BY uploaded_at DESC LIMIT 50').all();
     return rows.map(r => ({
-      ...r,
-      error_log: r.error_log ? JSON.parse(r.error_log) : null
+      ...(r as unknown as ImportBatch),
+      error_log: typeof r.error_log === 'string' && r.error_log ? JSON.parse(r.error_log) : null
     }));
   },
 
@@ -1114,12 +1127,12 @@ export const dbQueries = {
     );
   },
   getAuditLogs: (limit = 100): AuditLog[] => {
-    return getDb().prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?').all(limit) as AuditLog[];
+    return getDb().prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?').all(limit) as unknown as AuditLog[];
   },
 
   // Google Sheets Config
   getGoogleSheetsConfig: (): GoogleSheetsConfig => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'google_sheets'").get() as any;
+    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'google_sheets'").get();
     if (!row) {
       return {
         id: 'cfg_gsheet',
@@ -1133,7 +1146,7 @@ export const dbQueries = {
         auto_sync_enabled: false
       };
     }
-    return JSON.parse(row.config_json);
+    return JSON.parse(String(row.config_json));
   },
   saveGoogleSheetsConfig: (cfg: GoogleSheetsConfig) => {
     const db = getDb();
@@ -1146,7 +1159,7 @@ export const dbQueries = {
 
   // System & Session Parameters
   getSystemParameters: (): SystemParameters => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'system_parameters'").get() as any;
+    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'system_parameters'").get();
     if (!row) {
       return {
         session_timeout_minutes: 30,
@@ -1160,7 +1173,7 @@ export const dbQueries = {
       auto_logout_idle: true,
       warning_before_minutes: 2,
       default_theme: 'light',
-      ...JSON.parse(row.config_json),
+      ...JSON.parse(String(row.config_json)),
     };
   },
   saveSystemParameters: (params: Partial<SystemParameters>): SystemParameters => {
@@ -1188,7 +1201,7 @@ export const dbQueries = {
 
   // External Integration Credentials (Google Drive, Sheets, Gateway)
   getIntegrationCredentials: (): IntegrationCredentials => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'integration_credentials'").get() as any;
+    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'integration_credentials'").get();
     if (!row) {
       return {
         google_drive_email: 'regdashr@gmail.com',
@@ -1205,7 +1218,7 @@ export const dbQueries = {
       google_drive_file_path: 'data/input_data.xlsx',
       google_sheets_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
       google_sheets_name: 'Input_Kinerja_Bulanan',
-      ...JSON.parse(row.config_json),
+      ...JSON.parse(String(row.config_json)),
     };
   },
   saveIntegrationCredentials: (creds: Partial<IntegrationCredentials>, updatedBy?: string): IntegrationCredentials => {
@@ -1250,5 +1263,45 @@ export const dbQueries = {
     }
 
     return updated;
-  }
+  },
+
+  // Persistent Shared Login Rate Limit Storage (SQLite WAL for multi-instance & restart resilience)
+  getRateLimitEntry: (rateKey: string): { attempt_count: number; first_failed_at: number; locked_until: number } | null => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT attempt_count, first_failed_at, locked_until FROM auth_rate_limits WHERE rate_key = ?')
+      .get(rateKey) as { attempt_count: number; first_failed_at: number; locked_until: number } | undefined;
+    return row || null;
+  },
+  upsertRateLimitEntry: (rateKey: string, attemptCount: number, firstFailedAt: number, lockedUntil: number): void => {
+    const db = getDb();
+    const nowIso = new Date().toISOString();
+    db.prepare(`
+      INSERT INTO auth_rate_limits (rate_key, attempt_count, first_failed_at, locked_until, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(rate_key) DO UPDATE SET
+        attempt_count = excluded.attempt_count,
+        first_failed_at = excluded.first_failed_at,
+        locked_until = excluded.locked_until,
+        updated_at = excluded.updated_at
+    `).run(rateKey, attemptCount, firstFailedAt, lockedUntil, nowIso);
+  },
+  deleteRateLimitEntry: (rateKey: string): void => {
+    const db = getDb();
+    db.prepare('DELETE FROM auth_rate_limits WHERE rate_key = ?').run(rateKey);
+  },
+
+  // Atomic transactional commit for imported records + batch metadata + audit log
+  commitImportTransaction: (params: {
+    records: Omit<MonthlyRecord, 'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'>[];
+    batch: ImportBatch;
+    auditLog: Omit<AuditLog, 'id' | 'timestamp'>;
+  }): void => {
+    const db = getDb();
+    withTransaction(db, () => {
+      dbQueries.insertMonthlyRecords(params.records);
+      dbQueries.createImportBatch(params.batch);
+      dbQueries.createAuditLog(params.auditLog);
+    });
+  },
 };

@@ -7,7 +7,6 @@ import {
   type JwtSessionPayload,
 } from './auth';
 import {
-  OFFICIAL_BRANCHES,
   getCanonicalBranchCode,
   getBranchByCode,
   getBranchById,
@@ -268,6 +267,123 @@ export function enforceBranchFilterForRead(
     return resolved ? resolved.code : session.branch_id;
   }
   return requestedBranch || undefined;
+}
+
+/**
+ * Row-Level Security (ABAC) for Department-scoped READ endpoints:
+ * If the user is a `pic_dept_regional` assigned to a specific department, force the department filter to their assigned department.
+ */
+export function enforceDepartmentFilterForRead(
+  session: JwtSessionPayload | null,
+  requestedDepartmentId?: string | null
+): string | undefined {
+  if (session && session.role === 'pic_dept_regional' && session.department_id) {
+    return session.department_id;
+  }
+  return requestedDepartmentId || undefined;
+}
+
+/**
+ * Row-Level Security (ABAC) for Verification status on READ endpoints:
+ * If the user is a `viewer` (BOD / Executive Viewer), strictly force `verifiedOnly = true` even if query params are manipulated.
+ */
+export function enforceVerificationFilterForRead(
+  session: JwtSessionPayload | null,
+  requestedVerifiedOnly?: boolean | string | null
+): boolean {
+  if (session && session.role === 'viewer') {
+    return true;
+  }
+  if (typeof requestedVerifiedOnly === 'boolean') {
+    return requestedVerifiedOnly;
+  }
+  return requestedVerifiedOnly === 'true';
+}
+
+/**
+ * Row-Level Security (ABAC) for verification_status string filter on READ endpoints:
+ * If the user is a `viewer`, force status to `'verified'`.
+ */
+export function enforceVerificationStatusFilterForRead(
+  session: JwtSessionPayload | null,
+  requestedStatus?: string | null
+): string | undefined {
+  if (session && session.role === 'viewer') {
+    return 'verified';
+  }
+  return requestedStatus || undefined;
+}
+
+const VALID_DEPARTMENT_IDS = new Set(['dept_ops', 'dept_keu', 'dept_sdm', 'dept_tek', 'dept_kom']);
+
+export function resolveDepartmentFromText(
+  rawDeptId?: string | null,
+  divisi?: string | null,
+  departemen?: string | null
+): string | null {
+  if (rawDeptId && VALID_DEPARTMENT_IDS.has(rawDeptId.trim())) {
+    return rawDeptId.trim();
+  }
+  const combined = `${divisi || ''} ${departemen || ''}`.toLowerCase();
+  if (combined.includes('keuangan') || combined.includes('akuntansi') || combined.includes('finansial')) {
+    return 'dept_keu';
+  }
+  if (combined.includes('sdm') || combined.includes('sumber daya') || combined.includes('umum')) {
+    return 'dept_sdm';
+  }
+  if (combined.includes('teknik') || combined.includes('peralatan') || combined.includes('fasilitas') || combined.includes('ti') || combined.includes('teknologi')) {
+    return 'dept_tek';
+  }
+  if (combined.includes('komersial') || combined.includes('pemasaran') || combined.includes('pengembangan')) {
+    return 'dept_kom';
+  }
+  if (combined.includes('operasi') || combined.includes('terminal') || combined.includes('kapal')) {
+    return 'dept_ops';
+  }
+  return rawDeptId && VALID_DEPARTMENT_IDS.has(rawDeptId) ? rawDeptId : 'dept_ops';
+}
+
+/**
+ * Server-side rule enforcement for user role, branch_id, and department_id assignment.
+ */
+export function resolveServerAssignedUserScope(input: {
+  role?: UserRole;
+  branch_id?: string | null;
+  department_id?: string | null;
+  divisi?: string | null;
+  departemen?: string | null;
+  isPublicSelfRegistration?: boolean;
+}): { role: UserRole; branch_id: string; department_id: string | null } {
+  // Public self-registration (when enabled) can never self-assign elevated roles
+  const effectiveRole: UserRole = input.isPublicSelfRegistration
+    ? 'pic_cabang'
+    : input.role || 'pic_cabang';
+
+  const resolvedDept = resolveDepartmentFromText(input.department_id, input.divisi, input.departemen);
+
+  if (effectiveRole === 'viewer') {
+    return { role: 'viewer', branch_id: 'R99', department_id: null };
+  }
+
+  if (effectiveRole === 'super_admin' || effectiveRole === 'admin_regional') {
+    return { role: effectiveRole, branch_id: 'R99', department_id: resolvedDept };
+  }
+
+  if (effectiveRole === 'pic_dept_regional') {
+    return { role: 'pic_dept_regional', branch_id: 'R99', department_id: resolvedDept || 'dept_ops' };
+  }
+
+  // pic_cabang: resolve branch against official branches or infer from departemen/divisi text
+  const directBranch = resolveBranchIdentity(input.branch_id);
+  if (directBranch) {
+    return { role: 'pic_cabang', branch_id: directBranch.code, department_id: resolvedDept };
+  }
+  const inferredBranch = resolveBranchIdentity(`${input.departemen || ''} ${input.divisi || ''}`);
+  return {
+    role: 'pic_cabang',
+    branch_id: inferredBranch ? inferredBranch.code : 'R01',
+    department_id: resolvedDept,
+  };
 }
 
 /**

@@ -80,11 +80,11 @@ export async function GET(req: NextRequest) {
     }
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memuat sesi pengguna.';
     return NextResponse.json(
-      { success: false, authenticated: false, user: null, error: error.message },
+      { success: false, authenticated: false, user: null, error: message },
       { status: 500 }
     );
   }
 }
-

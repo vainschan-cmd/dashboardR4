@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 let localtunnel;
 try {
   localtunnel = require('localtunnel');

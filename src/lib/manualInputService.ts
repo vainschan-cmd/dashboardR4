@@ -4,9 +4,24 @@ import os from 'os';
 import * as xlsx from 'xlsx';
 import { getBranchByCode, getCanonicalBranchCode, getBranchNameByCode } from './constants';
 import { getBranchId } from './ingestInputData';
-import { getDb, dbQueries } from './db';
+import { getDb, dbQueries, withTransaction } from './db';
 
 export type ModuleType = 'finansial' | 'opkom' | 'kinerja' | 'utilisasi' | 'peralatan' | 'fasilitas';
+
+export function getModuleDepartmentId(module: ModuleType): string {
+  switch (module) {
+    case 'finansial':
+      return 'dept_keu';
+    case 'peralatan':
+    case 'fasilitas':
+      return 'dept_tek';
+    case 'opkom':
+    case 'kinerja':
+    case 'utilisasi':
+    default:
+      return 'dept_ops';
+  }
+}
 
 export interface ManualInputPayload {
   module: ModuleType;
@@ -16,7 +31,7 @@ export interface ManualInputPayload {
     role: string;
     nipp?: string;
   };
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }
 
 function slugKey(str: string): string {
@@ -44,7 +59,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
   verificationStatus: 'pending_verification';
   recordId: string;
   monthlyRecordId: string | null;
-  record: any;
+  record: Record<string, unknown>;
 } {
   const { module, data, user } = payload;
   const db = getDb();
@@ -64,10 +79,11 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
   const month = Number(data.bulan ?? data.BULAN ?? data.month) || (new Date().getMonth() + 1);
 
   let isUpdate = false;
-  let formattedRecord: any = {};
+  let formattedRecord: Record<string, unknown> = {};
   let recordId = '';
   let monthlyRecordId: string | null = null;
 
+  withTransaction(db, () => {
   const stmtUpsertMonthlyRecord = db.prepare(`
     INSERT INTO monthly_records (
       id, branch_id, department_id, indicator_id, month, year,
@@ -125,12 +141,12 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
     const existing = db
       .prepare('SELECT * FROM module_finansial WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND LOWER(rekening) = LOWER(?))')
-      .get(recordId, year, month, branchCode, rekening) as any;
+      .get(recordId, year, month, branchCode, rekening);
 
     let snapshotJson: string | null = null;
     if (existing) {
       isUpdate = true;
-      recordId = existing.id;
+      recordId = String(existing.id);
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({
@@ -144,7 +160,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
               yoy: existing.yoy,
               rka: existing.rka,
             })
-          : existing.verified_snapshot_json || null;
+          : (existing.verified_snapshot_json as string | null) || null;
     }
 
     db.prepare(`
@@ -255,12 +271,12 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
     const existing = db
       .prepare('SELECT * FROM module_opkom WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND UPPER(layanan) = UPPER(?) AND UPPER(satuan) = UPPER(?))')
-      .get(recordId, year, month, branchCode, layanan, satuan) as any;
+      .get(recordId, year, month, branchCode, layanan, satuan);
 
     let snapshotJson: string | null = null;
     if (existing) {
       isUpdate = true;
-      recordId = existing.id;
+      recordId = String(existing.id);
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({
@@ -268,7 +284,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
               yoy: existing.yoy,
               rka: existing.rka,
             })
-          : existing.verified_snapshot_json || null;
+          : (existing.verified_snapshot_json as string | null) || null;
     }
 
     db.prepare(`
@@ -400,16 +416,16 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
     const existing = db
       .prepare('SELECT * FROM module_kinerja WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND UPPER(kd_kine) = UPPER(?) AND UPPER(satuan) = UPPER(?))')
-      .get(recordId, year, month, branchCode, kdKine, satuan) as any;
+      .get(recordId, year, month, branchCode, kdKine, satuan);
 
     let snapshotJson: string | null = null;
     if (existing) {
       isUpdate = true;
-      recordId = existing.id;
+      recordId = String(existing.id);
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({ nilai: existing.nilai })
-          : existing.verified_snapshot_json || null;
+          : (existing.verified_snapshot_json as string | null) || null;
     }
 
     db.prepare(`
@@ -495,16 +511,16 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
     const existing = db
       .prepare('SELECT * FROM module_utilisasi WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND UPPER(dermaga) = UPPER(?))')
-      .get(recordId, year, month, branchCode, dermaga) as any;
+      .get(recordId, year, month, branchCode, dermaga);
 
     let snapshotJson: string | null = null;
     if (existing) {
       isUpdate = true;
-      recordId = existing.id;
+      recordId = String(existing.id);
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({ bor: existing.bor, yor: existing.yor, sor: existing.sor })
-          : existing.verified_snapshot_json || null;
+          : (existing.verified_snapshot_json as string | null) || null;
     }
 
     db.prepare(`
@@ -592,12 +608,12 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
     const existing = db
       .prepare('SELECT * FROM module_peralatan WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND (UPPER(kd_alat) = UPPER(?) OR LOWER(nm_alat) = LOWER(?)))')
-      .get(recordId, year, month, branchCode, kdAlat, nmAlat) as any;
+      .get(recordId, year, month, branchCode, kdAlat, nmAlat);
 
     let snapshotJson: string | null = null;
     if (existing) {
       isUpdate = true;
-      recordId = existing.id;
+      recordId = String(existing.id);
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({
@@ -605,7 +621,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
               availability: existing.availability,
               utilisasi: existing.utilisasi,
             })
-          : existing.verified_snapshot_json || null;
+          : (existing.verified_snapshot_json as string | null) || null;
     }
 
     db.prepare(`
@@ -697,12 +713,12 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
     const existing = db
       .prepare('SELECT * FROM module_fasilitas WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND LOWER(nama_fasilitas) = LOWER(?))')
-      .get(recordId, year, month, branchCode, nmPasfel) as any;
+      .get(recordId, year, month, branchCode, nmPasfel);
 
     let snapshotJson: string | null = null;
     if (existing) {
       isUpdate = true;
-      recordId = existing.id;
+      recordId = String(existing.id);
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({
@@ -713,7 +729,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
               kapasitas: existing.kapasitas,
               keterangan: existing.keterangan,
             })
-          : existing.verified_snapshot_json || null;
+          : (existing.verified_snapshot_json as string | null) || null;
     }
 
     db.prepare(`
@@ -777,6 +793,18 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     };
   }
 
+  // Audit log inside the same atomic SQLite transaction
+  dbQueries.createAuditLog({
+    user_id: user?.id || 'manual_user',
+    user_name: user?.name || 'PIC Input Manual',
+    user_role: (user?.role as 'super_admin' | 'admin_regional' | 'pic_dept_regional' | 'pic_cabang' | 'viewer') || 'pic_cabang',
+    action: isUpdate ? 'UPDATE_MANUAL_DATA' : 'CREATE_MANUAL_DATA',
+    entity: `module_${module}`,
+    entity_id: monthlyRecordId || recordId,
+    details: `Input manual modul ${module} untuk ${branchName} (${branchCode}), periode ${month}/${year}. Status awal: Menunggu Verifikasi (pending_verification).`,
+  });
+  });
+
   // Keep local spreadsheet export in sync without re-running full ingestInputData
   try {
     const excelPath = getInputDataSpreadsheetPath();
@@ -789,7 +817,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
         ws = xlsx.utils.json_to_sheet([]);
         xlsx.utils.book_append_sheet(wb, ws, sheetName);
       }
-      const existingRows: any[] = xlsx.utils.sheet_to_json(ws);
+      const existingRows: Record<string, unknown>[] = xlsx.utils.sheet_to_json(ws);
       existingRows.push(formattedRecord);
       wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(existingRows);
       const updatedBuf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -802,21 +830,6 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     }
   } catch (err) {
     console.warn('[ManualInput] Non-fatal spreadsheet export warning:', err);
-  }
-
-  // Audit log
-  try {
-    dbQueries.createAuditLog({
-      user_id: user?.id || 'manual_user',
-      user_name: user?.name || 'PIC Input Manual',
-      user_role: (user?.role as any) || 'pic_cabang',
-      action: isUpdate ? 'UPDATE_MANUAL_DATA' : 'CREATE_MANUAL_DATA',
-      entity: `module_${module}`,
-      entity_id: monthlyRecordId || recordId,
-      details: `Input manual modul ${module} untuk ${branchName} (${branchCode}), periode ${month}/${year}. Status awal: Menunggu Verifikasi (pending_verification).`,
-    });
-  } catch (err) {
-    console.warn('[ManualInput] Audit log warning:', err);
   }
 
   return {

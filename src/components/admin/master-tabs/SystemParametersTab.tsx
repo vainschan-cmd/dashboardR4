@@ -89,32 +89,35 @@ export default function SystemParametersTab({
   const [paramErrorMsg, setParamErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (systemParams) {
-      setSessionTimeoutInput(systemParams.session_timeout_minutes || 30);
-      setAutoLogoutInput(systemParams.auto_logout_idle !== false);
-      setWarningBeforeInput(systemParams.warning_before_minutes || 2);
-      setDefaultThemeInput(systemParams.default_theme || 'light');
-    }
-    if (dbConfig) {
-      setDbEngineInput(dbConfig.engine || 'sqlite');
-      setDbSqlitePathInput(dbConfig.sqlite_path || 'data/ed_dashboard.db');
-      setDbPgHostInput(dbConfig.pg_host || 'localhost');
-      setDbPgPortInput(dbConfig.pg_port || 5432);
-      setDbPgDatabaseInput(dbConfig.pg_database || 'ed_dashboard');
-      setDbPgUserInput(dbConfig.pg_user || 'postgres');
-      setDbPgPasswordInput(dbConfig.pg_password || '');
-      setDbPgSslInput(dbConfig.pg_ssl || false);
-      setDbMaxConnInput(dbConfig.max_connections || 10);
-    }
-    if (credentials) {
-      setGoogleDriveEmailInput(credentials.google_drive_email || 'regdashr@gmail.com');
-      setGoogleDriveFilePathInput(credentials.google_drive_file_path || 'data/input_data.xlsx');
-      setGoogleSheetsIdInput(credentials.google_sheets_id || '');
-      setGoogleSheetsNameInput(credentials.google_sheets_name || 'Input_Kinerja_Bulanan');
-      setGoogleApiKeyInput(credentials.google_api_key || '');
-      setApiGatewayUrlInput(credentials.api_gateway_url || 'https://api.pelindo.co.id/v1/r4');
-      setApiGatewayTokenInput(credentials.api_gateway_token || '');
-    }
+    const timer = window.setTimeout(() => {
+      if (systemParams) {
+        setSessionTimeoutInput(systemParams.session_timeout_minutes || 30);
+        setAutoLogoutInput(systemParams.auto_logout_idle !== false);
+        setWarningBeforeInput(systemParams.warning_before_minutes || 2);
+        setDefaultThemeInput(systemParams.default_theme || 'light');
+      }
+      if (dbConfig) {
+        setDbEngineInput(dbConfig.engine || 'sqlite');
+        setDbSqlitePathInput(dbConfig.sqlite_path || 'data/ed_dashboard.db');
+        setDbPgHostInput(dbConfig.pg_host || 'localhost');
+        setDbPgPortInput(dbConfig.pg_port || 5432);
+        setDbPgDatabaseInput(dbConfig.pg_database || 'ed_dashboard');
+        setDbPgUserInput(dbConfig.pg_user || 'postgres');
+        setDbPgPasswordInput(dbConfig.pg_password || '');
+        setDbPgSslInput(dbConfig.pg_ssl || false);
+        setDbMaxConnInput(dbConfig.max_connections || 10);
+      }
+      if (credentials) {
+        setGoogleDriveEmailInput(credentials.google_drive_email || 'regdashr@gmail.com');
+        setGoogleDriveFilePathInput(credentials.google_drive_file_path || 'data/input_data.xlsx');
+        setGoogleSheetsIdInput(credentials.google_sheets_id || '');
+        setGoogleSheetsNameInput(credentials.google_sheets_name || 'Input_Kinerja_Bulanan');
+        setGoogleApiKeyInput(credentials.google_api_key || '');
+        setApiGatewayUrlInput(credentials.api_gateway_url || 'https://api.pelindo.co.id/v1/r4');
+        setApiGatewayTokenInput(credentials.api_gateway_token || '');
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [systemParams, dbConfig, credentials]);
 
   const handleValidateDbPath = async () => {
@@ -131,10 +134,10 @@ export default function SystemParametersTab({
       });
       const data = await res.json();
       setPathValidationResult(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setPathValidationResult({
         success: false,
-        message: err.message || 'Gagal memvalidasi lokasi berkas database.',
+        message: err instanceof Error ? err.message : 'Gagal memvalidasi lokasi berkas database.',
       });
     } finally {
       setValidatingPath(false);
@@ -197,8 +200,8 @@ export default function SystemParametersTab({
       } else {
         setParamErrorMsg(data.error || 'Gagal menyimpan parameter sistem.');
       }
-    } catch (err: any) {
-      setParamErrorMsg(err.message || 'Terjadi kesalahan sistem.');
+    } catch (err: unknown) {
+      setParamErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan sistem.');
     } finally {
       setParamSaving(false);
     }

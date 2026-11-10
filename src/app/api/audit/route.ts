@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
 import { requireAuth } from '@/lib/rbac';
+import { auditQuerySchema, parseWithSchema } from '@/lib/validation';
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'audit_logs:read' });
   if (!auth.authorized) return auth.response;
 
   try {
     const { searchParams } = new URL(req.url);
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 100;
+    const parsed = parseWithSchema(auditQuerySchema, {
+      limit: searchParams.get('limit') || undefined,
+    });
+    const limit = parsed.success ? parsed.data.limit : 100;
     const logs = dbQueries.getAuditLogs(limit);
     const batches = dbQueries.getImportBatches();
 
@@ -17,7 +21,8 @@ export async function GET(req: NextRequest) {
       logs,
       batches,
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memuat log audit.';
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }

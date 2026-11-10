@@ -1,34 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
-import { requireAuth } from '@/lib/rbac';
+import { requireAuth, enforceDepartmentFilterForRead } from '@/lib/rbac';
 import { TemplateConfig } from '@/lib/types';
+import { templateSaveSchema, parseWithSchema } from '@/lib/validation';
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
+  const auth = await requireAuth(req, { requiredPermission: 'templates:read' });
   if (!auth.authorized) return auth.response;
 
   try {
-    const templates = dbQueries.getTemplates();
+    const { searchParams } = new URL(req.url);
+    const scopedDeptId = enforceDepartmentFilterForRead(
+      auth.session,
+      searchParams.get('department_id') || undefined
+    );
+    const allTemplates = dbQueries.getTemplates();
+    const templates = scopedDeptId
+      ? allTemplates.filter(t => t.department_id === scopedDeptId)
+      : allTemplates;
     return NextResponse.json({ success: true, templates });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memuat template.';
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'templates:manage' });
   if (!auth.authorized) return auth.response;
 
   try {
-    const body = await req.json();
-    const { template } = body;
-
-    if (!template || !template.id || !template.department_id) {
-      return NextResponse.json({ success: false, message: 'Data template tidak lengkap.' }, { status: 400 });
+    const body = (await req.json()) as { template?: unknown };
+    const candidate = body?.template ?? body;
+    const parsed = parseWithSchema(templateSaveSchema, candidate);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, message: parsed.error, error: parsed.error },
+        { status: 400 }
+      );
     }
 
-    dbQueries.saveTemplate(template as TemplateConfig);
+    const template: TemplateConfig = {
+      ...parsed.data,
+      updated_at: new Date().toISOString(),
+    };
+
+    dbQueries.saveTemplate(template);
 
     dbQueries.createAuditLog({
       user_id: auth.session.sub,
@@ -46,7 +64,8 @@ export async function POST(req: NextRequest) {
       message: 'Konfigurasi template mapping telah disimpan.',
       template,
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal menyimpan template.';
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }

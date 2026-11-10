@@ -54,10 +54,10 @@ export function getBranchId(code: string, name?: string): string {
   return `term_${cleanCode.toLowerCase()}`;
 }
 
-export function getField(row: any, name: string): any {
+export function getField(row: Record<string, unknown> | undefined | null, name: string): unknown {
   if (!row) return undefined;
   const target = name.trim().toLowerCase();
-  let fallbackVal: any = undefined;
+  let fallbackVal: unknown = undefined;
   for (const k of Object.keys(row)) {
     if (k.trim().toLowerCase() === target) {
       const val = row[k];
@@ -158,7 +158,7 @@ export function ingestInputData(filePath?: string) {
   // 1. Ingest Master Branches & Equipment from 'master'
   console.log('[Ingest] 1. Mengimpor Master Cabang Pelabuhan & Master Peralatan dari sheet master...');
   const masterSheet = wb.Sheets['master'];
-  const masterRows: any[][] = xlsx.utils.sheet_to_json(masterSheet, { header: 1 });
+  const masterRows: unknown[][] = xlsx.utils.sheet_to_json(masterSheet, { header: 1 });
 
   // Parse equipment catalog (Columns 8, 9, 10, 11)
   const stmtEquip = db.prepare(`
@@ -181,7 +181,7 @@ export function ingestInputData(filePath?: string) {
 
   // Parse facilities for each branch from 'fasilitas (2)'
   const facilitiesSheet = wb.Sheets['fasilitas (2)'] || wb.Sheets['fasilitas'];
-  const facilityRows: any[] = facilitiesSheet ? xlsx.utils.sheet_to_json(facilitiesSheet) : [];
+  const facilityRows: Record<string, unknown>[] = facilitiesSheet ? xlsx.utils.sheet_to_json(facilitiesSheet) : [];
   
   const branchFacilities = new Map<string, { dermaga_length_m: number; kolam_depth_mlws: number; lapangan_sqm: number; gudang_sqm: number }>();
   for (const f of facilityRows) {
@@ -362,7 +362,6 @@ export function ingestInputData(filePath?: string) {
   const nowIso = new Date().toISOString();
 
   // 1b. Ingest Facility rows into module_fasilitas
-  let countFas = 0;
   for (let i = 0; i < facilityRows.length; i++) {
     const f = facilityRows[i];
     const rawCode = String(getField(f, 'KODE_CBG') || '').trim().toUpperCase();
@@ -402,13 +401,12 @@ export function ingestInputData(filePath?: string) {
       nowIso,
       nowIso
     );
-    countFas++;
   }
 
   // 2. Ingest Financial Data from 'finansial'
   console.log('[Ingest] 2. Mengimpor Data Finansial dari sheet finansial...');
   const finSheet = wb.Sheets['finansial'];
-  const finRows: any[] = finSheet ? xlsx.utils.sheet_to_json(finSheet) : [];
+  const finRows: Record<string, unknown>[] = finSheet ? xlsx.utils.sheet_to_json(finSheet) : [];
 
   let countFin = 0;
   for (const row of finRows) {
@@ -496,7 +494,7 @@ export function ingestInputData(filePath?: string) {
   // 3. Ingest Utilization Data from 'utilisasi' (BOR, YOR, SOR)
   console.log('[Ingest] 3. Mengimpor Data Utilisasi Dermaga & Lapangan dari sheet utilisasi...');
   const utilSheet = wb.Sheets['utilisasi'];
-  const utilRows: any[] = utilSheet ? xlsx.utils.sheet_to_json(utilSheet) : [];
+  const utilRows: Record<string, unknown>[] = utilSheet ? xlsx.utils.sheet_to_json(utilSheet) : [];
 
   let countUtil = 0;
   for (const row of utilRows) {
@@ -621,7 +619,7 @@ export function ingestInputData(filePath?: string) {
   // 4. Ingest Equipment & Readiness from 'peralatan'
   console.log('[Ingest] 4. Mengimpor Data Kesiapan & Utilisasi Alat dari sheet peralatan...');
   const alatSheet = wb.Sheets['peralatan'];
-  const alatRows: any[] = alatSheet ? xlsx.utils.sheet_to_json(alatSheet) : [];
+  const alatRows: Record<string, unknown>[] = alatSheet ? xlsx.utils.sheet_to_json(alatSheet) : [];
 
   let countAlat = 0;
   for (const row of alatRows) {
@@ -752,7 +750,7 @@ export function ingestInputData(filePath?: string) {
   // 5. Ingest Commodity Revenue & Throughput from 'opkom'
   console.log('[Ingest] 5. Mengimpor Pendapatan & Trafik per Komoditas dari sheet opkom...');
   const opkomSheet = wb.Sheets['opkom'];
-  const opkomRows: any[] = opkomSheet ? xlsx.utils.sheet_to_json(opkomSheet) : [];
+  const opkomRows: Record<string, unknown>[] = opkomSheet ? xlsx.utils.sheet_to_json(opkomSheet) : [];
 
   let countOpkom = 0;
   for (const row of opkomRows) {
@@ -831,7 +829,7 @@ export function ingestInputData(filePath?: string) {
   // 6. Ingest Operational KPIs from 'kinerja'
   console.log('[Ingest] 6. Mengimpor Kinerja Operasional Kapal, Barang, & Petikemas dari sheet kinerja...');
   const kinerjaSheet = wb.Sheets['kinerja'];
-  const kinerjaRows: any[] = kinerjaSheet ? xlsx.utils.sheet_to_json(kinerjaSheet) : [];
+  const kinerjaRows: Record<string, unknown>[] = kinerjaSheet ? xlsx.utils.sheet_to_json(kinerjaSheet) : [];
 
   let countKinerja = 0;
   for (const row of kinerjaRows) {

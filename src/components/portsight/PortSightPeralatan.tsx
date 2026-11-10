@@ -58,8 +58,8 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
           setData(json.peralatan || []);
           setCatalog(json.equipmentCatalog || []);
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.name === 'AbortError')) {
           console.error(e);
         }
       } finally {
@@ -215,7 +215,7 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
                   <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
-                    formatter={(val: any, name: any, item: any) => [`${val} Unit (${item.payload.name})`, 'Populasi Unit']}
+                    formatter={(val: unknown, _name: unknown, item: { payload?: { name?: string } }) => [`${String(val ?? '')} Unit (${item.payload?.name || ''})`, 'Populasi Unit']}
                   />
                   <Bar dataKey="count" fill="#38bdf8" radius={[4, 4, 0, 0]} />
                 </BarChart>

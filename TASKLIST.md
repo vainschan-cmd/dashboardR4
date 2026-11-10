@@ -121,3 +121,45 @@
   - [x] Tambahkan *skeleton shimmer loader* presisi saat perpindahan periode/tab di [`PortSightBeranda.tsx`](file:///Users/rekaskuy/Documents/ChatGPT/Dashboard%20BOD/dashboardR4/src/components/portsight/PortSightBeranda.tsx).
   - [x] Ganti dialog `window.confirm()` pada tombol Logout di [`PortSightHeader.tsx`](file:///Users/rekaskuy/Documents/ChatGPT/Dashboard%20BOD/dashboardR4/src/components/layout/PortSightHeader.tsx) dan [`Sidebar.tsx`](file:///Users/rekaskuy/Documents/ChatGPT/Dashboard%20BOD/dashboardR4/src/components/layout/Sidebar.tsx) dengan *in-app confirmation popover/dialog* yang mendukung navigasi keyboard (`Escape` / `Enter`).
 
+---
+
+## Audit Lanjutan (P0–P3) — Hardening Keamanan, Batas Akses, Kualitas Kode & Aksesibilitas (SELESAI)
+
+### P0 — Tutup Celah Keamanan Kritis
+- [x] Lindungi `GET /api/master` dengan autentikasi dan izin yang sesuai. Jangan kirim daftar pengguna atau konfigurasi sensitif ke pengguna yang tidak berwenang.
+- [x] Lindungi `GET /api/users/export` untuk administrator yang berwenang.
+- [x] Lindungi `POST /api/import/sheets-sync` dengan autentikasi, izin impor, dan identitas pengguna dari sesi server.
+- [x] Lindungi `GET /api/import/drive-sync` atau hapus endpoint jika tidak diperlukan.
+- [x] Tinjau pendaftaran publik di `POST /api/users`: batasi siapa yang boleh mendaftar, tetapkan cabang/departemen melalui aturan server, dan hapus kata sandi bawaan `password123`.
+- [x] Hilangkan fallback secret JWT bawaan. Aplikasi harus menolak konfigurasi produksi jika `JWT_SECRET` tidak tersedia atau tidak cukup kuat.
+
+### P1 — Tegakkan Batas Akses dan Lindungi Impor
+- [x] Audit semua endpoint baca/tulis agar cakupan cabang dan departemen diterapkan di server.
+- [x] Pastikan `viewer` hanya dapat membaca data yang sudah terverifikasi, termasuk saat parameter filter dimanipulasi.
+- [x] Pindahkan rate limit login ke penyimpanan bersama yang tahan restart dan mendukung banyak instance.
+- [x] Batasi ukuran permintaan dan jumlah baris impor, termasuk impor berbentuk JSON.
+- [x] Terapkan validasi skema rinci pada setiap record impor.
+- [x] Simpan record, batch, dan audit dalam transaksi yang konsisten.
+- [x] Validasi format ID, nama sheet, dan range Google Sheets; tambahkan timeout permintaan.
+
+### P2 — Tingkatkan Arsitektur dan Kualitas Kode
+- [x] Samakan pola autentikasi dan otorisasi pada semua route API.
+- [x] Terapkan schema validation yang konsisten untuk seluruh request.
+- [x] Pisahkan aturan bisnis dan penyimpanan dari handler HTTP.
+- [x] Perbaiki temuan ESLint: 261 error dan 117 warning, mulai dari file API dan autentikasi.
+- [x] Perbarui `README.md` agar sesuai dengan struktur, konfigurasi, dan alur aplikasi saat ini.
+- [x] Jalankan kembali pemeriksaan advisori dependency saat registry npm dapat diakses.
+
+### P3 — Perbaiki Aksesibilitas dan Verifikasi UI
+- [x] Ubah header tabel yang dapat diurutkan menjadi kontrol keyboard yang dapat difokuskan; tampilkan arah pengurutan.
+- [x] Periksa navigasi keyboard, label kontrol, fokus modal, dan kontras.
+- [x] Verifikasi tampilan pada layar desktop dan mobile melalui browser.
+- [x] Tambahkan pemeriksaan regresi untuk alur login, izin per role, impor, dan verifikasi data.
+
+### Kriteria Penyelesaian
+- [x] Endpoint sensitif menolak permintaan tanpa sesi atau izin yang sesuai.
+- [x] Cakupan cabang/departemen dan status verifikasi dipaksakan oleh server.
+- [x] Impor memvalidasi input dan tersimpan konsisten sebagai satu operasi.
+- [x] `npx tsc --noEmit` dan `npm run lint` selesai tanpa error.
+- [x] Alur UI utama dapat digunakan dengan keyboard dan tampil baik di desktop serta mobile.
+

@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
           details: `Sesi JWT diakhiri (Logout) oleh ${session.name} (NIPP: ${session.nipp}).`,
           ip_address: clientIp,
         });
-      } catch {}
+      } catch {
+        // ignore non-fatal audit error
+      }
     }
 
     const response = NextResponse.json({
@@ -29,13 +31,13 @@ export async function POST(req: NextRequest) {
 
     clearSessionCookies(response);
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal mengakhiri sesi.';
     const response = NextResponse.json(
-      { success: false, error: error.message || 'Gagal mengakhiri sesi.' },
+      { success: false, error: message },
       { status: 500 }
     );
     clearSessionCookies(response);
     return response;
   }
 }
-

@@ -143,7 +143,18 @@ export default function DashboardHome() {
   const [pendingCount, setPendingCount] = useState<number>(0);
 
   // Drilldown Modal
-  const [drilldownItem, setDrilldownItem] = useState<any | null>(null);
+  const [drilldownItem, setDrilldownItem] = useState<{
+    title?: string;
+    value?: string;
+    fullValue?: string;
+    rawTarget?: string;
+    rawRealization?: string;
+    comp1?: string;
+    comp1Good?: boolean;
+    comp2?: string;
+    comp2Good?: boolean;
+    [key: string]: unknown;
+  } | null>(null);
 
   // Manual Data Input Modal
   const [manualInputModalOpen, setManualInputModalOpen] = useState<boolean>(false);
@@ -166,38 +177,40 @@ export default function DashboardHome() {
     let isMounted = true;
     const abortController = new AbortController();
 
-    try {
-      const savedTheme = localStorage.getItem('portsight_theme') as 'dark' | 'light' | null;
-      if (savedTheme === 'dark') {
-        setTheme('dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else {
-        setTheme('light');
-        document.documentElement.setAttribute('data-theme', 'light');
+    const initTimer = window.setTimeout(() => {
+      try {
+        const savedTheme = localStorage.getItem('portsight_theme') as 'dark' | 'light' | null;
+        if (savedTheme === 'dark') {
+          setTheme('dark');
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          setTheme('light');
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+        localStorage.removeItem('portsight_auth_user');
+      } catch (e) {
+        console.error(e);
       }
-      localStorage.removeItem('portsight_auth_user');
-    } catch (e) {
-      console.error(e);
-    }
 
-    // Read initial URL search params (?tab=...&branch=...&period=...)
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get('tab');
-      const branchParam = params.get('branch');
-      const periodParam = params.get('period');
-      if (tabParam && VALID_TABS.has(tabParam)) {
-        setActiveTab(tabParam);
+      // Read initial URL search params (?tab=...&branch=...&period=...)
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        const branchParam = params.get('branch');
+        const periodParam = params.get('period');
+        if (tabParam && VALID_TABS.has(tabParam)) {
+          setActiveTab(tabParam);
+        }
+        if (branchParam) {
+          setSelectedTerminal(branchParam);
+        }
+        if (periodParam) {
+          setSelectedPeriod(periodParam);
+        }
+      } catch (e) {
+        console.warn('Gagal membaca parameter URL:', e);
       }
-      if (branchParam) {
-        setSelectedTerminal(branchParam);
-      }
-      if (periodParam) {
-        setSelectedPeriod(periodParam);
-      }
-    } catch (e) {
-      console.warn('Gagal membaca parameter URL:', e);
-    }
+    }, 0);
 
     const handlePopState = () => {
       try {
@@ -244,8 +257,8 @@ export default function DashboardHome() {
             console.warn('Gagal menyimpan waktu aktivitas:', e);
           }
         }
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if (!(err instanceof Error && err.name === 'AbortError')) {
           // Unauthenticated or network error — remain on LoginScreen
         }
       }
@@ -255,6 +268,7 @@ export default function DashboardHome() {
 
     return () => {
       isMounted = false;
+      window.clearTimeout(initTimer);
       abortController.abort();
       window.removeEventListener('popstate', handlePopState);
     };
@@ -361,10 +375,19 @@ export default function DashboardHome() {
   // Fetch Master Data, Users, and Verification Pending Count
   const loadMasterData = useCallback(async (signal?: AbortSignal) => {
     try {
+      const canReadVerification = currentUser && currentUser.role !== 'viewer';
+      const canReadUsers =
+        currentUser &&
+        (currentUser.role === 'super_admin' || currentUser.role === 'admin_regional');
+
       const [resMaster, resVer, resUsers] = await Promise.all([
         fetch('/api/master', { credentials: 'include', signal }),
-        fetch('/api/verification?month=9&year=2026', { credentials: 'include', signal }),
-        fetch('/api/users', { credentials: 'include', signal }),
+        canReadVerification
+          ? fetch('/api/verification?month=9&year=2026', { credentials: 'include', signal })
+          : Promise.resolve(null),
+        canReadUsers
+          ? fetch('/api/users', { credentials: 'include', signal })
+          : Promise.resolve(null),
       ]);
       const dataMaster = await resMaster.json();
       if (dataMaster.success) {
@@ -383,27 +406,40 @@ export default function DashboardHome() {
           setCredentials(dataMaster.credentials);
         }
       }
-      const dataVer = await resVer.json();
-      if (dataVer.success) {
-        setPendingCount(dataVer.pendingCount || 0);
+      if (resVer && resVer.ok) {
+        const dataVer = await resVer.json();
+        if (dataVer.success) {
+          setPendingCount(dataVer.pendingCount || 0);
+        }
+      } else {
+        setPendingCount(0);
       }
-      const dataUsers = await resUsers.json();
-      if (dataUsers.success) {
-        setUsersList(dataUsers.users || []);
+      if (resUsers && resUsers.ok) {
+        const dataUsers = await resUsers.json();
+        if (dataUsers.success) {
+          setUsersList(dataUsers.users || []);
+        }
+      } else {
+        setUsersList([]);
       }
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
+    } catch (e: unknown) {
+      if (!(e instanceof Error && e.name === 'AbortError')) {
         console.error(e);
       }
     }
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser) return;
     const abortController = new AbortController();
-    loadMasterData(abortController.signal);
-    return () => abortController.abort();
-  }, [currentUser?.id, loadMasterData]);
+    const timer = window.setTimeout(() => {
+      void loadMasterData(abortController.signal);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      abortController.abort();
+    };
+  }, [currentUser, loadMasterData]);
 
   const handleLoginSuccess = (user: User) => {
     setSessionExpiredMessage(null);
@@ -464,7 +500,8 @@ export default function DashboardHome() {
 
   useEffect(() => {
     if (isBod && ['data_records', 'master_data', 'verification', 'import_center', 'templates', 'audit_trail'].includes(activeTab)) {
-      setActiveTab('beranda');
+      const timer = window.setTimeout(() => setActiveTab('beranda'), 0);
+      return () => window.clearTimeout(timer);
     }
   }, [isBod, activeTab]);
 
@@ -478,8 +515,10 @@ export default function DashboardHome() {
 
   useEffect(() => {
     if (isPicCabang && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
-      if (selectedTerminal !== currentUser.branch_id) {
-        setSelectedTerminal(currentUser.branch_id);
+      const branchId = currentUser.branch_id;
+      if (selectedTerminal !== branchId) {
+        const timer = window.setTimeout(() => setSelectedTerminal(branchId), 0);
+        return () => window.clearTimeout(timer);
       }
     }
   }, [isPicCabang, currentUser?.branch_id, selectedTerminal]);
@@ -816,6 +855,9 @@ export default function DashboardHome() {
         <div className="modal-overlay" onClick={() => setDrilldownItem(null)}>
           <div
             className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-label={drilldownItem.title || 'Detail Indikator'}
             onClick={(e) => e.stopPropagation()}
             style={{
               backgroundColor: 'var(--bg-card)',
@@ -834,6 +876,8 @@ export default function DashboardHome() {
                 </h3>
               </div>
               <button
+                type="button"
+                aria-label="Tutup detail indikator"
                 onClick={() => setDrilldownItem(null)}
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
               >

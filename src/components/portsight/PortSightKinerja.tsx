@@ -88,8 +88,8 @@ export default function PortSightKinerja({
         if (json.success && json.kinerja) {
           setData(json.kinerja);
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.name === 'AbortError')) {
           console.error(e);
         }
       } finally {
@@ -616,7 +616,7 @@ export default function PortSightKinerja({
               <select
                 className="filter-select"
                 value={chartMetricView}
-                onChange={e => setChartMetricView(e.target.value as any)}
+                onChange={e => setChartMetricView(e.target.value as 'ALL' | 'TSD' | 'TGH' | 'WTP' | 'PETIKEMAS')}
                 style={{ fontSize: '11.5px', padding: '4px 10px' }}
                 title="Pilih parameter / satuan yang ingin ditampilkan pada grafik"
               >
@@ -730,9 +730,9 @@ export default function PortSightKinerja({
                     borderRadius: '8px',
                     color: 'var(--text-main)',
                   }}
-                  formatter={(val: any, name: any) => {
+                  formatter={(val: unknown, name: unknown) => {
                     const unit = name === 'TSD' ? 'Ton/Ship/Day' : name === 'TGH' ? 'Ton/Gang/Jam' : name === 'WTP' ? 'Jam' : 'Box/Jam';
-                    return [`${Number(val).toLocaleString('id-ID')} ${unit}`, `Parameter ${name}`];
+                    return [`${Number(val || 0).toLocaleString('id-ID')} ${unit}`, `Parameter ${String(name ?? '')}`];
                   }}
                   labelFormatter={(label) => `Jenis Operasi: ${label}`}
                 />

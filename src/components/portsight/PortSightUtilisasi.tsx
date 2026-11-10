@@ -45,8 +45,8 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
         if (json.success && json.utilisasi) {
           setData(json.utilisasi);
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.name === 'AbortError')) {
           console.error(e);
         }
       } finally {
@@ -179,7 +179,7 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
               <YAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
-                formatter={(val: any) => [`${val}%`, '']}
+                formatter={(val: unknown) => [`${String(val ?? '')}%`, '']}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
               <Bar dataKey="BOR" fill="#38bdf8" radius={[3, 3, 0, 0]} name="BOR (Dermaga)" />

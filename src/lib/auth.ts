@@ -1,12 +1,18 @@
 import { scryptSync, randomBytes, timingSafeEqual, createHmac, randomUUID } from 'node:crypto';
 import type { NextRequest, NextResponse } from 'next/server';
 import type { User, UserRole } from './types';
+import { dbQueries } from './db';
 
 export const ACCESS_TOKEN_COOKIE = 'portsight_access_token';
 export const REFRESH_TOKEN_COOKIE = 'portsight_refresh_token';
 
 const DEFAULT_ACCESS_TTL_SECONDS = 60 * 60 * 8; // 8 jam
 const DEFAULT_REFRESH_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 hari
+const MIN_JWT_SECRET_LENGTH = 32;
+
+const globalForJwt = globalThis as unknown as {
+  __portsightEphemeralJwtSecret?: string;
+};
 
 export interface JwtSessionPayload {
   sub: string;
@@ -25,12 +31,28 @@ export interface JwtSessionPayload {
   type: 'access' | 'refresh';
 }
 
-function getJwtSecret(): string {
+export function getJwtSecret(): string {
   const envSecret = process.env.JWT_SECRET?.trim();
-  if (envSecret && envSecret.length >= 16) {
+  if (envSecret) {
+    if (envSecret.length < MIN_JWT_SECRET_LENGTH) {
+      throw new Error(
+        `Konfigurasi keamanan ditolak: JWT_SECRET harus memiliki panjang minimal ${MIN_JWT_SECRET_LENGTH} karakter.`
+      );
+    }
     return envSecret;
   }
-  return 'pelindo-r4-portdash-dev-jwt-secret-key-2026-hs256';
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `Konfigurasi produksi ditolak: variabel lingkungan JWT_SECRET tidak tersedia atau kurang dari ${MIN_JWT_SECRET_LENGTH} karakter.`
+    );
+  }
+
+  // Non-production ephemeral secret generated per process (never a hardcoded string)
+  if (!globalForJwt.__portsightEphemeralJwtSecret) {
+    globalForJwt.__portsightEphemeralJwtSecret = randomBytes(64).toString('hex');
+  }
+  return globalForJwt.__portsightEphemeralJwtSecret;
 }
 
 function base64UrlEncode(input: Buffer | string): string {
@@ -277,18 +299,10 @@ export function getClientIp(req: NextRequest | Request): string {
   return '127.0.0.1';
 }
 
-// --- Brute-Force Protection (In-Memory Rate Limiter) ---
-interface RateLimitEntry {
-  count: number;
-  firstFailedAt: number;
-  lockedUntil: number;
-}
-
+// --- Brute-Force Protection (Persistent Shared SQLite WAL Rate Limiter) ---
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
 const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 menit
-
-const loginAttemptsMap = new Map<string, RateLimitEntry>();
 
 function getRateLimitKey(ip: string, nipp: string): string {
   return `${ip.trim().toLowerCase()}::${nipp.trim().toLowerCase()}`;
@@ -300,51 +314,43 @@ export function checkLoginRateLimit(
 ): { allowed: boolean; retryAfterSeconds: number; remainingAttempts: number } {
   const now = Date.now();
   const key = getRateLimitKey(ip, nipp);
-  const entry = loginAttemptsMap.get(key);
+  const entry = dbQueries.getRateLimitEntry(key);
 
   if (!entry) {
     return { allowed: true, retryAfterSeconds: 0, remainingAttempts: LOGIN_MAX_ATTEMPTS };
   }
 
-  if (entry.lockedUntil > now) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((entry.lockedUntil - now) / 1000));
+  if (entry.locked_until > now) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((entry.locked_until - now) / 1000));
     return { allowed: false, retryAfterSeconds, remainingAttempts: 0 };
   }
 
-  if (now - entry.firstFailedAt > LOGIN_WINDOW_MS) {
-    loginAttemptsMap.delete(key);
+  if (now - entry.first_failed_at > LOGIN_WINDOW_MS) {
+    dbQueries.deleteRateLimitEntry(key);
     return { allowed: true, retryAfterSeconds: 0, remainingAttempts: LOGIN_MAX_ATTEMPTS };
   }
 
-  const remaining = Math.max(0, LOGIN_MAX_ATTEMPTS - entry.count);
+  const remaining = Math.max(0, LOGIN_MAX_ATTEMPTS - entry.attempt_count);
   return { allowed: true, retryAfterSeconds: 0, remainingAttempts: remaining };
 }
 
 export function recordLoginFailure(ip: string, nipp: string): void {
   const now = Date.now();
   const key = getRateLimitKey(ip, nipp);
-  const existing = loginAttemptsMap.get(key);
+  const existing = dbQueries.getRateLimitEntry(key);
 
-  if (!existing || now - existing.firstFailedAt > LOGIN_WINDOW_MS) {
-    loginAttemptsMap.set(key, {
-      count: 1,
-      firstFailedAt: now,
-      lockedUntil: 0,
-    });
+  if (!existing || now - existing.first_failed_at > LOGIN_WINDOW_MS) {
+    dbQueries.upsertRateLimitEntry(key, 1, now, 0);
     return;
   }
 
-  const nextCount = existing.count + 1;
+  const nextCount = existing.attempt_count + 1;
   const lockedUntil = nextCount >= LOGIN_MAX_ATTEMPTS ? now + LOGIN_LOCKOUT_MS : 0;
-  loginAttemptsMap.set(key, {
-    ...existing,
-    count: nextCount,
-    lockedUntil,
-  });
+  dbQueries.upsertRateLimitEntry(key, nextCount, existing.first_failed_at, lockedUntil);
 }
 
 export function resetLoginRateLimit(ip: string, nipp: string): void {
   const key = getRateLimitKey(ip, nipp);
-  loginAttemptsMap.delete(key);
+  dbQueries.deleteRateLimitEntry(key);
 }
 

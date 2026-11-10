@@ -12,17 +12,21 @@ const PROTECTED_API_RULES: Array<{
   methods?: string[];
   permission?: Permission;
 }> = [
+  { pattern: /^\/api\/master(\/|$)/, methods: ['GET'], permission: 'master_data:read' },
   { pattern: /^\/api\/system-params(\/|$)/, methods: ['POST', 'PUT', 'DELETE'], permission: 'system_params:manage' },
   { pattern: /^\/api\/system-params(\/|$)/, methods: ['GET'], permission: 'system_params:read' },
+  { pattern: /^\/api\/users\/export(\/|$)/, methods: ['GET'], permission: 'users:manage' },
   { pattern: /^\/api\/users\/sync-drive(\/|$)/, methods: ['GET', 'POST'], permission: 'users:manage' },
-  { pattern: /^\/api\/users$/, methods: ['PUT', 'DELETE'], permission: 'users:manage' },
-  { pattern: /^\/api\/users$/, methods: ['GET'], permission: 'dashboard:read' },
+  { pattern: /^\/api\/users$/, methods: ['POST', 'PUT', 'DELETE'], permission: 'users:manage' },
+  { pattern: /^\/api\/users$/, methods: ['GET'], permission: 'users:read' },
   { pattern: /^\/api\/verification(\/|$)/, methods: ['POST'], permission: 'verification:approve' },
-  { pattern: /^\/api\/verification(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
+  { pattern: /^\/api\/verification(\/|$)/, methods: ['GET'], permission: 'verification:read' },
   { pattern: /^\/api\/manual-input(\/|$)/, methods: ['POST'], permission: 'manual_input:write' },
   { pattern: /^\/api\/import\/commit(\/|$)/, methods: ['POST'], permission: 'import:write' },
   { pattern: /^\/api\/import\/validate(\/|$)/, methods: ['POST'], permission: 'import:write' },
-  { pattern: /^\/api\/import\/drive-sync(\/|$)/, methods: ['POST'], permission: 'import:write' },
+  { pattern: /^\/api\/import\/sheets-sync(\/|$)/, methods: ['POST'], permission: 'import:write' },
+  { pattern: /^\/api\/import\/drive-sync(\/|$)/, methods: ['GET', 'POST'], permission: 'import:write' },
+  { pattern: /^\/api\/templates(\/|$)/, methods: ['GET'], permission: 'templates:read' },
   { pattern: /^\/api\/templates(\/|$)/, methods: ['POST', 'PUT', 'DELETE'], permission: 'templates:manage' },
   { pattern: /^\/api\/audit(\/|$)/, methods: ['GET'], permission: 'audit_logs:read' },
   { pattern: /^\/api\/records(\/|$)/, methods: ['GET'], permission: 'records:read' },
@@ -40,8 +44,7 @@ export async function proxy(request: NextRequest) {
     pathname === '/api/users/logout' ||
     pathname === '/api/users/me' ||
     pathname === '/api/health' ||
-    (pathname === '/api/master' && method === 'GET') ||
-    (pathname === '/api/users' && method === 'POST')
+    (pathname === '/api/users' && method === 'POST' && process.env.ALLOW_PUBLIC_REGISTRATION === 'true')
   ) {
     return NextResponse.next();
   }

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { History, Search, RefreshCw, Shield, User, Clock, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { History, Search, RefreshCw } from 'lucide-react';
 import { AuditLog } from '@/lib/types';
 
 export default function AuditTrailView() {
@@ -9,7 +9,7 @@ export default function AuditTrailView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/audit?limit=150');
@@ -22,11 +22,14 @@ export default function AuditTrailView() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchLogs();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void fetchLogs();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchLogs]);
 
   const filtered = logs.filter(l => {
     const text = `${l.action} ${l.user_name} ${l.user_role} ${l.entity} ${l.details}`.toLowerCase();

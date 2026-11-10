@@ -1,176 +1,141 @@
-# Executive Dashboard – Monitoring Kinerja Pelabuhan
-**Platform Web Desktop & Mobile Konsolidasi Kinerja Regional & Seluruh Cabang Pelabuhan**
+# Pelindo Regional 4 – Executive Dashboard (PortDash R4)
+**Platform Web Desktop & Mobile Konsolidasi Kinerja Regional & 28 Cabang Pelabuhan**
 
 ---
 
-## 1. Ikhtisar Aplikasi
-Aplikasi **Executive Dashboard – Monitoring Kinerja Pelabuhan** dibangun sesuai dokumen instruksi/prompt spesifikasi resmi untuk mengonsolidasikan, memonitor, menganalisis, dan menyajikan kinerja operasional, finansial, pelanggan, keselamatan (HSSE), komersial, teknik, SDM, dan profil fasilitas pelabuhan.
-
-Aplikasi dirancang modular, fleksibel, responsif, dan siap dikembangkan lebih lanjut ketika format template resmi dari masing-masing departemen ditetapkan.
-
-> [!NOTE]
-> Seluruh data awal yang disajikan dalam demonstrasi ini merupakan **DATA SIMULASI** terstruktur dan konsisten untuk 5 cabang pelabuhan utama selama periode 2024, 2025, dan 2026 berjalan.
-
----
-
-## 2. Struktur 9 Menu Utama Kinerja
-
-| No | Menu Utama | Cakupan & Indikator Utama |
-|---|---|---|
-| **3.1** | **Summary Eksekutif** | Ringkasan kinerja Regional & seluruh cabang, Core KPIs (Pendapatan Usaha, Arus Kapal, Petikemas, Fatality Zero, CSAT, RFU Alat), perbandingan antarcabang, tren bulanan, status indikator hijau/kuning/merah. |
-| **3.2** | **Pelanggan** | Jumlah pelanggan aktif, pertumbuhan pelanggan, Customer Satisfaction Index (CSAT), keluhan masuk, dan rasio penyelesaian keluhan sesuai SLA (3 hari). |
-| **3.3** | **HSSE (K3 & Lingkungan)** | Program Zero Accident, Fatalities (Target: 0), Lost Time Injury (LTI), pelaporan Near Miss, kepatuhan Safety Inspection lapangan, dan kepatuhan baku mutu lingkungan. *(Indikator kecelakaan otomatis menerapkan logika 'semakin kecil semakin baik')*. |
-| **3.4** | **Keuangan & RKAP** | Total pendapatan usaha, beban pokok operasional, laba bersih, realisasi anggaran RKAP tahunan, margin EBITDA, dan pertumbuhan MoM/YoY. |
-| **3.5** | **Komersial** | Pendapatan jasa dermaga & tambat, jasa pemanduan & penundaan kapal, kontrak kerja sama baru (B2B shipping lines), dan utilisasi fasilitas gudang/lapangan. |
-| **3.6** | **Operasional** | Arus kunjungan kapal (Call & GT), throughput petikemas (TEUs), kargo curah/non-petikemas (Ton), Berth Occupancy Ratio (BOR %), Turn Around Time (TRT Jam), Waiting Time (WT), dan produktivitas BSH (Box/Ship/Hour). |
-| **3.7** | **Teknik & Fasilitas** | Kesiapan alat (Ready For Use / RFU %), rasio pemeliharaan preventif vs korektif, total jam kerusakan/downtime alat, dan progres proyek investasi capex fasilitas pelabuhan. |
-| **3.8** | **SDM (Human Capital)** | Total komposisi pegawai aktif, produktivitas per tenaga kerja (Omset/Pegawai), rata-rata jam diklat kompetensi per pegawai, dan tingkat kehadiran (presensi). |
-| **3.9** | **Profil Cabang Pelabuhan** | Informasi umum cabang (Priok, Perak, Belawan, Makassar, Balikpapan), wilayah kerja, spesifikasi panjang dermaga, kedalaman kolam (mLWS), lapangan penumpukan (CY), armada Crane, Tugboat & Pilotboat, serta drilldown data kinerja per cabang. |
+## 1. Ikhtisar Arsitektur Aplikasi
+**PortDash Regional 4** adalah portal intelijen bisnis eksekutif dan manajemen tata kelola data kinerja pelabuhan PT Pelabuhan Indonesia (Persero) Regional 4. Sistem ini mengintegrasikan data dari 28 cabang pelabuhan aktif yang mencakup modul:
+- **Beranda Eksekutif**: Konsolidasi metrik finansial, operasional, fasilitas, dan peralatan pelabuhan.
+- **Finansial (Keuangan)**: Pendapatan, Beban Pokok Operasi, Laba Usaha, Laba Bersih, dan EBITDA konsolidasi per cabang dan entitas anak/afiliasi (PMT, PTP, PSL, PJM).
+- **Opkom (Operasi & Komersial)**: Realisasi pendapatan dan trafik layanan kapal, petikemas, barang curah/general cargo, penumpang, dan rupa-rupa usaha.
+- **Kinerja Operasional**: Indikator kinerja pelayanan (WTP, ET:BT, BSH, BCH, TGH, TSD).
+- **Utilisasi Dermaga & Lapangan**: BOR (Berth Occupancy Ratio), YOR (Yard Occupancy Ratio), dan SOR (Shed Occupancy Ratio).
+- **Peralatan Pelabuhan**: Kesiapan peralatan (RFU - Ready For Use), populasi armada (QCC, HMC, RTG, Reach Stacker, Forklift, Head Truck, Tugboat, Pilot Boat), dan utilisasi jam kerja.
+- **Fasilitas & Infrastruktur**: Inventaris dermaga, lapangan penumpukan, gudang, alur pelayaran, kedalaman kolam (mLWS), dan panjang fasilitas.
+- **Data Governance Suite**: Rekaman data kinerja (raw data), verifikasi & pengesahan berjenjang, studio pemetaan template dinamis, pusat impor spreadsheet, master data pengguna, dan jejak audit (audit trail).
 
 ---
 
-## 3. Fitur Tata Kelola & Administrasi
+## 2. Pengamanan & Tata Kelola Keamanan (Security Hardening)
 
-### 4.1 Pusat Impor Data (Spreadsheet & Google Sheets)
-- **Upload File**: Menerima file Microsoft Excel (`.xlsx`) dan `.csv`.
-- **Google Sheets API**: Menghubungkan langsung Google Spreadsheet melalui URL atau Spreadsheet ID dengan adapter server yang aman tanpa mengekspos kredensial di frontend.
-- **Validasi Multi-Lapisan**: Preview baris, cek kolom wajib, tipe data, format periode, duplikasi record, dan daftar error spesifik baris & kolom sebelum penyimpanan.
-- **Unduh Template**: Menghasilkan template Excel resmi dengan kolom baku dan lembar petunjuk kode cabang/indikator.
+### Autentikasi & Sesi
+- **JWT HttpOnly Cookie**: Token JWT disimpan dalam cookie `portsight_session` yang terlindungi dengan bendera `HttpOnly`, `SameSite=Lax`, dan `Secure` pada mode produksi.
+- **Validasi Kunci Rahasia JWT**: Memeriksa keberadaan dan kekuatan `JWT_SECRET` (minimal 32 karakter). Menolak konfigurasi produksi secara otomatis jika kunci tidak tersedia atau kurang kuat.
+- **Rate Limiting Login Terdistribusi**: Menggunakan tabel persisten SQLite WAL (`auth_rate_limits`) untuk membatasi percobaan masuk gagal (maksimal 5 kali per IP dalam 15 menit), tahan terhadap *restart* proses maupun *multi-instance*.
 
-### 4.2 Pusat Verifikasi & Monitoring Pengumpulan Data
-- **Alur Kerja**: Draft $\rightarrow$ Menunggu Verifikasi $\rightarrow$ Terverifikasi (Data Resmi) / Perlu Revisi.
-- **Matriks Monitoring Kelengkapan**: Pemantauan matriks status pengumpulan data cabang per departemen (Belum Upload, Draft, Menunggu Verifikasi, Perlu Revisi, Terverifikasi) dengan nama PIC penanggung jawab dan deteksi keterlambatan.
-- **Catatan Revisi**: Admin Regional dapat mengembalikan data yang tidak wajar dengan catatan perbaikan untuk ditindaklanjuti oleh PIC cabang.
+### Kontrol Akses Berbasis Peran & Atribut (RBAC & ABAC Server-Side)
+- Seluruh endpoint API menerapkan verifikasi sesi dan otorisasi langsung di server (`src/proxy.ts` dan domain controller):
+  - **BOD / Viewer**: Akses hanya baca (*read-only*), otomatis terkunci pada rekaman terverifikasi resmi (`verifiedOnly=true`), dan diblokir dari endpoint penulisan atau menu administratif.
+  - **PIC Cabang**: Akses tulis dan baca dibatasi pada cabang penugasan masing-masing (contoh: Cabang Makassar `R01`, Cabang Balikpapan `R04`).
+  - **Admin Regional & Super Admin**: Akses verifikasi data, manajemen pengguna PIC, konfigurasi pemetaan kolom, dan jejak audit regional.
+- **Pendaftaran Pengguna Terkontrol**: Pendaftaran publik via `POST /api/users` dinonaktifkan secara bawaan (`ALLOW_PUBLIC_REGISTRATION=false`). Akun baru hanya dapat didaftarkan oleh administrator resmi dengan penetapan cabang di server dan sandi wajib yang aman.
 
-### 4.3 Template & Dynamic Mapping Studio
-- Admin dapat menambah, mengubah, memetakan, atau menghapus nama kolom spreadsheet ke field database secara dinamis tanpa perlu mengubah source code aplikasi.
-
-### 4.4 Audit Trail
-- Pencatatan seluruh aksi pengguna (LOGIN, UPLOAD, IMPORT, APPROVE, REVISE, CONFIG_UPDATE, EXPORT) lengkap dengan timestamp, username, role, dan alamat IP.
-
----
-
-## 4. Hak Akses Pengguna (RBAC)
-
-Aplikasi dilengkapi selector role interaktif di bagian header untuk kemudahan pengujian:
-
-1. **Super Admin** (`budi.superadmin`): Akses penuh seluruh fitur, kelola master cabang/departemen, mapping template, verifikasi, dan konfigurasi sistem.
-2. **Admin Regional** (`hendra.regional`): Akses seluruh data regional/cabang, memonitor kelengkapan data, memverifikasi/mengesahkan data, meminta revisi, dan laporan konsolidasi.
-3. **PIC Departemen Regional** (`rudi.ops_regional` / `siti.keuangan`): Mengunggah dan memonitor data departemen yang menjadi tanggung jawabnya.
-4. **PIC Cabang** (`ahmad.priok` / `bambang.perak`): Mengunggah dan memperbaiki data cabang sesuai kewenangan (terkunci pada cabang masing-masing).
-5. **Manajemen / Viewer** (`direksi.eksekutif`): Hak akses khusus eksekutif untuk melihat dashboard, filter, drilldown, dan laporan konsolidasi data resmi (hanya data terverifikasi).
+### Proteksi Impor Data & Integritas Transaksi
+- **Batas Beban**: Impor JSON dibatasi maksimal 2 MB (`MAX_IMPORT_JSON_BYTES`) dan maksimal 2.000 baris data (`MAX_IMPORT_ROWS`).
+- **Validasi Skema Input**: Setiap rekaman impor divalidasi ketat menggunakan skema Zod terhadap master cabang, departemen, tipe data, dan aturan ABAC.
+- **Integritas Transaksi Atomik**: Penyimpanan rekaman data bulanan, batch impor, dan log audit dieksekusi dalam satu transaksi atomik database (`withTransaction`).
+- **Validasi Google Sheets Adapter**: Validasi regex untuk Spreadsheet ID, nama sheet tab, dan format A1 range, disertai batas waktu permintaan (*timeout* 10 detik dengan `AbortSignal.timeout`).
 
 ---
 
-## 5. Teknologi & Arsitektur
+## 3. Matriks Hak Akses Peran Pengguna (RBAC Matrix)
 
-- **Frontend**: Next.js 16 (App Router), React 19, TypeScript.
-- **Styling**: Vanilla CSS kustom dengan Design System modern maritim eksekutif (Deep Navy, Slate, Accent Electric Blue, status indikator hijau/kuning/merah).
-- **Visualisasi**: Recharts (Bar chart antarcabang, Line chart tren bulanan, Donut/Pie chart komposisi).
-- **Database Engine**:
-  - **Lokal**: Node.js `node:sqlite` (`data/ed_dashboard.db`) berjalan instan tanpa perlu instalasi daemon tambahan.
-  - **Produksi**: Skema database PostgreSQL resmi tersedia di `data/schema.sql` lengkap dengan relasi referensial dan indeks performa.
-- **Spreadsheet & Ekspor**:
-  - Parser & Exporter: SheetJS (`xlsx`) untuk upload/download Excel (.xlsx).
-  - Cetak PDF: Tata letak ramah cetak (print-optimized) dengan informasi filter dan stempel waktu.
+| Peran (Role) | Beranda & Modul Kinerja | Input Data Manual | Impor Spreadsheet | Verifikasi & Pengesahan | Master PIC & Parameter | Jejak Audit |
+|---|---|---|---|---|---|---|
+| **BOD (Viewer)** | Hanya Baca (Data Terverifikasi) | Ditolak | Ditolak | Ditolak | Ditolak | Ditolak |
+| **PIC Cabang** | Baca (Cabang Terkait) | Cabang Terkait | Cabang Terkait | Memantau Status | Ditolak | Ditolak |
+| **PIC Dept Regional** | Baca (Seluruh Wilayah) | Departemen Terkait | Departemen Terkait | Memantau Status | Ditolak | Ditolak |
+| **Admin Regional 4** | Baca & Analisis Penuh | Seluruh Cabang | Seluruh Cabang | Mengesahkan & Minta Revisi | Kelola Master Data | Baca Seluruh Log |
+| **Super Admin** | Akses Penuh Sistem | Seluruh Cabang | Seluruh Cabang | Akses Penuh | Kelola Akun & Sistem | Akses Penuh |
 
 ---
 
-## 6. Cara Menjalankan Aplikasi
+## 4. Konfigurasi Lingkungan (.env)
+
+Salin berkas `.env.example` ke `.env.local` atau `.env` sebelum menjalankan aplikasi:
+
+```env
+# Kunci rahasia JWT wajib diisi minimal 32 karakter untuk produksi
+JWT_SECRET=pelindo_r4_executive_dashboard_secret_key_production_32chars_min
+
+# Jalur penyimpanan basis data SQLite
+DATABASE_PATH=data/ed_dashboard.db
+
+# Kebijakan pendaftaran publik pengguna (true/false)
+ALLOW_PUBLIC_REGISTRATION=false
+
+# Opsional: Integrasi Google Sheets API & Gateway
+GOOGLE_SHEETS_API_KEY=
+PORT=3000
+NODE_ENV=development
+```
+
+---
+
+## 5. Menjalankan Aplikasi & Pengujian
 
 ### Prasyarat
-- Node.js versi 18 atau lebih baru (direkomendasikan Node.js 20+ atau 24).
-- npm versi 9 atau lebih baru.
+- Node.js versi 18.18+ atau 20+
+- npm versi 9+
 
-### Langkah Instalasi
-1. Masuk ke direktori proyek:
-   ```bash
-   cd ed-dashboard
-   ```
-2. Instal dependensi:
-   ```bash
-   npm install
-   ```
-3. Inisialisasi dan jalankan seeder data awal:
-   ```bash
-   npx tsx src/lib/seed.ts
-   ```
-4. Jalankan development server:
-   ```bash
-   npm run dev
-   ```
-5. Buka peramban (browser) di alamat:
-   ```
-   http://localhost:3000
-   ```
+### Instalasi & Menjalankan Mode Pengembang
+```bash
+# Instalasi dependensi
+npm install
 
-### Konfigurasi Environment (`.env`)
-Buat file `.env` di root direktori jika ingin mengaktifkan Google Sheets API v4 produksi:
-```env
-# Port & Host
-PORT=3000
-
-# Google Sheets API Key (Opsional untuk koneksi live produksi)
-GOOGLE_SHEETS_API_KEY=your_google_cloud_api_key_here
-
-# Mode Database
-DATABASE_URL=file:./data/ed_dashboard.db
+# Jalankan server pengembangan
+npm run dev
 ```
-*(Jika API key belum diisi, sistem otomatis mengaktifkan Google Sheets Adapter Mode yang aman untuk demonstrasi).*
+Buka browser pada alamat `http://localhost:3000`.
+
+### Pemeriksaan Kualitas Kode & Tipe Data
+```bash
+# Pemeriksaan tipe data TypeScript
+npx tsc --noEmit
+
+# Pemeriksaan linter ESLint
+npm run lint
+```
+
+### Menjalankan Rangkaian Uji Regresi Keamanan
+Skrip pengujian otomatis komprehensif menguji seluruh kriteria keamanan dan otorisasi:
+```bash
+node scripts/regression-test.mjs
+```
+Rangkaian pengujian mencakup:
+1. Penolakan akses unauthenticated pada `/api/master`, `/api/users/export`, `/api/import/sheets-sync`, `/api/import/drive-sync`.
+2. Penolakan pendaftaran pengguna publik saat `ALLOW_PUBLIC_REGISTRATION=false`.
+3. Pengujian *rate limiting* kegagalan login dan pemulihan kunci sesi.
+4. Penegakan isolasi role BOD/Viewer (hanya rekaman terverifikasi yang dikembalikan meskipun query parameter dimanipulasi).
+5. Pembatasan akses cabang bagi PIC Cabang (ABAC server-side).
+6. Pengujian validasi skema input dan eksekusi transaksi atomik saat impor data.
 
 ---
 
-## 7. Struktur Folder Proyek
+## 6. Struktur Direktori Proyek
 
 ```
-ed-dashboard/
-├── data/
-│   ├── ed_dashboard.db            # Database SQLite lokal terstruktur
-│   └── schema.sql                 # Skema DDL resmi PostgreSQL
+dashboardR4/
+├── data/                      # Berkas database SQLite dan spreadsheet master
+│   ├── ed_dashboard.db
+│   ├── input_data.xlsx
+│   └── master_user_pic.xlsx
+├── scripts/                   # Skrip pengujian regresi dan utilitas pemeliharaan
+│   ├── regression-test.mjs
+│   └── seed.ts
 ├── src/
-│   ├── app/
-│   │   ├── api/                   # Backend REST API
-│   │   │   ├── audit/             # Log audit trail
-│   │   │   ├── import/            # Validasi, commit, & Google Sheets sync
-│   │   │   ├── master/            # Master data katalog
-│   │   │   ├── records/           # Query data bulanan & filter
-│   │   │   ├── reports/           # Ekspor Excel (.xlsx) & template generator
-│   │   │   ├── templates/         # Konfigurasi mapping dinamis
-│   │   │   └── verification/      # Review antrean & matriks kelengkapan
-│   │   ├── globals.css            # Token CSS & tema maritim eksekutif
-│   │   ├── layout.tsx             # Root Layout & viewport metadata
-│   │   └── page.tsx               # Main Dashboard Controller
-│   ├── components/
-│   │   ├── admin/                 # Modul tata kelola & administrasi
-│   │   │   ├── AuditTrailView.tsx
-│   │   │   ├── ImportCenter.tsx
-│   │   │   ├── MasterDataView.tsx
-│   │   │   ├── TemplateMapping.tsx
-│   │   │   └── VerificationQueue.tsx
-│   │   ├── layout/                # Shell navigasi & header
-│   │   │   ├── Header.tsx
-│   │   │   └── Sidebar.tsx
-│   │   ├── menus/                 # 9 Tampilan menu utama kinerja
-│   │   │   ├── HSSEView.tsx
-│   │   │   ├── KeuanganView.tsx
-│   │   │   ├── KomersialView.tsx
-│   │   │   ├── OperasionalView.tsx
-│   │   │   ├── PelangganView.tsx
-│   │   │   ├── ProfilCabangView.tsx
-│   │   │   ├── SDMView.tsx
-│   │   │   ├── SummaryView.tsx
-│   │   │   └── TeknikView.tsx
-│   │   └── ui/                    # Komponen atomik
-│   │       ├── DataTable.tsx
-│   │       ├── DetailDrilldownModal.tsx
-│   │       ├── KPICard.tsx
-│   │       └── StatusBadge.tsx
-│   └── lib/
-│       ├── db.ts                  # Konektor database & query helpers
-│       ├── excelExporter.ts       # Generator file Excel & template
-│       ├── googleSheetsAdapter.ts # Integrasi Google Sheets API
-│       ├── seed.ts                # Seeder data master & simulasi
-│       ├── types.ts               # Interface TypeScript
-│       └── validator.ts           # Mesin validasi spreadsheet & duplikasi
-└── package.json
+│   ├── app/                   # App Router Next.js (halaman dan 19 endpoint API)
+│   │   ├── api/
+│   │   └── page.tsx
+│   ├── components/            # Komponen antarmuka pengguna (UI)
+│   │   ├── admin/             # Data Governance, Verifikasi, Impor, Audit
+│   │   ├── auth/              # Layar masuk dan modal otorisasi
+│   │   ├── layout/            # Header dan Sidebar responsif
+│   │   ├── modals/            # Modal komparasi eksekutif vs RKAP & 2025
+│   │   ├── portsight/         # 8 Modul visualisasi data pelabuhan
+│   │   └── ui/                # DataTable aksesibel, KPICard, StatusBadge
+│   ├── hooks/                 # React custom hooks analitik
+│   ├── lib/                   # Layanan domain, database SQLite, JWT, RBAC, validasi
+│   └── proxy.ts               # Gateway autentikasi dan penegakan izin API
+└── README.md
 ```

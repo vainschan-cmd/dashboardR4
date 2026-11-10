@@ -10,7 +10,7 @@ export function generateTemplateWorkbook(
 
   // 1. Data Input Sheet
   const headers = template.columns.map(c => c.column_name);
-  const sampleRows: any[][] = [headers];
+  const sampleRows: Array<Array<string | number>> = [headers];
 
   const targetBranch = sampleBranches[0] || { code: 'CBG-TGPRK', name: 'Cabang Tanjung Priok' };
   indicators.forEach((ind, idx) => {
@@ -49,7 +49,7 @@ export function generateTemplateWorkbook(
   XLSX.utils.book_append_sheet(wb, ws, 'Input_Kinerja');
 
   // 2. Reference Sheet for Branches & Indicators (Petunjuk Pengisian)
-  const refRows: any[][] = [
+  const refRows: Array<Array<string | number>> = [
     ['PETUNJUK PENGISIAN TEMPLATE SPREADSHEET KINERJA PELABUHAN'],
     ['1. Jangan mengubah nama kolom pada baris pertama (Header).'],
     ['2. Kode Cabang dan Kode Indikator wajib mengacu pada daftar referensi di bawah ini.'],
@@ -73,8 +73,9 @@ export function generateTemplateWorkbook(
 
 export function exportRecordsToExcel(
   records: MonthlyRecord[],
-  title = 'Laporan_Kinerja_Pelabuhan'
+  _title = 'Laporan_Kinerja_Pelabuhan'
 ): Uint8Array {
+  void _title;
   const wb = XLSX.utils.book_new();
 
   const dataRows = records.map(r => ({

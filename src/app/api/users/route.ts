@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
 import { dbQueries, toSafeUser } from '@/lib/db';
-import { getSessionFromRequest, issueSessionCookies, getClientIp } from '@/lib/auth';
-import { requireAuth } from '@/lib/rbac';
+import { issueSessionCookies, getClientIp } from '@/lib/auth';
+import {
+  requireAuth,
+  resolveRequestSession,
+  hasPermission,
+  resolveServerAssignedUserScope,
+} from '@/lib/rbac';
 import { getMasterUserSpreadsheetPath, DRIVE_ACCOUNT } from '@/lib/userPicSync';
 import { createUserSchema, updateUserSchema, parseWithSchema } from '@/lib/validation';
-import type { UserRole } from '@/lib/types';
-import fs from 'fs';
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
+  const auth = await requireAuth(req, { requiredPermission: 'users:read' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -34,55 +38,72 @@ export async function GET(req: NextRequest) {
       total: users.length,
       spreadsheet: fileStats,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memuat daftar pengguna.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
+  const allowPublicRegistration = process.env.ALLOW_PUBLIC_REGISTRATION === 'true';
+  const session = await resolveRequestSession(req);
+  const canManageUsers = Boolean(session && hasPermission(session.role, 'users:manage'));
+
+  if (!canManageUsers && !allowPublicRegistration) {
+    const auth = await requireAuth(req, { requiredPermission: 'users:manage' });
+    if (!auth.authorized) return auth.response;
+  }
+
   try {
     const body = await req.json();
     const parsed = parseWithSchema(createUserSchema, body);
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error },
+        { success: false, error: parsed.error, message: parsed.error },
         { status: 400 }
       );
     }
     const { name, nipp, divisi, departemen, password, role, branch_id, department_id, email } = parsed.data;
-
     const cleanNipp = String(nipp).trim();
+
+    if (canManageUsers && role === 'super_admin' && session?.role !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, error: 'Hanya Super Admin yang dapat membuat akun dengan role Super Admin.' },
+        { status: 403 }
+      );
+    }
 
     // Check if NIPP already exists
     const existing = dbQueries.getUserByNipp(cleanNipp);
     if (existing) {
       return NextResponse.json(
-        { success: false, error: `NIPP ${cleanNipp} sudah terdaftar. Silakan gunakan NIPP lain atau masuk menggunakan akun yang sudah ada.` },
+        {
+          success: false,
+          error: `NIPP ${cleanNipp} sudah terdaftar. Silakan gunakan NIPP lain atau masuk menggunakan akun yang sudah ada.`,
+        },
         { status: 409 }
       );
     }
 
-    const session = await getSessionFromRequest(req);
-    const isAdminSession = session && (session.role === 'super_admin' || session.role === 'admin_regional');
-    // Prevent privilege escalation on public self-registration: only admins can assign elevated roles
-    const allowedRoles: UserRole[] = ['super_admin', 'admin_regional', 'pic_dept_regional', 'pic_cabang', 'viewer'];
-    const effectiveRole: UserRole =
-      isAdminSession && role && allowedRoles.includes(role)
-        ? role
-        : 'pic_cabang';
+    // Assign role, branch_id, and department_id strictly via server-side rules
+    const assignedScope = resolveServerAssignedUserScope({
+      role: canManageUsers ? role : 'pic_cabang',
+      branch_id,
+      department_id,
+      divisi,
+      departemen,
+      isPublicSelfRegistration: !canManageUsers,
+    });
 
     const newUser = dbQueries.createUser({
       name: String(name).trim(),
       nipp: cleanNipp,
       divisi: String(divisi).trim(),
       departemen: String(departemen).trim(),
-      password: password || 'password123',
-      role: effectiveRole,
-      branch_id: branch_id || null,
-      department_id: department_id || null,
+      password: String(password).trim(),
+      role: assignedScope.role,
+      branch_id: assignedScope.branch_id,
+      department_id: assignedScope.department_id,
       email: email || `${cleanNipp}@pelindo.co.id`,
     });
 
@@ -97,10 +118,12 @@ export async function POST(req: NextRequest) {
         action: 'CONFIG_UPDATE',
         entity: 'UserAccount',
         entity_id: safeUser.nipp,
-        details: `Pendaftaran akun baru PIC ${safeUser.name} (NIPP: ${safeUser.nipp}, Role: ${safeUser.role}, Cabang: ${safeUser.branch_id || 'R99'}).`,
+        details: `Pendaftaran akun baru PIC ${safeUser.name} (NIPP: ${safeUser.nipp}, Role: ${safeUser.role}, Cabang: ${safeUser.branch_id || 'R99'}, Dept: ${safeUser.department_id || '-'}).`,
         ip_address: clientIp,
       });
-    } catch {}
+    } catch {
+      // ignore non-fatal audit error
+    }
 
     const response = NextResponse.json({
       success: true,
@@ -121,23 +144,20 @@ export async function POST(req: NextRequest) {
       driveAccount: DRIVE_ACCOUNT,
     });
 
-    // If self-registering (not logged in as admin), issue JWT session cookies for the new user
-    if (!session) {
+    if (!session && allowPublicRegistration) {
       const systemParams = dbQueries.getSystemParameters();
       await issueSessionCookies(response, safeUser, systemParams.session_timeout_minutes || 30);
     }
 
     return response;
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal mendaftarkan pengguna baru.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'users:manage' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -159,26 +179,50 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    const existingUser = dbQueries.getUserById(id);
+    if (!existingUser) {
+      return NextResponse.json(
+        { success: false, error: 'User PIC tidak ditemukan.' },
+        { status: 404 }
+      );
+    }
+
+    if (existingUser.role === 'super_admin' && auth.session.role !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, error: 'Hanya Super Admin yang dapat mengubah akun Super Admin.' },
+        { status: 403 }
+      );
+    }
+
     // If NIPP is changed, verify it doesn't conflict with another user
     if (nipp) {
       const cleanNipp = String(nipp).trim();
-      const existing = dbQueries.getUserByNipp(cleanNipp);
-      if (existing && existing.id !== id) {
+      const existingByNipp = dbQueries.getUserByNipp(cleanNipp);
+      if (existingByNipp && existingByNipp.id !== id) {
         return NextResponse.json(
-          { success: false, error: `NIPP ${cleanNipp} sudah digunakan oleh ${existing.name}.` },
+          { success: false, error: `NIPP ${cleanNipp} sudah digunakan oleh ${existingByNipp.name}.` },
           { status: 409 }
         );
       }
     }
+
+    const assignedScope = resolveServerAssignedUserScope({
+      role: role || existingUser.role,
+      branch_id: branch_id !== undefined ? branch_id : existingUser.branch_id,
+      department_id: department_id !== undefined ? department_id : existingUser.department_id,
+      divisi,
+      departemen,
+      isPublicSelfRegistration: false,
+    });
 
     const updated = dbQueries.updateUser(id, {
       name: String(name).trim(),
       nipp: nipp ? String(nipp).trim() : undefined,
       divisi: String(divisi).trim(),
       departemen: String(departemen).trim(),
-      role: role || undefined,
-      branch_id: branch_id || null,
-      department_id: department_id || null,
+      role: assignedScope.role,
+      branch_id: assignedScope.branch_id,
+      department_id: assignedScope.department_id,
       email: email ? String(email).trim() : undefined,
       active: active !== undefined ? Boolean(active) : undefined,
       password: password && String(password).trim().length > 0 ? String(password).trim() : undefined,
@@ -204,7 +248,9 @@ export async function PUT(req: NextRequest) {
         details: `Pembaruan akun PIC ${safeUpdated.name} (NIPP: ${safeUpdated.nipp}, Role: ${safeUpdated.role}, Cabang: ${safeUpdated.branch_id || 'R99'}, Status: ${safeUpdated.active ? 'Aktif' : 'Nonaktif'}).`,
         ip_address: getClientIp(req),
       });
-    } catch {}
+    } catch {
+      // ignore non-fatal audit error
+    }
 
     return NextResponse.json({
       success: true,
@@ -212,16 +258,14 @@ export async function PUT(req: NextRequest) {
       user: safeUpdated,
       driveAccount: DRIVE_ACCOUNT,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal memperbarui pengguna.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireAuth(req, { allowedRoles: ['super_admin', 'admin_regional'] });
+  const auth = await requireAuth(req, { requiredPermission: 'users:manage' });
   if (!auth.authorized) return auth.response;
 
   try {
@@ -259,19 +303,19 @@ export async function DELETE(req: NextRequest) {
         action: 'CONFIG_UPDATE',
         entity: 'UserAccount',
         entity_id: targetUser?.nipp || id,
-        details: `Penghapusan akun PIC ${targetUser?.name || id} (NIPP: ${targetUser?.nipp || '-'}).`,
+        details: `Penghapusan akun PIC ${targetUser?.name || id} (NIPP: ${targetUser?.nipp || '-'}) oleh ${auth.session.name}.`,
         ip_address: getClientIp(req),
       });
-    } catch {}
+    } catch {
+      // ignore non-fatal audit error
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'User berhasil dihapus dan file master_user_pic.xlsx telah diperbarui.',
+      message: 'User PIC telah dihapus dan master_user_pic.xlsx telah diperbarui.',
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Gagal menghapus pengguna.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
