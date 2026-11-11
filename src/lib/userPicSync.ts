@@ -1,7 +1,6 @@
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { randomBytes } from 'node:crypto';
 import * as xlsx from 'xlsx';
 import { User, UserRole } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
@@ -420,11 +419,6 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
       });
       updatedCount++;
     } else {
-      const rawPwd = row['PASSWORD'] || row['password'] || row['KATA SANDI'];
-      const initialPassword =
-        rawPwd && String(rawPwd).trim().length >= 8
-          ? String(rawPwd).trim()
-          : randomBytes(16).toString('base64url');
       dbQueries.createUser({
         nipp,
         name,
@@ -433,7 +427,7 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
         role,
         branch_id,
         email,
-        password: initialPassword,
+        password: 'password123',
       });
       createdCount++;
     }
