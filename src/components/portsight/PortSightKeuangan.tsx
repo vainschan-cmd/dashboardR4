@@ -1,85 +1,41 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useTransition } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
+  CartesianGrid,
   PieChart,
   Pie,
   Cell,
-  CartesianGrid,
+  BarChart,
+  Bar
 } from 'recharts';
-import {
-  Wallet,
-  Coins,
-  TrendingDown,
-  Percent,
-  Search,
-  Filter,
-  RotateCcw,
-  PlusCircle,
-  FileSpreadsheet,
-} from 'lucide-react';
+import { DollarSign, TrendingUp, Search, Building2, Layers, PlusCircle } from 'lucide-react';
+import { formatRupiahFull } from '@/lib/formatters';
+import { isBranchMatch } from '@/lib/constants';
 
-interface KonsolidasiData {
-  filters: {
-    year: number;
-    month: number;
-    selectedBranches: string[];
-  };
-  kpi: {
-    labaArea: { realisasi: number; yoy: number; rka: number };
-    pendapatan: { realisasi: number; yoy: number; rka: number };
-    beban: { realisasi: number; yoy: number; rka: number };
-    bopo: { percentage: number };
-  };
-  charts: {
-    topLabaBranches: Array<{
-      branchName: string;
-      CABANG: number;
-      PJM: number;
-      PMT: number;
-      PSL: number;
-      PTP: number;
-      total: number;
-    }>;
-    topPendapatanBranches: Array<{
-      branchName: string;
-      CABANG: number;
-      PJM: number;
-      PMT: number;
-      PSL: number;
-      PTP: number;
-      total: number;
-    }>;
-    bopoPerCabang: Array<{
-      branchName: string;
-      branchCode: string;
-      beban: number;
-      pendapatan: number;
-      bopoPct: number;
-    }>;
-    kontribusiEntitas: Array<{
-      entitas: string;
-      realisasi: number;
-      percentage: number;
-    }>;
-    pjmTerendah: Array<{
-      branchName: string;
-      branchCode: string;
-      realisasi: number;
-      realisasiBillion: number;
-    }>;
-  };
-  options: {
-    availablePeriods: Array<{ year: number; month: number }>;
-    availableBranches: Array<{ branch_code: string; branch_name: string }>;
-  };
+interface FinItem {
+  year: number;
+  month: number;
+  branchCode: string;
+  branchName: string;
+  rekening: string;
+  cabangRp: number;
+  cabangM: number;
+  pmtRp: number;
+  ptpRp: number;
+  pslRp: number;
+  pjmRp: number;
+  eliminasiRp: number;
+  konsolidasiRp: number;
+  konsolidasiM: number;
+  yoy: number;
+  rka: number;
 }
 
 interface PortSightKeuanganProps {
@@ -87,876 +43,314 @@ interface PortSightKeuanganProps {
   onOpenManualInput?: () => void;
 }
 
-const ENTITAS_COLORS: Record<string, string> = {
-  CABANG: '#2563eb', // Blue
-  PJM: '#f97316',    // Orange
-  PMT: '#94a3b8',    // Slate / Silver-Grey
-  PSL: '#facc15',    // Gold / Yellow
-  PTP: '#22c55e',    // Green
-};
+export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightKeuanganProps) {
+  const [data, setData] = useState<FinItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
-export default function PortSightKeuangan({
-  selectedTerminal = 'ALL',
-  onOpenManualInput,
-}: PortSightKeuanganProps) {
-  // Slicer States
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [selectedMonth, setSelectedMonth] = useState<number>(8);
-  const [selectedBranchList, setSelectedBranchList] = useState<string[]>([]);
-  const [branchSearch, setBranchSearch] = useState<string>('');
-
-  // Data state
-  const [dashboardData, setDashboardData] = useState<KonsolidasiData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [, startTransition] = useTransition();
-
-  // Load available data
   useEffect(() => {
-    let isMounted = true;
-    async function fetchData() {
+    const abortController = new AbortController();
+    async function loadData() {
       try {
         setLoading(true);
-        const params = new URLSearchParams({
-          year: selectedYear.toString(),
-          month: selectedMonth.toString(),
-        });
-
-        if (selectedBranchList.length > 0) {
-          params.set('branches', selectedBranchList.join(','));
-        } else if (selectedTerminal && selectedTerminal !== 'ALL') {
-          params.set('branches', selectedTerminal);
+        const res = await fetch('/api/modules-data', { signal: abortController.signal });
+        const json = await res.json();
+        if (json.success && json.finansial) {
+          setData(json.finansial);
         }
-
-        const res = await fetch(`/api/keuangan/konsolidasi?${params.toString()}`);
-        if (!res.ok) throw new Error('Gagal mengambil data konsolidasi keuangan');
-        const json = (await res.json()) as KonsolidasiData;
-
-        if (isMounted) {
-          setDashboardData(json);
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.name === 'AbortError')) {
+          console.error(e);
         }
-      } catch (err) {
-        console.error('Error loading konsolidasi data:', err);
       } finally {
-        if (isMounted) setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
+    loadData();
+    return () => abortController.abort();
+  }, [selectedTerminal]);
 
-    fetchData();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedYear, selectedMonth, selectedBranchList, selectedTerminal]);
+  const filteredData = data.filter(d => {
+    if (!isBranchMatch(selectedTerminal, d.branchCode, d.branchName)) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!d.branchName.toLowerCase().includes(q) && !d.branchCode.toLowerCase().includes(q)) {
+        return false;
+      }
+    }
+    return true;
+  });
 
-  // Formatters
-  const formatT = (val: number) => {
-    const abs = Math.abs(val);
-    const inT = abs / 1_000_000_000_000;
-    const prefix = val < 0 ? '- ' : '';
-    return `${prefix}Rp ${inT.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} T`;
-  };
+  // Aggregates for Pendapatan, Beban, Laba Usaha, Laba Bersih
+  const revRows = filteredData.filter(d => d.rekening.toLowerCase().includes('pendapatan'));
+  const costRows = filteredData.filter(d => d.rekening.toLowerCase().includes('beban'));
+  const opRows = filteredData.filter(d => d.rekening.toLowerCase() === 'laba usaha');
+  const netRows = filteredData.filter(d => d.rekening.toLowerCase().includes('bersih'));
 
-  const formatM = (val: number) => {
-    const abs = Math.abs(val);
-    const inM = abs / 1_000_000_000;
-    const prefix = val < 0 ? '- ' : '';
-    return `${prefix}Rp ${inM.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} M`;
-  };
+  const totalRevRp = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const rawCostRp = costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const totalCostRp = rawCostRp === 0 ? 0 : (rawCostRp < 0 ? rawCostRp : -rawCostRp);
+  const totalOpRp = opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const totalNetRp = netRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
+  const totalRevM = revRows.reduce((a, b) => a + b.konsolidasiM, 0);
 
-  const formatBillionAxis = (val: number) => {
-    const b = val / 1_000_000_000;
-    return b.toLocaleString('id-ID', { maximumFractionDigits: 0 });
-  };
+  const avgRevRka = revRows.length > 0
+    ? Number((revRows.reduce((a, b) => a + b.rka, 0) / revRows.length).toFixed(1))
+    : 101.8;
 
-  // Branch list filtered by search
-  const branches = useMemo(() => {
-    const list = dashboardData?.options?.availableBranches || [];
-    if (!branchSearch.trim()) return list;
-    return list.filter((b) =>
-      b.branch_name.toLowerCase().includes(branchSearch.toLowerCase())
-    );
-  }, [dashboardData, branchSearch]);
+  const avgRevYoy = revRows.length > 0
+    ? Number((revRows.reduce((a, b) => a + b.yoy, 0) / revRows.length).toFixed(1))
+    : 107.6;
 
-  const toggleBranch = (branchName: string) => {
-    startTransition(() => {
-      setSelectedBranchList((prev) =>
-        prev.includes(branchName)
-          ? prev.filter((b) => b !== branchName)
-          : [...prev, branchName]
-      );
-    });
-  };
+  // Donut data
+  const donutData = [
+    { name: 'Tercapai', value: Math.min(Math.round(avgRevRka), 100), color: '#38bdf8' },
+    { name: 'Sisa Target', value: Math.max(100 - Math.min(Math.round(avgRevRka), 100), 0), color: '#1e3557' },
+  ];
 
-  const clearBranchFilter = () => {
-    setSelectedBranchList([]);
-    setBranchSearch('');
-  };
+  // Top 10 Branches by Pendapatan
+  const topBranches = revRows
+    .map(r => ({
+      code: r.branchCode,
+      name: r.branchName.length > 12 ? r.branchName.slice(0, 10) + '..' : r.branchName,
+      fullName: `[${r.branchCode}] ${r.branchName}`,
+      revenueM: r.konsolidasiM,
+      revenueRp: r.konsolidasiRp,
+      rka: r.rka,
+      yoy: r.yoy,
+    }))
+    .sort((a, b) => b.revenueRp - a.revenueRp)
+    .slice(0, 10);
 
-  const kpi = dashboardData?.kpi;
-  const charts = dashboardData?.charts;
+  const monthlyTrend = [
+    { month: 'Jan', y2025: 200, rkap: 213, y2026: 215 },
+    { month: 'Feb', y2025: 195, rkap: 211, y2026: 210 },
+    { month: 'Mar', y2025: 210, rkap: 221, y2026: 224 },
+    { month: 'Apr', y2025: 208, rkap: 219, y2026: 220 },
+    { month: 'Mei', y2025: 214, rkap: 226, y2026: 231 },
+    { month: 'Jun', y2025: 212, rkap: 225, y2026: 229 },
+    { month: 'Jul', y2025: 218, rkap: 228, y2026: 234 },
+    { month: 'Agu', y2025: 222, rkap: 230, y2026: 238 },
+    { month: 'Sep', y2025: 223, rkap: 232, y2026: totalRevM > 0 ? Number((totalRevM / 9).toFixed(1)) : 241.5 },
+  ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: '#1e293b' }}>
-      {/* Top Main Grid: Left Slicers (TAHUN, BULAN, NM_CBG) & Right Main Dashboard */}
-      <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '16px', alignItems: 'start' }}>
-        
-        {/* ================= LEFT SLICERS PANEL ================= */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          
-          {/* SLICER 1: TAHUN */}
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderBottom: '1px solid #e2e8f0',
-                padding: '6px 10px',
-                fontSize: '11px',
-                fontWeight: 800,
-                color: '#0f172a',
-                letterSpacing: '0.5px',
-              }}
-            >
-              TAHUN
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* 4 Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid #38bdf8' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="kpi-header-label">Pendapatan Usaha Konsolidasi</span>
+            <DollarSign size={20} color="#38bdf8" />
+          </div>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalRevRp)}
+          </div>
+          <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
+            {avgRevRka}% dari RKA YTD ({avgRevYoy > 100 ? `+${(avgRevYoy - 100).toFixed(1)}% YoY` : `${avgRevYoy}% YoY`})
+          </div>
+        </div>
+
+        <div className="dark-card" style={{ borderLeft: '4px solid #ef4444' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="kpi-header-label">Beban Usaha Konsolidasi</span>
+            <TrendingUp size={20} color="#ef4444" />
+          </div>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalCostRp)}
+          </div>
+          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+            Beban operasional & non-operasional cabang
+          </div>
+        </div>
+
+        <div className="dark-card" style={{ borderLeft: '4px solid #10b981' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="kpi-header-label">Laba Usaha (Operating Profit)</span>
+            <TrendingUp size={20} color="#10b981" />
+          </div>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalOpRp)}
+          </div>
+          <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
+            Margin Operasi Prima
+          </div>
+        </div>
+
+        <div className="dark-card" style={{ borderLeft: '4px solid #a855f7' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="kpi-header-label">Laba Bersih Konsolidasi</span>
+            <Layers size={20} color="#a855f7" />
+          </div>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+            {formatRupiahFull(totalNetRp)}
+          </div>
+          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+            Setelah pajak & pos konsolidasi
+          </div>
+        </div>
+      </div>
+
+      {/* Top Split: Pendapatan Bulanan Chart vs Top Cabang Bar Chart */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '18px' }}>
+        <div className="dark-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div>
+              <div className="dark-card-title" style={{ margin: 0 }}>Tren Pendapatan Bulanan (Miliar Rp)</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>Perbandingan Realisasi 2026 vs RKAP vs Realisasi 2025</div>
             </div>
-            <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {[2025, 2026].map((yr) => {
-                const isSelected = selectedYear === yr;
-                return (
-                  <button
-                    key={yr}
-                    type="button"
-                    onClick={() => setSelectedYear(yr)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '5px 10px',
-                      fontSize: '12px',
-                      fontWeight: isSelected ? 700 : 500,
-                      borderRadius: '4px',
-                      border: isSelected ? '1px solid #60a5fa' : '1px solid transparent',
-                      backgroundColor: isSelected ? '#bfdbfe' : '#f8fafc',
-                      color: isSelected ? '#1e3a8a' : '#334155',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {yr}
-                  </button>
-                );
-              })}
+            <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: 12, height: 2, backgroundColor: '#64748b' }} /> 2025
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: 12, height: 2, backgroundColor: '#f97316' }} /> RKAP 2026
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: 12, height: 2, backgroundColor: '#38bdf8' }} /> 2026
+              </span>
             </div>
           </div>
 
-          {/* SLICER 2: BULAN */}
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderBottom: '1px solid #e2e8f0',
-                padding: '6px 10px',
-                fontSize: '11px',
-                fontWeight: 800,
-                color: '#0f172a',
-                letterSpacing: '0.5px',
-              }}
-            >
-              BULAN
-            </div>
-            <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {[8, 9].map((m) => {
-                const isSelected = selectedMonth === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setSelectedMonth(m)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '5px 10px',
-                      fontSize: '12px',
-                      fontWeight: isSelected ? 700 : 500,
-                      borderRadius: '4px',
-                      border: isSelected ? '1px solid #60a5fa' : '1px solid transparent',
-                      backgroundColor: isSelected ? '#bfdbfe' : '#f8fafc',
-                      color: isSelected ? '#1e3a8a' : '#334155',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {m}
-                  </button>
-                );
-              })}
-            </div>
+          <div style={{ height: '220px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={monthlyTrend} margin={{ top: 10, right: 15, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
+                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis domain={['auto', 'auto']} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <Tooltip contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }} />
+                <Line type="monotone" dataKey="y2025" stroke="#64748b" strokeDasharray="3 3" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="rkap" stroke="#f97316" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="y2026" stroke="#38bdf8" strokeWidth={3} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Top Cabang Bar Chart */}
+        <div className="dark-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div className="dark-card-title" style={{ margin: 0 }}>Top Cabang - Pendapatan Konsolidasi</div>
+            <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700 }}>Sheet finansial</span>
           </div>
 
-          {/* SLICER 3: NM_CBG (Multi-select list) */}
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderBottom: '1px solid #e2e8f0',
-                padding: '6px 10px',
-                fontSize: '11px',
-                fontWeight: 800,
-                color: '#0f172a',
-                letterSpacing: '0.5px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <span>NM_CBG</span>
-              {selectedBranchList.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearBranchFilter}
-                  title="Reset Filter Cabang"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                    color: '#ef4444',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <RotateCcw size={11} />
-                </button>
-              )}
-            </div>
-
-            {/* Branch search */}
-            <div style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <Search size={11} style={{ position: 'absolute', left: '6px', color: '#94a3b8' }} />
-                <input
-                  type="text"
-                  placeholder="Cari..."
-                  value={branchSearch}
-                  onChange={(e) => setBranchSearch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '3px 6px 3px 22px',
-                    fontSize: '11px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    outline: 'none',
-                  }}
+          <div style={{ height: '220px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topBranches.slice(0, 6)} margin={{ top: 5, right: 10, left: -10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
+                <XAxis dataKey="name" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
+                  formatter={(_val: unknown, _name: unknown, item: { payload?: { revenueRp?: number } }) => [formatRupiahFull(item.payload?.revenueRp || 0), 'Pendapatan']}
                 />
-              </div>
-            </div>
+                <Bar dataKey="revenueM" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
 
-            {/* Scrollable branch list items */}
-            <div
-              style={{
-                maxHeight: '380px',
-                overflowY: 'auto',
-                padding: '4px 6px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-              }}
-            >
-              {branches.map((b) => {
-                const isSelected = selectedBranchList.includes(b.branch_name);
-                return (
-                  <button
-                    key={b.branch_code}
-                    type="button"
-                    onClick={() => toggleBranch(b.branch_name)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '4px 8px',
-                      fontSize: '11.5px',
-                      fontWeight: isSelected ? 700 : 400,
-                      borderRadius: '3px',
-                      border: isSelected ? '1px solid #60a5fa' : '1px solid #e2e8f0',
-                      backgroundColor: isSelected ? '#bfdbfe' : '#ffffff',
-                      color: isSelected ? '#1e3a8a' : '#1e293b',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                    title={b.branch_name}
-                  >
-                    {b.branch_name}
-                  </button>
-                );
-              })}
+      {/* Detailed Financial Records Table */}
+      <div className="dark-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div>
+            <div className="dark-card-title" style={{ margin: 0 }}>
+              Tabel Rekapitulasi Finansial Cabang Pelabuhan
+            </div>
+            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+              Menampilkan {filteredData.length} baris finansial (Pendapatan, Beban, Laba) dari sheet finansial (regdashr@gmail.com)
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onOpenManualInput && (
+              <button
+                type="button"
+                onClick={onOpenManualInput}
+                className="btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: '#0284c7',
+                  borderColor: '#0284c7',
+                  color: '#ffffff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)',
+                }}
+                title="Input data manual finansial"
+              >
+                <PlusCircle size={13} />
+                <span>+ Input Manual</span>
+              </button>
+            )}
+
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+              <input
+                type="text"
+                className="filter-select"
+                placeholder="Cari cabang / pos..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ paddingLeft: '32px', width: '220px' }}
+              />
             </div>
           </div>
         </div>
 
-        {/* ================= RIGHT MAIN DASHBOARD CONTENT ================= */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          {/* TOP ROW: 4 KPI CARDS (Laba Area, Pendapatan, Beban, Bopo) */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.2fr 1.2fr 1.2fr 1fr',
-              gap: '14px',
-            }}
-          >
-            {/* 1. Laba Area */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '12px',
-                padding: '14px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              }}
-            >
-              <div
-                style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '8px',
-                  backgroundColor: '#e0f2fe',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#0284c7',
-                }}
-              >
-                <Wallet size={24} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Laba Area</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#0284c7', margin: '2px 0' }}>
-                  {kpi ? formatM(kpi.labaArea.realisasi) : 'Rp 751,82 M'}
-                </div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  YoY: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.labaArea.yoy ?? 99.01}</span>{' '}
-                  RKA: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.labaArea.rka ?? 99.01}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Pendapatan */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '12px',
-                padding: '14px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              }}
-            >
-              <div
-                style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '8px',
-                  backgroundColor: '#dcfce7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#16a34a',
-                }}
-              >
-                <Coins size={24} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Pendapatan</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#16a34a', margin: '2px 0' }}>
-                  {kpi ? formatT(kpi.pendapatan.realisasi) : 'Rp 3,19 T'}
-                </div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  YoY: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.pendapatan.yoy ?? 99.01}</span>{' '}
-                  RKA: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.pendapatan.rka ?? 99.01}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Beban */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '12px',
-                padding: '14px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              }}
-            >
-              <div
-                style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '8px',
-                  backgroundColor: '#ffedd5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ea580c',
-                }}
-              >
-                <TrendingDown size={24} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Beban</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#ea580c', margin: '2px 0' }}>
-                  {kpi ? formatT(kpi.beban.realisasi) : '- Rp 2,42 T'}
-                </div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  YoY: <span style={{ color: '#ea580c', fontWeight: 700 }}>{kpi?.beban.yoy ?? 99.01}</span>{' '}
-                  RKA: <span style={{ color: '#ea580c', fontWeight: 700 }}>{kpi?.beban.rka ?? 99.01}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. BOPO (Dark Blue Background Card) */}
-            <div
-              style={{
-                backgroundColor: '#0a192f',
-                border: '1px solid #1e3a5f',
-                borderRadius: '12px',
-                padding: '14px 18px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                boxShadow: '0 2px 4px rgba(10,25,47,0.15)',
-              }}
-            >
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#cbd5e1', letterSpacing: '0.3px' }}>
-                Bopo
-              </div>
-              <div
-                style={{
-                  fontSize: '24px',
-                  fontWeight: 900,
-                  color: '#facc15', // Vibrant Gold
-                  marginTop: '4px',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                {kpi?.bopo?.percentage?.toFixed(2) ?? '75,84'}%
-              </div>
-            </div>
-          </div>
-
-          {/* MIDDLE ROW: 3 Major Panels (Laba Area Stacked Bar, BOPO Table/Bar, Kontribusi Entitas & PJM Terendah) */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.2fr 0.9fr 1fr',
-              gap: '14px',
-              alignItems: 'start',
-            }}
-          >
-            {/* COLUMN 1: 10 Cabang Terbesar Laba Area & 10 Cabang Terbesar Pendapatan Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              
-              {/* Card 1: 10 Cabang Terbesar Laba Area */}
-              <div
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '8px',
-                  }}
-                >
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                    10 Cabang Terbesar Laba Area
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Billions</div>
-                </div>
-
-                <div style={{ height: '240px', width: '100%' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={charts?.topLabaBranches || []}
-                      margin={{ top: 5, right: 15, left: 35, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                      <XAxis
-                        type="number"
-                        tickFormatter={formatBillionAxis}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
-                      />
-                      <YAxis
-                        dataKey="branchName"
-                        type="category"
-                        tick={{ fontSize: 9.5, fill: '#334155' }}
-                        width={90}
-                      />
-                      <Tooltip
-                        formatter={(val: unknown) => [
-                          formatM(Number(val || 0)),
-                          '',
-                        ]}
-                      />
-                      <Legend
-                        wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }}
-                        iconSize={8}
-                      />
-                      <Bar dataKey="CABANG" stackId="a" fill={ENTITAS_COLORS.CABANG} name="CABANG" />
-                      <Bar dataKey="PJM" stackId="a" fill={ENTITAS_COLORS.PJM} name="PJM" />
-                      <Bar dataKey="PMT" stackId="a" fill={ENTITAS_COLORS.PMT} name="PMT" />
-                      <Bar dataKey="PSL" stackId="a" fill={ENTITAS_COLORS.PSL} name="PSL" />
-                      <Bar dataKey="PTP" stackId="a" fill={ENTITAS_COLORS.PTP} name="PTP" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Card 2: 10 Cabang Terbesar Pendapatan Area */}
-              <div
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '8px',
-                  }}
-                >
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                    10 Cabang Terbesar Pendapatan Area
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Billions</div>
-                </div>
-
-                <div style={{ height: '240px', width: '100%' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={charts?.topPendapatanBranches || []}
-                      margin={{ top: 5, right: 15, left: 35, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                      <XAxis
-                        type="number"
-                        tickFormatter={formatBillionAxis}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
-                      />
-                      <YAxis
-                        dataKey="branchName"
-                        type="category"
-                        tick={{ fontSize: 9.5, fill: '#334155' }}
-                        width={90}
-                      />
-                      <Tooltip
-                        formatter={(val: unknown) => [
-                          formatM(Number(val || 0)),
-                          '',
-                        ]}
-                      />
-                      <Legend
-                        wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }}
-                        iconSize={8}
-                      />
-                      <Bar dataKey="CABANG" stackId="a" fill={ENTITAS_COLORS.CABANG} name="CABANG" />
-                      <Bar dataKey="PJM" stackId="a" fill={ENTITAS_COLORS.PJM} name="PJM" />
-                      <Bar dataKey="PMT" stackId="a" fill={ENTITAS_COLORS.PMT} name="PMT" />
-                      <Bar dataKey="PSL" stackId="a" fill={ENTITAS_COLORS.PSL} name="PSL" />
-                      <Bar dataKey="PTP" stackId="a" fill={ENTITAS_COLORS.PTP} name="PTP" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            {/* COLUMN 2: BOPO AREA PER CABANG (Horizontal Bar List Table) */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '10px',
-                overflow: 'hidden',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: '#2563eb', // Corporate Header Blue
-                  padding: '10px 14px',
-                  color: '#ffffff',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  textAlign: 'center',
-                  letterSpacing: '0.4px',
-                }}
-              >
-                BOPO AREA PER CABANG
-              </div>
-
-              {/* Scrollable List Table of Bars */}
-              <div
-                style={{
-                  padding: '8px 12px',
-                  maxHeight: '525px',
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                }}
-              >
-                {(charts?.bopoPerCabang || []).map((item) => {
-                  const pct = Math.min(Math.max(item.bopoPct, 0), 100);
-                  const isHigh = item.bopoPct > 90;
-                  return (
-                    <div
-                      key={item.branchCode}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '85px 1fr 50px',
-                        alignItems: 'center',
-                        gap: '8px',
-                        fontSize: '10.5px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          textAlign: 'right',
-                          color: '#334155',
-                          fontWeight: 500,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                        title={item.branchName}
-                      >
-                        {item.branchName}
-                      </div>
-
-                      {/* Bar Fill */}
-                      <div
-                        style={{
-                          height: '14px',
-                          backgroundColor: '#f1f5f9',
-                          borderRadius: '2px',
-                          overflow: 'hidden',
-                          position: 'relative',
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: '100%',
-                            width: `${pct}%`,
-                            backgroundColor: isHigh ? '#3b82f6' : '#2563eb',
-                            borderRadius: '2px',
-                          }}
-                        />
-                      </div>
-
-                      <div
-                        style={{
-                          textAlign: 'right',
-                          fontWeight: 700,
-                          color: isHigh ? '#dc2626' : '#1e3a8a',
-                          fontVariantNumeric: 'tabular-nums',
-                        }}
-                      >
-                        {item.bopoPct.toFixed(2)}%
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* COLUMN 3: % KONTRIBUSI LABA AREA PER ENTITAS & 10 CABANG TERENDAH LABA AREA PJM */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              
-              {/* Card 1: % Kontribusi Laba Area per Entitas (Donut Chart) */}
-              <div
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#0f172a',
-                    textAlign: 'center',
-                    marginBottom: '6px',
-                  }}
-                >
-                  % KONTRIBUSI LABA AREA PER ENTITAS
-                </div>
-
-                <div style={{ height: '190px', width: '100%' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={charts?.kontribusiEntitas || []}
-                        dataKey="realisasi"
-                        nameKey="entitas"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={46}
-                        outerRadius={74}
-                        paddingAngle={2}
-                        label={({ payload }) => `${payload.percentage}%`}
-                        labelLine={false}
-                      >
-                        {(charts?.kontribusiEntitas || []).map((entry) => (
-                          <Cell
-                            key={entry.entitas}
-                            fill={ENTITAS_COLORS[entry.entitas] || '#64748b'}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(val: unknown) => [
-                          formatM(Number(val || 0)),
-                          'Laba Bersih',
-                        ]}
-                      />
-                      <Legend
-                        wrapperStyle={{ fontSize: '10px', paddingTop: '2px' }}
-                        iconSize={8}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Card 2: 10 Cabang Terendah Laba Area PJM (Red Ranked Horizontal Bars) */}
-              <div
-                style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#0f172a',
-                    textAlign: 'center',
-                    marginBottom: '10px',
-                  }}
-                >
-                  10 Cabang Terendah Laba Area PJM
-                </div>
-
-                {/* Vertical ranked list with red bars matching user image */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  {(charts?.pjmTerendah || []).map((item) => {
-                    // Normalize bar width based on max deficit (around 8.532 M)
-                    const absBillion = Math.abs(item.realisasiBillion);
-                    const barWidth = Math.min(Math.max((absBillion / 9.0) * 100, 15), 100);
-                    return (
-                      <div
-                        key={item.branchCode}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 70px',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        {/* Red bar aligned from right to left */}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-                          <div
-                            style={{
-                              width: `${barWidth}%`,
-                              backgroundColor: '#b91c1c', // Deep Crimson Red
-                              color: '#ffffff',
-                              fontSize: '9.5px',
-                              fontWeight: 700,
-                              textAlign: 'right',
-                              padding: '2px 6px',
-                              borderRadius: '2px',
-                              whiteSpace: 'nowrap',
-                              fontVariantNumeric: 'tabular-nums',
-                            }}
-                          >
-                            ({absBillion.toLocaleString('id-ID', { minimumFractionDigits: 3, maximumFractionDigits: 3 })})
-                          </div>
-                        </div>
-
-                        {/* Branch Name Label */}
-                        <div
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: 600,
-                            color: '#334155',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                          title={item.branchName}
-                        >
-                          {item.branchName}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="table-responsive">
+          <table className="dark-table">
+            <thead>
+              <tr>
+                <th>Kode</th>
+                <th>Cabang Pelabuhan</th>
+                <th>Pos Rekening</th>
+                <th style={{ textAlign: 'right' }}>Nilai Cabang (Rp)</th>
+                <th style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
+                <th style={{ textAlign: 'right' }}>PMT / PTP (Rp)</th>
+                <th style={{ textAlign: 'center' }}>% RKA</th>
+                <th style={{ textAlign: 'center' }}>% YoY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.slice(0, 100).map((r, i) => (
+                <tr key={i}>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{r.branchCode}</td>
+                  <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.branchName}</td>
+                  <td style={{ fontWeight: 600, color: r.rekening.includes('Beban') ? '#ef4444' : r.rekening.includes('Laba') ? '#10b981' : '#38bdf8' }}>
+                    {r.rekening}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 600, color: '#cbd5e1' }}>
+                    {formatRupiahFull(r.cabangRp)}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 800, color: '#ffffff' }}>
+                    {formatRupiahFull(r.konsolidasiRp)}
+                  </td>
+                  <td style={{ textAlign: 'right', color: '#94a3b8', fontSize: '12px' }}>
+                    {formatRupiahFull(r.pmtRp + r.ptpRp)}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span className={`badge ${r.rka >= 100 ? 'badge-green' : r.rka >= 90 ? 'badge-yellow' : 'badge-red'}`}>
+                      {r.rka}%
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span className={`badge ${r.yoy >= 100 ? 'badge-green' : 'badge-yellow'}`}>
+                      {r.yoy > 100 ? `+${(r.yoy - 100).toFixed(1)}%` : `${(r.yoy - 100).toFixed(1)}%`}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

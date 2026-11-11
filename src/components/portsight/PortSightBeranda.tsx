@@ -38,6 +38,7 @@ import { getSelectedBranchLabel } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
 import { User, UserRole } from '@/lib/types';
 import { useBerandaAnalytics, BerandaKpiItem } from '@/hooks/useBerandaAnalytics';
+import ExecutiveKonsolidasiDashboard from './ExecutiveKonsolidasiDashboard';
 
 interface PortSightBerandaProps {
   selectedTerminal?: string;
@@ -63,7 +64,7 @@ export default function PortSightBeranda({
   onOpenComparisonModal,
 }: PortSightBerandaProps) {
   const [terminalSearch, setTerminalSearch] = useState<string>('');
-  const [dashboardView, setDashboardView] = useState<'visual' | 'cards'>('visual');
+  const [dashboardView, setDashboardView] = useState<'konsolidasi' | 'visual' | 'cards'>('konsolidasi');
 
   const {
     loading,
@@ -352,6 +353,27 @@ export default function PortSightBeranda({
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-inner)', padding: '3px', borderRadius: '8px' }}>
           <button
             type="button"
+            onClick={() => setDashboardView('konsolidasi')}
+            style={{
+              padding: '5px 12px',
+              fontSize: '11.5px',
+              fontWeight: dashboardView === 'konsolidasi' ? 700 : 500,
+              backgroundColor: dashboardView === 'konsolidasi' ? '#0284c7' : 'transparent',
+              color: dashboardView === 'konsolidasi' ? '#ffffff' : 'var(--text-muted)',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Gauge size={13} strokeWidth={1.75} />
+            <span>Dashboard Konsolidasi</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setDashboardView('visual')}
             style={{
               padding: '5px 12px',
@@ -395,7 +417,13 @@ export default function PortSightBeranda({
         </div>
       </div>
 
-      {dashboardView === 'visual' ? (
+      {dashboardView === 'konsolidasi' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <ExecutiveKonsolidasiDashboard
+            selectedTerminal={selectedTerminal}
+          />
+        </div>
+      ) : dashboardView === 'visual' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Bagian Atas: Metrik Finansial & KPI Gauge */}
           <div
