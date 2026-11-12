@@ -1,10 +1,7 @@
 import { query } from '@/lib/db';
-import { ingestInputData } from '@/lib/ingestInputData';
 import { getCanonicalBranchCode } from '@/lib/constants';
 import {
   BERANDA_ENTITAS_ORDER,
-  formatBerandaSummaryRupiah,
-  formatIdPercent2,
   type BerandaBopoBranchRow,
   type BerandaBranchOption,
   type BerandaEntityShareRow,
@@ -12,6 +9,11 @@ import {
   type BerandaStackedBranchRow,
   type BerandaSummaryResponse,
 } from '@/lib/berandaSummary';
+import {
+  ensureModuleFinansialPopulated,
+  FINANSIAL_EFF_COLUMNS_SQL,
+  queryFinansialConsolidatedKpis,
+} from '@/lib/finansialConsolidationService';
 
 export interface BerandaSummaryQueryInput {
   tahun?: number | null;
@@ -31,21 +33,7 @@ const BASE_CTE_SQL = `
       rekening,
       entitas,
       verification_status,
-      CASE
-        WHEN $1::boolean AND verification_status <> 'verified' AND verified_snapshot_json IS NOT NULL
-        THEN COALESCE(NULLIF(verified_snapshot_json->>'realisasi', '')::double precision, realisasi)
-        ELSE realisasi
-      END AS eff_realisasi,
-      CASE
-        WHEN $1::boolean AND verification_status <> 'verified' AND verified_snapshot_json IS NOT NULL
-        THEN NULLIF(NULLIF(verified_snapshot_json->>'rka', ''), '-')::double precision
-        ELSE rka
-      END AS eff_rka,
-      CASE
-        WHEN $1::boolean AND verification_status <> 'verified' AND verified_snapshot_json IS NOT NULL
-        THEN NULLIF(NULLIF(verified_snapshot_json->>'yoy', ''), '-')::double precision
-        ELSE yoy
-      END AS eff_yoy
+      ${FINANSIAL_EFF_COLUMNS_SQL}
     FROM module_finansial
     WHERE year = $2::int
       AND month = $3::int
@@ -54,19 +42,6 @@ const BASE_CTE_SQL = `
       AND ($5::text[] IS NULL OR branch_code = ANY($5::text[]))
   )
 `;
-
-async function ensureModuleFinansialPopulated() {
-  const res = await query<{ count: number }>('SELECT COUNT(*)::int AS count FROM module_finansial');
-  if (Number(res.rows[0]?.count || 0) === 0) {
-    await ingestInputData();
-  }
-}
-
-function toNullableNumber(val: unknown): number | null {
-  if (val === null || val === undefined || val === '') return null;
-  const num = Number(val);
-  return Number.isFinite(num) ? num : null;
-}
 
 function mapStackedRows(
   rows: Array<{
@@ -186,53 +161,24 @@ export async function getBerandaSummaryData(
     rbacBranchCodes,
   ];
 
-  // 4. Execute verification counts, KPI summary, and 5 charts in parallel
+  // 4. Hitung KPI utama dari Single Source of Truth PostgreSQL + 5 grafik Beranda secara paralel
   const [
-    verificationRes,
-    kpiRes,
+    consolidatedKpis,
     top10LabaRes,
     top10PendapatanRes,
     bopoRes,
     entityShareRes,
     bottom10PjmRes,
   ] = await Promise.all([
-    query<{ verified_count: number; pending_count: number; revision_count: number }>(
-      `SELECT
-         COUNT(*) FILTER (WHERE verification_status = 'verified')::int AS verified_count,
-         COUNT(*) FILTER (WHERE verification_status = 'pending_verification')::int AS pending_count,
-         COUNT(*) FILTER (WHERE verification_status = 'revision_needed')::int AS revision_count
-       FROM module_finansial
-       WHERE year = $1::int
-         AND month = $2::int
-         AND ($3::text[] IS NULL OR branch_name = ANY($3::text[]))
-         AND ($4::text[] IS NULL OR branch_code = ANY($4::text[]))`,
-      [activeYear, activeMonth, filterNmCbg, rbacBranchCodes]
-    ),
-    query<{
-      laba_total: number;
-      laba_yoy: number | null;
-      laba_rka: number | null;
-      pendapatan_total: number;
-      pendapatan_yoy: number | null;
-      pendapatan_rka: number | null;
-      beban_total: number;
-      beban_yoy: number | null;
-      beban_rka: number | null;
-    }>(
-      `${BASE_CTE_SQL}
-       SELECT
-         COALESCE(SUM(eff_realisasi) FILTER (WHERE LOWER(TRIM(rekening)) = 'laba bersih'), 0)::double precision AS laba_total,
-         AVG(eff_yoy) FILTER (WHERE LOWER(TRIM(rekening)) = 'laba bersih' AND eff_yoy IS NOT NULL)::double precision AS laba_yoy,
-         AVG(eff_rka) FILTER (WHERE LOWER(TRIM(rekening)) = 'laba bersih' AND eff_rka IS NOT NULL)::double precision AS laba_rka,
-         COALESCE(SUM(eff_realisasi) FILTER (WHERE LOWER(TRIM(rekening)) = 'pendapatan'), 0)::double precision AS pendapatan_total,
-         AVG(eff_yoy) FILTER (WHERE LOWER(TRIM(rekening)) = 'pendapatan' AND eff_yoy IS NOT NULL)::double precision AS pendapatan_yoy,
-         AVG(eff_rka) FILTER (WHERE LOWER(TRIM(rekening)) = 'pendapatan' AND eff_rka IS NOT NULL)::double precision AS pendapatan_rka,
-         COALESCE(SUM(eff_realisasi) FILTER (WHERE LOWER(TRIM(rekening)) = 'beban'), 0)::double precision AS beban_total,
-         AVG(eff_yoy) FILTER (WHERE LOWER(TRIM(rekening)) = 'beban' AND eff_yoy IS NOT NULL)::double precision AS beban_yoy,
-         AVG(eff_rka) FILTER (WHERE LOWER(TRIM(rekening)) = 'beban' AND eff_rka IS NOT NULL)::double precision AS beban_rka
-       FROM base_rows`,
-      baseParams
-    ),
+    queryFinansialConsolidatedKpis({
+      verifiedOnly: input.verifiedOnly,
+      year: activeYear,
+      month: activeMonth,
+      nmCbgList: filterNmCbg,
+      branchCodes: null,
+      rbacBranchCodes,
+      entitas: null, // Konsolidasi seluruh entitas TERMASUK ELIMINASI
+    }),
     query<{
       nm_cbg: string;
       branch_code: string;
@@ -333,15 +279,6 @@ export async function getBerandaSummaryData(
     ),
   ]);
 
-  const vRow = verificationRes.rows[0];
-  const kRow = kpiRes.rows[0];
-
-  const labaVal = Number(kRow?.laba_total || 0);
-  const pendapatanVal = Number(kRow?.pendapatan_total || 0);
-  const bebanVal = Number(kRow?.beban_total || 0);
-  const bopoVal =
-    pendapatanVal !== 0 ? (Math.abs(bebanVal) / Math.abs(pendapatanVal)) * 100 : 0;
-
   // Map BOPO per cabang (ordered A-Z)
   const bopoPerCabang: BerandaBopoBranchRow[] = bopoRes.rows.map((row) => {
     const pend = Number(row.pendapatan || 0);
@@ -403,34 +340,27 @@ export async function getBerandaSummaryData(
       isPicCabang: input.isPicCabang,
       assignedBranchName: input.isPicCabang ? (availableBranches[0]?.nmCbg ?? null) : null,
     },
-    verificationSummary: {
-      verified: Number(vRow?.verified_count || 0),
-      pending: Number(vRow?.pending_count || 0),
-      revision: Number(vRow?.revision_count || 0),
-    },
+    verificationSummary: consolidatedKpis.verificationSummary,
     kpis: {
       labaArea: {
-        value: labaVal,
-        formatted: formatBerandaSummaryRupiah(labaVal),
-        yoy: toNullableNumber(kRow?.laba_yoy),
-        rka: toNullableNumber(kRow?.laba_rka),
+        value: consolidatedKpis.labaBersih.realisasi,
+        formatted: consolidatedKpis.labaBersih.formatted,
+        yoy: consolidatedKpis.labaBersih.yoy,
+        rka: consolidatedKpis.labaBersih.rka,
       },
       pendapatan: {
-        value: pendapatanVal,
-        formatted: formatBerandaSummaryRupiah(pendapatanVal),
-        yoy: toNullableNumber(kRow?.pendapatan_yoy),
-        rka: toNullableNumber(kRow?.pendapatan_rka),
+        value: consolidatedKpis.pendapatan.realisasi,
+        formatted: consolidatedKpis.pendapatan.formatted,
+        yoy: consolidatedKpis.pendapatan.yoy,
+        rka: consolidatedKpis.pendapatan.rka,
       },
       beban: {
-        value: bebanVal,
-        formatted: formatBerandaSummaryRupiah(bebanVal),
-        yoy: toNullableNumber(kRow?.beban_yoy),
-        rka: toNullableNumber(kRow?.beban_rka),
+        value: consolidatedKpis.beban.realisasi,
+        formatted: consolidatedKpis.beban.formatted,
+        yoy: consolidatedKpis.beban.yoy,
+        rka: consolidatedKpis.beban.rka,
       },
-      bopo: {
-        value: bopoVal,
-        formatted: formatIdPercent2(bopoVal),
-      },
+      bopo: consolidatedKpis.bopo,
     },
     charts: {
       top10LabaArea: mapStackedRows(top10LabaRes.rows),

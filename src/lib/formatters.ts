@@ -6,37 +6,39 @@
 
 export function formatRupiahFull(val: number | null | undefined): string {
   if (val === null || val === undefined || isNaN(val)) return 'Rp 0';
-  const isNegative = val < 0;
-  const absVal = Math.abs(Math.round(val));
+  const safe = Math.abs(val) < 0.5 ? 0 : val;
+  const isNegative = safe < 0;
+  const absVal = Math.abs(Math.round(safe));
   const formatted = absVal.toLocaleString('id-ID');
-  return isNegative ? `Rp -${formatted}` : `Rp ${formatted}`;
+  return isNegative ? `- Rp ${formatted}` : `Rp ${formatted}`;
 }
 
 export function formatRupiahCompact(val: number | null | undefined): string {
   if (val === null || val === undefined || isNaN(val)) return 'Rp 0';
-  const isNegative = val < 0;
-  const absVal = Math.abs(val);
-  const sign = isNegative ? '-' : '';
+  const safe = Math.abs(val) < 0.005 ? 0 : val;
+  const isNegative = safe < 0;
+  const absVal = Math.abs(safe);
+  const prefix = isNegative ? '- Rp ' : 'Rp ';
 
   if (absVal >= 1_000_000_000_000) {
-    return `Rp ${sign}${(absVal / 1_000_000_000_000).toLocaleString('id-ID', {
+    return `${prefix}${(absVal / 1_000_000_000_000).toLocaleString('id-ID', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })} T`;
   }
   if (absVal >= 1_000_000_000) {
-    return `Rp ${sign}${(absVal / 1_000_000_000).toLocaleString('id-ID', {
+    return `${prefix}${(absVal / 1_000_000_000).toLocaleString('id-ID', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })} M`;
   }
   if (absVal >= 1_000_000) {
-    return `Rp ${sign}${(absVal / 1_000_000).toLocaleString('id-ID', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
+    return `${prefix}${(absVal / 1_000_000).toLocaleString('id-ID', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })} Jt`;
   }
-  return formatRupiahFull(val);
+  return formatRupiahFull(safe);
 }
 
 export function formatNominalFull(val: number | null | undefined): string {

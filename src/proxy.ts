@@ -29,6 +29,7 @@ const PROTECTED_API_RULES: Array<{
   { pattern: /^\/api\/reports\/export(\/|$)/, methods: ['GET'], permission: 'reports:export' },
   { pattern: /^\/api\/modules-data(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
   { pattern: /^\/api\/beranda-summary(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
+  { pattern: /^\/api\/finansial-summary(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
 ];
 
 export async function proxy(request: NextRequest) {

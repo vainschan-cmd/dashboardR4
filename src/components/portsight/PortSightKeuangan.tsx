@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -25,21 +25,29 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  Percent,
+  ShieldCheck,
+  AlertCircle,
 } from 'lucide-react';
-import { formatRupiahFull, formatRupiahCompact } from '@/lib/formatters';
+import { formatRupiahFull } from '@/lib/formatters';
 import { isBranchMatch, parseSelectedBranches } from '@/lib/constants';
+import { formatIdDecimal2, formatIdPercent2 } from '@/lib/berandaSummary';
 import {
   ENTITAS_SEMUA,
   FINANSIAL_ENTITAS_LIST,
   FINANSIAL_REKENING_LIST,
-  aggregateFinansialByRekening,
   canonicalRekening,
-  formatPercentOrDash,
   getMonthNameId,
   parseMetricPercent,
   parseRealisasi,
 } from '@/lib/finansialHelpers';
-import type { FinansialRecord, User } from '@/lib/types';
+import type {
+  FinansialEntityBreakdownPoint,
+  FinansialModuleSummaryResponse,
+  FinansialPeriodTrendPoint,
+  FinansialTopBranchPoint,
+} from '@/lib/finansialSummaryTypes';
+import type { User } from '@/lib/types';
 
 interface PortSightKeuanganProps {
   selectedTerminal?: string;
@@ -48,7 +56,123 @@ interface PortSightKeuanganProps {
   onOpenManualInput?: () => void;
 }
 
+interface TooltipPayloadEntry<T> {
+  payload?: T;
+}
+
+interface CustomTooltipProps<T> {
+  active?: boolean;
+  payload?: Array<TooltipPayloadEntry<T>>;
+}
+
 const PAGE_SIZE = 60;
+
+function formatPercentIdOrDash(val: unknown): string {
+  const parsed = parseMetricPercent(val);
+  if (parsed === null) return '-';
+  return formatIdPercent2(parsed);
+}
+
+function PeriodTrendTooltip({ active, payload }: CustomTooltipProps<FinansialPeriodTrendPoint>) {
+  if (!active || !payload || payload.length === 0 || !payload[0]?.payload) return null;
+  const p = payload[0].payload;
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: '10px 12px',
+        color: 'var(--text-main)',
+        fontSize: 12,
+        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)',
+      }}
+    >
+      <div style={{ fontWeight: 800, color: 'var(--text-title)', marginBottom: 6 }}>{p.periode}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#38bdf8' }}>Pendapatan</span>
+        <strong>{formatRupiahFull(p.pendapatanRp)}</strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#f87171' }}>Beban</span>
+        <strong>{formatRupiahFull(p.bebanRp)}</strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#34d399' }}>Laba Usaha</span>
+        <strong>{formatRupiahFull(p.labaUsahaRp)}</strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#c084fc' }}>Laba Bersih</span>
+        <strong>{formatRupiahFull(p.labaBersihRp)}</strong>
+      </div>
+    </div>
+  );
+}
+
+function EntityBreakdownTooltip({
+  active,
+  payload,
+}: CustomTooltipProps<FinansialEntityBreakdownPoint>) {
+  if (!active || !payload || payload.length === 0 || !payload[0]?.payload) return null;
+  const p = payload[0].payload;
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: '10px 12px',
+        color: 'var(--text-main)',
+        fontSize: 12,
+        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)',
+      }}
+    >
+      <div style={{ fontWeight: 800, color: 'var(--text-title)', marginBottom: 6 }}>{p.entitas}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#38bdf8' }}>Pendapatan</span>
+        <strong>{formatRupiahFull(p.pendapatanRp)}</strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#f87171' }}>Beban</span>
+        <strong>{formatRupiahFull(p.bebanRp)}</strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#34d399' }}>Laba Usaha</span>
+        <strong>{formatRupiahFull(p.labaUsahaRp)}</strong>
+      </div>
+    </div>
+  );
+}
+
+function TopBranchesTooltip({ active, payload }: CustomTooltipProps<FinansialTopBranchPoint>) {
+  if (!active || !payload || payload.length === 0 || !payload[0]?.payload) return null;
+  const p = payload[0].payload;
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: '10px 12px',
+        color: 'var(--text-main)',
+        fontSize: 12,
+        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)',
+      }}
+    >
+      <div style={{ fontWeight: 800, color: 'var(--text-title)', marginBottom: 6 }}>{p.fullName}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#38bdf8' }}>Pendapatan</span>
+        <strong>
+          {formatRupiahFull(p.pendapatanRp)} (RKA: {p.rkaLabel})
+        </strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+        <span style={{ color: '#34d399' }}>Laba Usaha</span>
+        <strong>{formatRupiahFull(p.labaUsahaRp)}</strong>
+      </div>
+    </div>
+  );
+}
 
 export default function PortSightKeuangan({
   selectedTerminal = 'ALL',
@@ -56,309 +180,288 @@ export default function PortSightKeuangan({
   currentUser = null,
   onOpenManualInput,
 }: PortSightKeuanganProps) {
-  const [data, setData] = useState<FinansialRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-
-  // Filter 9-field standar: TAHUN, BULAN, ENTITAS, NM_CBG (+ filter opsional REKENING)
-  const [tahunFilter, setTahunFilter] = useState<string>('2026');
-  const [bulanFilter, setBulanFilter] = useState<string>('9');
-  const [entitasFilter, setEntitasFilter] = useState<string>(ENTITAS_SEMUA);
-  const [nmCbgFilter, setNmCbgFilter] = useState<string>('ALL');
-  const [rekeningFilter, setRekeningFilter] = useState<string>('ALL');
-  const [page, setPage] = useState<number>(1);
-
+  const isBodViewer = currentUser?.role === 'viewer';
+  const picBranchId = currentUser?.branch_id || '';
   const isPicCabang =
-    currentUser?.role === 'pic_cabang' &&
-    Boolean(currentUser?.branch_id) &&
-    currentUser?.branch_id !== 'R99';
+    currentUser?.role === 'pic_cabang' && Boolean(picBranchId) && picBranchId !== 'R99';
 
+  // Filter 9-field standar diselaraskan ke default yang sama dengan Beranda: Tahun 2026, Bulan 8
+  const [initialHeaderPeriod] = useState<string>(() => selectedPeriod);
+  const [periodOverride, setPeriodOverride] = useState<{
+    headerBase: string;
+    tahun: string;
+    bulan: string;
+  } | null>(null);
+  const [entitasFilter, setEntitasFilter] = useState<string>(ENTITAS_SEMUA);
+  const [nmCbgOverride, setNmCbgOverride] = useState<{
+    terminalKey: string;
+    value: string;
+  } | null>(null);
+  const [rekeningFilter, setRekeningFilter] = useState<string>('ALL');
+  const [search, setSearch] = useState<string>('');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
+  const [verifiedOverride, setVerifiedOverride] = useState<{
+    roleKey: string;
+    value: boolean;
+  } | null>(null);
+  const [pageState, setPageState] = useState<{ key: string; page: number }>({
+    key: '',
+    page: 1,
+  });
+
+  const [summary, setSummary] = useState<FinansialModuleSummaryResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasLoadedOnceRef = useRef<boolean>(false);
+
+  // Debounce query search agar panggilan PostgreSQL ringan saat mengetik
   useEffect(() => {
-    const abortController = new AbortController();
-    async function loadData() {
-      try {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const roleKey = currentUser?.role ?? 'anonymous';
+  const verifiedOnly = isBodViewer
+    ? true
+    : verifiedOverride && verifiedOverride.roleKey === roleKey
+      ? verifiedOverride.value
+      : false;
+
+  const derivedHeaderPeriod = useMemo(() => {
+    if (selectedPeriod === initialHeaderPeriod) {
+      return { tahun: '2026', bulan: '8' };
+    }
+    const p = selectedPeriod.toUpperCase();
+    if (p.includes('2025')) return { tahun: '2025', bulan: '9' };
+    if (p.includes('JUN 2026')) return { tahun: '2026', bulan: '8' };
+    if (p.includes('AGS 2026') || p.includes('AGUSTUS 2026')) return { tahun: '2026', bulan: '8' };
+    if (p.includes('SEP 2026')) return { tahun: '2026', bulan: '9' };
+    return { tahun: '2026', bulan: '8' };
+  }, [selectedPeriod, initialHeaderPeriod]);
+
+  const tahunFilter =
+    periodOverride && periodOverride.headerBase === selectedPeriod
+      ? periodOverride.tahun
+      : derivedHeaderPeriod.tahun;
+
+  const bulanFilter =
+    periodOverride && periodOverride.headerBase === selectedPeriod
+      ? periodOverride.bulan
+      : derivedHeaderPeriod.bulan;
+
+  const availableBranches = useMemo(
+    () => summary?.filters.availableBranches ?? [],
+    [summary]
+  );
+  const assignedBranchName = summary?.filters.assignedBranchName;
+
+  const nmCbgFilter = useMemo(() => {
+    if (isPicCabang && assignedBranchName) {
+      return assignedBranchName;
+    }
+    if (!isPicCabang && nmCbgOverride && nmCbgOverride.terminalKey === selectedTerminal) {
+      return nmCbgOverride.value;
+    }
+    const codes = parseSelectedBranches(selectedTerminal);
+    if (
+      selectedTerminal &&
+      selectedTerminal !== 'ALL' &&
+      !codes.includes('ALL') &&
+      codes.length === 1 &&
+      availableBranches.length > 0
+    ) {
+      const matched = availableBranches.find((b) => isBranchMatch(codes[0], b.kode, b.nama));
+      if (matched) return matched.nama;
+    }
+    return 'ALL';
+  }, [
+    isPicCabang,
+    assignedBranchName,
+    nmCbgOverride,
+    selectedTerminal,
+    availableBranches,
+  ]);
+
+  const filterResetKey = [
+    tahunFilter,
+    bulanFilter,
+    entitasFilter,
+    nmCbgFilter,
+    rekeningFilter,
+    debouncedSearch,
+    selectedTerminal,
+  ].join('|');
+
+  // Fetch data langsung dari PostgreSQL Single Source of Truth (/api/finansial-summary)
+  useEffect(() => {
+    const controller = new AbortController();
+    let isActive = true;
+
+    async function fetchFinansialSummary() {
+      if (!hasLoadedOnceRef.current) {
         setLoading(true);
-        const res = await fetch('/api/modules-data?includeAllFinansial=true', {
-          credentials: 'include',
-          signal: abortController.signal,
-        });
-        const json = await res.json();
-        if (json.success && Array.isArray(json.finansial)) {
-          const rows: FinansialRecord[] = json.finansial;
-          setData(rows);
+      }
+      setError(null);
 
-          // Pastikan default tahun/bulan tersedia dalam dataset terbaru
-          const distinctYears = Array.from(new Set(rows.map(r => r.TAHUN))).sort((a, b) => b - a);
-          if (distinctYears.length > 0) {
-            const preferredYear = selectedPeriod?.includes('2025')
-              ? distinctYears.find(y => y === 2025) ?? distinctYears[0]
-              : distinctYears[0];
-            setTahunFilter(String(preferredYear));
+      try {
+        const params = new URLSearchParams();
+        params.set('tahun', tahunFilter);
+        params.set('bulan', bulanFilter);
+        params.set('entitas', entitasFilter);
+        params.set('rekening', rekeningFilter);
+        params.set('verifiedOnly', String(verifiedOnly));
 
-            const monthsInYear = Array.from(
-              new Set(rows.filter(r => r.TAHUN === preferredYear).map(r => r.BULAN))
-            ).sort((a, b) => b - a);
-            if (monthsInYear.length > 0) {
-              setBulanFilter(String(monthsInYear[0]));
-            }
+        if (!isPicCabang) {
+          if (nmCbgFilter && nmCbgFilter !== 'ALL') {
+            params.set('nmCbg', nmCbgFilter);
+          } else if (selectedTerminal && selectedTerminal !== 'ALL') {
+            params.set('branchCode', selectedTerminal);
           }
+        } else if (picBranchId) {
+          params.set('branchCode', picBranchId);
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
-          console.error('Error fetching finansial data:', e);
+
+        if (debouncedSearch) {
+          params.set('search', debouncedSearch);
         }
+
+        const res = await fetch(`/api/finansial-summary?${params.toString()}`, {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const errBody = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(errBody?.error || `HTTP ${res.status}`);
+        }
+
+        const json = (await res.json()) as FinansialModuleSummaryResponse;
+        if (!isActive) return;
+
+        hasLoadedOnceRef.current = true;
+        setSummary(json);
+      } catch (err) {
+        if (!isActive || (err instanceof DOMException && err.name === 'AbortError')) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Gagal memuat data Finansial dari PostgreSQL');
       } finally {
-        if (!abortController.signal.aborted) {
+        if (isActive) {
           setLoading(false);
         }
       }
     }
-    loadData();
-    return () => abortController.abort();
-  }, []);
 
-  // Sinkronkan filter NM_CBG dengan dropdown Cabang pada header utama bila berubah
-  useEffect(() => {
-    if (isPicCabang && currentUser?.branch_id) {
-      const own = data.find(r => r.KODE_CBG === currentUser.branch_id);
-      setNmCbgFilter(own ? own.NM_CBG : 'ALL');
-      return;
-    }
-    const codes = parseSelectedBranches(selectedTerminal);
-    if (!selectedTerminal || selectedTerminal === 'ALL' || codes.includes('ALL')) {
-      setNmCbgFilter('ALL');
-    } else if (codes.length === 1) {
-      const matched = data.find(r => isBranchMatch(codes[0], r.KODE_CBG, r.NM_CBG));
-      setNmCbgFilter(matched ? matched.NM_CBG : 'ALL');
-    } else {
-      // Multi-branch dari header tetap disaring lewat headerScopeRows
-      setNmCbgFilter('ALL');
-    }
-  }, [selectedTerminal, isPicCabang, currentUser?.branch_id, data]);
+    fetchFinansialSummary();
 
-  // Sinkronkan tahun default saat header period berubah
-  useEffect(() => {
-    if (data.length === 0) return;
-    if (selectedPeriod?.includes('2025') && data.some(r => r.TAHUN === 2025)) {
-      setTahunFilter('2025');
-    } else if (data.some(r => r.TAHUN === 2026)) {
-      setTahunFilter('2026');
-    }
-  }, [selectedPeriod, data]);
-
-  // Reset pagination ketika filter berubah
-  useEffect(() => {
-    setPage(1);
-  }, [tahunFilter, bulanFilter, entitasFilter, nmCbgFilter, rekeningFilter, search, selectedTerminal]);
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [
+    tahunFilter,
+    bulanFilter,
+    entitasFilter,
+    nmCbgFilter,
+    rekeningFilter,
+    debouncedSearch,
+    verifiedOnly,
+    isPicCabang,
+    picBranchId,
+    selectedTerminal,
+  ]);
 
   const availableYears = useMemo(
-    () => Array.from(new Set(data.map(r => r.TAHUN))).sort((a, b) => b - a),
-    [data]
+    () => summary?.filters.availableYears ?? [2026, 2025],
+    [summary]
+  );
+  const availableMonths = useMemo(
+    () => summary?.filters.availableMonths ?? [8, 9],
+    [summary]
+  );
+  const availableEntitas = useMemo(
+    () => summary?.filters.availableEntitas ?? ([...FINANSIAL_ENTITAS_LIST] as string[]),
+    [summary]
   );
 
-  const availableMonths = useMemo(() => {
-    const scoped = tahunFilter === 'ALL' ? data : data.filter(r => r.TAHUN === Number(tahunFilter));
-    const months = Array.from(new Set(scoped.map(r => r.BULAN))).sort((a, b) => b - a);
-    if (months.length > 0) return months;
-    return Array.from(new Set(data.map(r => r.BULAN))).sort((a, b) => b - a);
-  }, [data, tahunFilter]);
-
-  const availableEntitas = useMemo(() => {
-    const ordered = [...FINANSIAL_ENTITAS_LIST] as string[];
-    const extra = Array.from(new Set(data.map(r => r.ENTITAS))).filter(e => !ordered.includes(e));
-    return [...ordered, ...extra];
-  }, [data]);
-
-  const availableBranches = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const r of data) {
-      if (!map.has(r.KODE_CBG)) map.set(r.KODE_CBG, r.NM_CBG);
-    }
-    return Array.from(map.entries())
-      .map(([kode, nama]) => ({ kode, nama }))
-      .sort((a, b) => a.kode.localeCompare(b.kode));
-  }, [data]);
-
-  // Filter dasar cabang (header selectedTerminal + NM_CBG filter + RBAC)
-  const branchScopedData = useMemo(() => {
-    return data.filter(d => {
-      if (selectedTerminal === 'NONE') return false;
-      if (selectedTerminal && selectedTerminal !== 'ALL' && !isBranchMatch(selectedTerminal, d.KODE_CBG, d.NM_CBG)) {
-        return false;
-      }
-      if (nmCbgFilter !== 'ALL' && d.NM_CBG.toLowerCase() !== nmCbgFilter.toLowerCase()) {
-        return false;
-      }
-      return true;
-    });
-  }, [data, selectedTerminal, nmCbgFilter]);
-
-  // Filter periode + cabang (sebelum ENTITAS dipotong — dipakai untuk grafik komposisi per entitas)
-  const periodAndBranchData = useMemo(() => {
-    return branchScopedData.filter(d => {
-      if (tahunFilter !== 'ALL' && d.TAHUN !== Number(tahunFilter)) return false;
-      if (bulanFilter !== 'ALL' && d.BULAN !== Number(bulanFilter)) return false;
-      return true;
-    });
-  }, [branchScopedData, tahunFilter, bulanFilter]);
-
-  // Baris final setelah filter ENTITAS, REKENING, dan Search (untuk tabel & KPI)
-  const filteredRows = useMemo(() => {
-    const isAllEntitas = entitasFilter === ENTITAS_SEMUA || entitasFilter === 'ALL';
-    const q = search.trim().toLowerCase();
-
-    return periodAndBranchData.filter(d => {
-      if (!isAllEntitas && d.ENTITAS !== entitasFilter) return false;
-      if (rekeningFilter !== 'ALL' && canonicalRekening(d.REKENING) !== rekeningFilter) return false;
-      if (q) {
-        const hay = `${d.KODE_CBG} ${d.NM_CBG} ${d.REKENING} ${d.ENTITAS} ${d.TAHUN} ${d.BULAN}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [periodAndBranchData, entitasFilter, rekeningFilter, search]);
-
-  // Agregasi metrik utama per REKENING (mode konsolidasi menjumlahkan seluruh entitas TERMASUK ELIMINASI)
-  const kpiByRekening = useMemo(
-    () => aggregateFinansialByRekening(periodAndBranchData, entitasFilter),
-    [periodAndBranchData, entitasFilter]
+  const rows = useMemo(() => summary?.rows ?? [], [summary]);
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const rawPage = pageState.key === filterResetKey ? pageState.page : 1;
+  const page = Math.min(rawPage, totalPages);
+  const pagedRows = useMemo(
+    () => rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [rows, page]
   );
 
   const isConsolidationMode = entitasFilter === ENTITAS_SEMUA;
   const hasMultiPeriodSelected = tahunFilter === 'ALL' || bulanFilter === 'ALL';
 
-  // Grafik 1: Tren Realisasi Antar Periode Tersedia (dinamis dari DB, bukan dummy statis)
-  const periodTrendData = useMemo(() => {
-    const periodKeys = Array.from(
-      new Set(branchScopedData.map(r => `${r.TAHUN}-${String(r.BULAN).padStart(2, '0')}`))
-    ).sort();
-
-    return periodKeys.map(pk => {
-      const [yStr, mStr] = pk.split('-');
-      const y = Number(yStr);
-      const m = Number(mStr);
-      const rowsInPeriod = branchScopedData.filter(r => r.TAHUN === y && r.BULAN === m);
-      const agg = aggregateFinansialByRekening(rowsInPeriod, entitasFilter);
-      const revM = Number((agg.Pendapatan.realisasi / 1_000_000_000).toFixed(2));
-      const costM = Number((agg.Beban.realisasi / 1_000_000_000).toFixed(2));
-      const opM = Number((agg['Laba Usaha'].realisasi / 1_000_000_000).toFixed(2));
-      const netM = Number((agg['Laba Bersih'].realisasi / 1_000_000_000).toFixed(2));
-      return {
-        periode: `${getMonthNameId(m).slice(0, 3)} ${y}`,
-        PendapatanM: revM,
-        BebanM: costM,
-        LabaUsahaM: opM,
-        LabaBersihM: netM,
-        pendapatanRp: agg.Pendapatan.realisasi,
-        bebanRp: agg.Beban.realisasi,
-        labaUsahaRp: agg['Laba Usaha'].realisasi,
-        labaBersihRp: agg['Laba Bersih'].realisasi,
-      };
-    });
-  }, [branchScopedData, entitasFilter]);
-
-  // Grafik 2: Kontribusi Entitas & Dampak ELIMINASI untuk Periode & Cabang Aktif
-  const entityBreakdownData = useMemo(() => {
-    const items = availableEntitas.map(ent => {
-      const agg = aggregateFinansialByRekening(periodAndBranchData, ent);
-      return {
-        entitas: ent,
-        PendapatanM: Number((agg.Pendapatan.realisasi / 1_000_000_000).toFixed(2)),
-        BebanM: Number((agg.Beban.realisasi / 1_000_000_000).toFixed(2)),
-        LabaUsahaM: Number((agg['Laba Usaha'].realisasi / 1_000_000_000).toFixed(2)),
-        pendapatanRp: agg.Pendapatan.realisasi,
-        bebanRp: agg.Beban.realisasi,
-        labaUsahaRp: agg['Laba Usaha'].realisasi,
-      };
-    });
-    const cons = aggregateFinansialByRekening(periodAndBranchData, ENTITAS_SEMUA);
-    items.push({
-      entitas: 'KONSOLIDASI',
-      PendapatanM: Number((cons.Pendapatan.realisasi / 1_000_000_000).toFixed(2)),
-      BebanM: Number((cons.Beban.realisasi / 1_000_000_000).toFixed(2)),
-      LabaUsahaM: Number((cons['Laba Usaha'].realisasi / 1_000_000_000).toFixed(2)),
-      pendapatanRp: cons.Pendapatan.realisasi,
-      bebanRp: cons.Beban.realisasi,
-      labaUsahaRp: cons['Laba Usaha'].realisasi,
-    });
-    return items;
-  }, [availableEntitas, periodAndBranchData]);
-
-  // Grafik 3: Top Cabang Pelabuhan berdasarkan Realisasi Pendapatan & Laba Usaha
-  const topBranchesChartData = useMemo(() => {
-    const byBranch = new Map<string, FinansialRecord[]>();
-    for (const r of periodAndBranchData) {
-      if (!byBranch.has(r.KODE_CBG)) byBranch.set(r.KODE_CBG, []);
-      byBranch.get(r.KODE_CBG)!.push(r);
-    }
-
-    return Array.from(byBranch.entries())
-      .map(([kode, rows]) => {
-        const agg = aggregateFinansialByRekening(rows, entitasFilter);
-        const nama = rows[0]?.NM_CBG || kode;
-        return {
-          kode,
-          name: nama.length > 13 ? `${nama.slice(0, 11)}..` : nama,
-          fullName: `[${kode}] ${nama}`,
-          PendapatanM: Number((agg.Pendapatan.realisasi / 1_000_000_000).toFixed(2)),
-          LabaUsahaM: Number((agg['Laba Usaha'].realisasi / 1_000_000_000).toFixed(2)),
-          pendapatanRp: agg.Pendapatan.realisasi,
-          labaUsahaRp: agg['Laba Usaha'].realisasi,
-          rkaLabel: formatPercentOrDash(agg.Pendapatan.rka),
-          yoyLabel: formatPercentOrDash(agg.Pendapatan.yoy),
-        };
-      })
-      .sort((a, b) => b.pendapatanRp - a.pendapatanRp)
-      .slice(0, 8);
-  }, [periodAndBranchData, entitasFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-  const pagedRows = useMemo(
-    () => filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filteredRows, page]
-  );
-
   const handleResetFilters = () => {
-    setTahunFilter(availableYears[0] ? String(availableYears[0]) : 'ALL');
-    setBulanFilter(availableMonths[0] ? String(availableMonths[0]) : 'ALL');
+    setPeriodOverride({
+      headerBase: selectedPeriod,
+      tahun: '2026',
+      bulan: '8',
+    });
     setEntitasFilter(ENTITAS_SEMUA);
-    if (!isPicCabang) setNmCbgFilter('ALL');
+    if (!isPicCabang) {
+      setNmCbgOverride({ terminalKey: selectedTerminal, value: 'ALL' });
+    }
     setRekeningFilter('ALL');
     setSearch('');
   };
 
+  const kpis = summary?.kpis;
+  const periodTrendData = summary?.charts.periodTrend ?? [];
+  const entityBreakdownData = summary?.charts.entityBreakdown ?? [];
+  const topBranchesChartData = summary?.charts.topBranches ?? [];
+
   const summaryCardsConfig = [
     {
-      rek: 'Pendapatan' as const,
+      key: 'Pendapatan' as const,
+      metric: kpis?.pendapatan,
       title: isConsolidationMode ? 'Pendapatan (Konsolidasi)' : `Pendapatan (${entitasFilter})`,
       accent: '#0284c7',
       icon: DollarSign,
       subtitle: 'Total pendapatan sesuai filter aktif',
+      isCost: false,
     },
     {
-      rek: 'Beban' as const,
+      key: 'Beban' as const,
+      metric: kpis?.beban,
       title: isConsolidationMode ? 'Beban (Konsolidasi)' : `Beban (${entitasFilter})`,
       accent: '#ef4444',
       icon: TrendingDown,
-      subtitle: 'Nilai negatif pada entitas, offset ELIMINASI',
+      subtitle: isConsolidationMode
+        ? 'Total seluruh entitas termasuk ELIMINASI'
+        : `Total Beban entitas ${entitasFilter}`,
+      isCost: true,
     },
     {
-      rek: 'Laba Usaha' as const,
+      key: 'Laba Usaha' as const,
+      metric: kpis?.labaUsaha,
       title: isConsolidationMode ? 'Laba Usaha (Konsolidasi)' : `Laba Usaha (${entitasFilter})`,
       accent: '#10b981',
       icon: TrendingUp,
       subtitle: 'Margin laba operasional periode terpilih',
+      isCost: false,
     },
     {
-      rek: 'Laba Bersih' as const,
+      key: 'Laba Bersih' as const,
+      metric: kpis?.labaBersih,
       title: isConsolidationMode ? 'Laba Bersih (Konsolidasi)' : `Laba Bersih (${entitasFilter})`,
       accent: '#a855f7',
       icon: Layers,
       subtitle: 'Setelah pajak & pos non-operasional',
+      isCost: false,
     },
   ];
 
-  const renderBadgeClass = (pct: number | string, isBebanAccount = false) => {
+  const renderBadgeClass = (pct: number | string | null | undefined, isBebanAccount = false) => {
     const parsed = parseMetricPercent(pct);
     if (parsed === null) return 'badge-neutral';
     if (isBebanAccount) return parsed <= 105 ? 'badge-green' : 'badge-yellow';
@@ -382,7 +485,7 @@ export default function PortSightKeuangan({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <Filter size={16} color="#0284c7" />
             <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
-              Filter Laporan Laba Rugi (9 Field Standar)
+              Filter Laporan Laba Rugi (9 Field Standar — PostgreSQL SSOT)
             </span>
             <span
               style={{
@@ -401,7 +504,31 @@ export default function PortSightKeuangan({
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {!isBodViewer && kpis?.verificationSummary && (
+              <button
+                type="button"
+                onClick={() => setVerifiedOverride({ roleKey, value: !verifiedOnly })}
+                className="btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '6px 11px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  border: verifiedOnly
+                    ? '1px solid rgba(16, 185, 129, 0.45)'
+                    : '1px solid var(--border-subtle)',
+                  color: verifiedOnly ? '#10b981' : 'var(--text-secondary)',
+                }}
+              >
+                <ShieldCheck size={13} />
+                <span>{verifiedOnly ? 'Hanya Terverifikasi' : 'Semua Status'}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleResetFilters}
@@ -417,7 +544,7 @@ export default function PortSightKeuangan({
               }}
             >
               <RotateCcw size={13} />
-              <span>Reset</span>
+              <span>Reset (2026 Ags)</span>
             </button>
             {onOpenManualInput && (
               <button
@@ -462,9 +589,15 @@ export default function PortSightKeuangan({
               className="filter-select"
               style={{ width: '100%' }}
               value={tahunFilter}
-              onChange={e => setTahunFilter(e.target.value)}
+              onChange={(e) =>
+                setPeriodOverride({
+                  headerBase: selectedPeriod,
+                  tahun: e.target.value,
+                  bulan: bulanFilter,
+                })
+              }
             >
-              {availableYears.map(y => (
+              {availableYears.map((y) => (
                 <option key={y} value={String(y)}>
                   {y}
                 </option>
@@ -482,9 +615,15 @@ export default function PortSightKeuangan({
               className="filter-select"
               style={{ width: '100%' }}
               value={bulanFilter}
-              onChange={e => setBulanFilter(e.target.value)}
+              onChange={(e) =>
+                setPeriodOverride({
+                  headerBase: selectedPeriod,
+                  tahun: tahunFilter,
+                  bulan: e.target.value,
+                })
+              }
             >
-              {availableMonths.map(m => (
+              {availableMonths.map((m) => (
                 <option key={m} value={String(m)}>
                   {m} — {getMonthNameId(m)}
                 </option>
@@ -502,10 +641,10 @@ export default function PortSightKeuangan({
               className="filter-select"
               style={{ width: '100%' }}
               value={entitasFilter}
-              onChange={e => setEntitasFilter(e.target.value)}
+              onChange={(e) => setEntitasFilter(e.target.value)}
             >
               <option value={ENTITAS_SEMUA}>Semua Entitas (Konsolidasi + ELIMINASI)</option>
-              {availableEntitas.map(ent => (
+              {availableEntitas.map((ent) => (
                 <option key={ent} value={ent}>
                   {ent}
                 </option>
@@ -523,10 +662,12 @@ export default function PortSightKeuangan({
               style={{ width: '100%' }}
               value={nmCbgFilter}
               disabled={isPicCabang}
-              onChange={e => setNmCbgFilter(e.target.value)}
+              onChange={(e) =>
+                setNmCbgOverride({ terminalKey: selectedTerminal, value: e.target.value })
+              }
             >
               <option value="ALL">Semua Cabang ({availableBranches.length} Cabang)</option>
-              {availableBranches.map(b => (
+              {availableBranches.map((b) => (
                 <option key={b.kode} value={b.nama}>
                   [{b.kode}] {b.nama}
                 </option>
@@ -543,10 +684,10 @@ export default function PortSightKeuangan({
               className="filter-select"
               style={{ width: '100%' }}
               value={rekeningFilter}
-              onChange={e => setRekeningFilter(e.target.value)}
+              onChange={(e) => setRekeningFilter(e.target.value)}
             >
               <option value="ALL">Semua Rekening (4 Akun)</option>
-              {FINANSIAL_REKENING_LIST.map(rek => (
+              {FINANSIAL_REKENING_LIST.map((rek) => (
                 <option key={rek} value={rek}>
                   {rek}
                 </option>
@@ -578,45 +719,107 @@ export default function PortSightKeuangan({
         )}
       </div>
 
-      {/* 4 Summary KPI Cards dikelompokkan berdasarkan REKENING */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(235px, 1fr))', gap: '16px' }}>
-        {summaryCardsConfig.map(card => {
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            backgroundColor: 'var(--status-danger-bg)',
+            border: '1px solid var(--status-danger-border)',
+            color: 'var(--status-danger-text)',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}
+        >
+          <AlertCircle size={15} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* 5 Summary KPI Cards dari PostgreSQL SSOT (4 Akun + BOPO Konsolidasi) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(215px, 1fr))', gap: '14px' }}>
+        {summaryCardsConfig.map((card) => {
           const IconComp = card.icon;
-          const agg = kpiByRekening[card.rek];
-          const isCost = card.rek === 'Beban';
+          const m = card.metric;
           return (
-            <div key={card.rek} className="dark-card" style={{ borderLeft: `4px solid ${card.accent}` }}>
+            <div key={card.key} className="dark-card" style={{ borderLeft: `4px solid ${card.accent}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="kpi-header-label">{card.title}</span>
                 <IconComp size={20} color={card.accent} />
               </div>
               <div
                 style={{
-                  fontSize: 'clamp(20px, 1.9vw, 26px)',
+                  fontSize: 'clamp(20px, 1.8vw, 25px)',
                   fontWeight: 900,
-                  color: 'var(--text-title)',
+                  color: card.isCost ? '#f97316' : 'var(--text-title)',
                   margin: '8px 0 2px',
                   letterSpacing: '-0.3px',
+                  fontVariantNumeric: 'tabular-nums',
                 }}
-                title={formatRupiahFull(agg.realisasi)}
+                title={m?.formattedFull ?? 'Rp 0'}
               >
-                {loading ? '...' : formatRupiahCompact(agg.realisasi)}
+                {loading && !kpis ? '...' : m?.formatted ?? 'Rp 0'}
               </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '8px' }}>
-                {loading ? 'Memuat...' : formatRupiahFull(agg.realisasi)}
+              <div
+                style={{
+                  fontSize: '11.5px',
+                  color: 'var(--text-secondary)',
+                  fontWeight: 600,
+                  marginBottom: '8px',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {loading && !kpis ? 'Memuat...' : m?.formattedFull ?? 'Rp 0'}
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <span className={`badge ${renderBadgeClass(agg.rka, isCost)}`}>
-                  RKA: {formatPercentOrDash(agg.rka)}
+                <span className={`badge ${renderBadgeClass(m?.rka, card.isCost)}`}>
+                  RKA: {m?.rka !== null && m?.rka !== undefined ? `${formatIdDecimal2(m.rka)}%` : '-'}
                 </span>
-                <span className={`badge ${renderBadgeClass(agg.yoy, isCost)}`}>
-                  YoY: {formatPercentOrDash(agg.yoy)}
+                <span className={`badge ${renderBadgeClass(m?.yoy, card.isCost)}`}>
+                  YoY: {m?.yoy !== null && m?.yoy !== undefined ? `${formatIdDecimal2(m.yoy)}%` : '-'}
                 </span>
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{card.subtitle}</div>
             </div>
           );
         })}
+
+        {/* Kartu BOPO tersinkron dengan Beranda */}
+        <div
+          className="dark-card"
+          style={{
+            background: 'linear-gradient(135deg, #09204e 0%, #0f3070 100%)',
+            borderColor: '#1e40af',
+            borderLeft: '4px solid #facc15',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
+              BOPO {isConsolidationMode ? '(Konsolidasi)' : `(${entitasFilter})`}
+            </span>
+            <Percent size={20} color="#facc15" />
+          </div>
+          <div
+            style={{
+              fontSize: 'clamp(24px, 2.2vw, 30px)',
+              fontWeight: 900,
+              color: '#facc15',
+              margin: '8px 0 4px',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {loading && !kpis ? '...' : kpis?.bopo.formatted ?? '0,00%'}
+          </div>
+          <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: 1.4 }}>
+            ABS(Total Beban) / Total Pendapatan × 100%
+          </div>
+        </div>
       </div>
 
       {/* Row Charts: Tren Antar Periode & Komposisi Entitas + Eliminasi */}
@@ -642,22 +845,7 @@ export default function PortSightKeuangan({
                 <XAxis dataKey="periode" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                 <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} unit=" M" />
                 <ReferenceLine y={0} stroke="var(--border-subtle)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--bg-surface)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '8px',
-                    color: 'var(--text-main)',
-                    fontSize: '12px',
-                  }}
-                  formatter={(value: any, name: any, props: any) => {
-                    const p = props?.payload;
-                    if (name === 'Pendapatan' && p) return [formatRupiahFull(p.pendapatanRp), 'Pendapatan'];
-                    if (name === 'Beban' && p) return [formatRupiahFull(p.bebanRp), 'Beban'];
-                    if (name === 'Laba Usaha' && p) return [formatRupiahFull(p.labaUsahaRp), 'Laba Usaha'];
-                    return [`${Number(value).toLocaleString('id-ID')} M`, name];
-                  }}
-                />
+                <Tooltip content={<PeriodTrendTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 <Bar dataKey="PendapatanM" name="Pendapatan" fill="#0284c7" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="BebanM" name="Beban" fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -687,22 +875,7 @@ export default function PortSightKeuangan({
                 <XAxis dataKey="entitas" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
                 <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} unit=" M" />
                 <ReferenceLine y={0} stroke="var(--border-subtle)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--bg-surface)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '8px',
-                    color: 'var(--text-main)',
-                    fontSize: '12px',
-                  }}
-                  formatter={(value: any, name: any, props: any) => {
-                    const p = props?.payload;
-                    if (name === 'Pendapatan' && p) return [formatRupiahFull(p.pendapatanRp), 'Pendapatan'];
-                    if (name === 'Beban' && p) return [formatRupiahFull(p.bebanRp), 'Beban'];
-                    if (name === 'Laba Usaha' && p) return [formatRupiahFull(p.labaUsahaRp), 'Laba Usaha'];
-                    return [`${Number(value).toLocaleString('id-ID')} M`, name];
-                  }}
-                />
+                <Tooltip content={<EntityBreakdownTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 <Bar dataKey="PendapatanM" name="Pendapatan" fill="#38bdf8" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="BebanM" name="Beban" fill="#f87171" radius={[4, 4, 0, 0]} />
@@ -725,7 +898,7 @@ export default function PortSightKeuangan({
             </div>
           </div>
           <span style={{ fontSize: '11px', color: '#0284c7', fontWeight: 700 }}>
-            Sumber: data/labarugi.xlsx &amp; PostgreSQL
+            Sumber: PostgreSQL (module_finansial)
           </span>
         </div>
 
@@ -735,26 +908,7 @@ export default function PortSightKeuangan({
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
               <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
               <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} unit=" M" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '8px',
-                  color: 'var(--text-main)',
-                  fontSize: '12px',
-                }}
-                labelFormatter={(_l, payload) => payload?.[0]?.payload?.fullName || ''}
-                formatter={(value: any, name: any, props: any) => {
-                  const p = props?.payload;
-                  if (name === 'Pendapatan' && p) {
-                    return [`${formatRupiahFull(p.pendapatanRp)} (RKA: ${p.rkaLabel})`, 'Pendapatan'];
-                  }
-                  if (name === 'Laba Usaha' && p) {
-                    return [formatRupiahFull(p.labaUsahaRp), 'Laba Usaha'];
-                  }
-                  return [`${value} M`, name];
-                }}
-              />
+              <Tooltip content={<TopBranchesTooltip />} />
               <Legend wrapperStyle={{ fontSize: '11px' }} />
               <Bar dataKey="PendapatanM" name="Pendapatan" fill="#0284c7" radius={[4, 4, 0, 0]} />
               <Bar dataKey="LabaUsahaM" name="Laba Usaha" radius={[4, 4, 0, 0]}>
@@ -784,7 +938,8 @@ export default function PortSightKeuangan({
               Tabel Rincian Laba Rugi (9 Field Standar)
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Menampilkan {pagedRows.length} dari {filteredRows.length} baris tersaring (total dataset: {data.length} baris)
+              Menampilkan {pagedRows.length} dari {rows.length} baris tersaring (total dataset:{' '}
+              {summary?.filters.totalDatasetRows ?? 0} baris)
             </div>
           </div>
 
@@ -795,7 +950,7 @@ export default function PortSightKeuangan({
               className="filter-select"
               placeholder="Cari cabang / rekening / entitas..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               style={{ paddingLeft: '32px', width: '250px' }}
             />
           </div>
@@ -817,10 +972,10 @@ export default function PortSightKeuangan({
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && !summary ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                    Memuat dataset finansial...
+                    Memuat dataset finansial dari PostgreSQL...
                   </td>
                 </tr>
               ) : pagedRows.length === 0 ? (
@@ -833,8 +988,8 @@ export default function PortSightKeuangan({
                 pagedRows.map((r, i) => {
                   const realVal = parseRealisasi(r.REALISASI);
                   const isCost = canonicalRekening(r.REKENING) === 'Beban';
-                  const rkaFormatted = formatPercentOrDash(r.RKA);
-                  const yoyFormatted = formatPercentOrDash(r.YOY);
+                  const rkaFormatted = formatPercentIdOrDash(r.RKA);
+                  const yoyFormatted = formatPercentIdOrDash(r.YOY);
 
                   return (
                     <tr key={r.id || `${r.TAHUN}-${r.BULAN}-${r.KODE_CBG}-${r.REKENING}-${r.ENTITAS}-${i}`}>
@@ -874,6 +1029,7 @@ export default function PortSightKeuangan({
                           textAlign: 'right',
                           fontWeight: 700,
                           fontFamily: 'var(--font-mono)',
+                          fontVariantNumeric: 'tabular-nums',
                           color: realVal < 0 ? '#ef4444' : realVal === 0 ? 'var(--text-muted)' : 'var(--text-title)',
                         }}
                       >
@@ -914,7 +1070,9 @@ export default function PortSightKeuangan({
                 type="button"
                 className="btn-secondary"
                 disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                onClick={() =>
+                  setPageState({ key: filterResetKey, page: Math.max(1, page - 1) })
+                }
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -933,7 +1091,9 @@ export default function PortSightKeuangan({
                 type="button"
                 className="btn-secondary"
                 disabled={page >= totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                onClick={() =>
+                  setPageState({ key: filterResetKey, page: Math.min(totalPages, page + 1) })
+                }
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
