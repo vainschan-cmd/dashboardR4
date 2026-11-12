@@ -28,6 +28,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
+          # Pin the CLI: the action's own default (8.24.3) silently ignores the
+          # plural `[[allowlists]]` config form, so an allowlist that works with
+          # a newer CLI is a no-op here. `.gitleaks.toml` uses the singular
+          # `[allowlist]` table, which both 8.24.3 and 8.30.1 honour — pinning
+          # keeps that verified behaviour instead of whatever ships next.
+          GITLEAKS_VERSION: '8.30.1'
 
   quality:
     name: Typecheck, Lint, Unit tests & Build

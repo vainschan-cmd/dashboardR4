@@ -1,5 +1,13 @@
 # Gitleaks configuration — runs in CI on the full git history.
 # https://github.com/gitleaks/gitleaks#configuration
+#
+# IMPORTANT: use the SINGULAR `[allowlist]` table, never `[[allowlists]]`.
+# `gitleaks/gitleaks-action@v2` pins gitleaks 8.24.3, which does not understand
+# the plural array form and SILENTLY IGNORES IT — the scan then reports every
+# documentation placeholder as a leak and the job fails no matter what the
+# allowlist says. Verified: 8.24.3 and 8.30.1 both honour the singular table,
+# only 8.30.1+ honours the plural one. CI pins GITLEAKS_VERSION so the behaviour
+# stays reproducible.
 
 title = "PortDash R4 secret scanning"
 
@@ -18,40 +26,37 @@ description = "Hardcoded bootstrap PIC password"
 regex = '''BOOTSTRAP_PIC_PASSWORD\s*=\s*["']?[^\s"']{8,}["']?'''
 tags = ["secret", "password"]
 
-[[allowlists]]
-description = "Placeholder values used by CI and .env.example"
-paths = ['''\.env\.example$''', '''^\.github/workflows/''']
-regexes = [
-  '''ganti_dengan_secret''',
-  '''placeholder''',
-  '''ci_build_password_placeholder''',
-  '''ci_regression_password_placeholder''',
-  '''ci_build_secret_placeholder_value_at_least_32_chars''',
-  '''ci_regression_secret_placeholder_value_32_chars''',
-]
-
-[[allowlists]]
-description = "Generated build output and local data files are not part of the source tree"
-paths = ['''^\.next/''', '''^node_modules/''', '''^data/.*\.db''', '''^data/.*\.xlsx''']
-
-[[allowlists]]
+[allowlist]
 description = """
-Nilai contoh dokumentasi dan fixture uji yang sudah terlanjur dipublikasikan.
-Ketiganya bukan kredensial: README memuat contoh JWT yang bisa dibaca manusia,
-dan dua entri lain adalah kata sandi sengaja-salah yang dipakai skrip regresi
-untuk membuktikan API menolaknya (400/403). Kode tidak punya nilai cadangan
-untuk JWT_SECRET, jadi contoh README tidak pernah bisa menjadi kunci nyata.
+Bukan kredensial, beserta alasannya.
 
-Nilai persisnya di-allowlist, bukan path-nya: kredensial BARU di berkas yang
-sama tetap harus tertangkap. Riwayat tidak ditulis ulang karena sudah
-dipublikasikan, dan menulis ulang riwayat untuk tiga nilai non-rahasia justru
-lebih berisiko daripada manfaatnya.
+`paths` menutup keluaran build, data lokal, dan berkas yang memang berisi contoh.
+`regexes` menutup nilai contoh dokumentasi dan fixture uji yang sudah
+terpublikasi. Tiga nilai terakhir di-allowlist PERSIS NILAINYA, bukan per-berkas:
+kredensial baru di berkas yang sama tetap harus tertangkap.
 
-Bila salah satu dari ini pernah dipakai sebagai JWT_SECRET sungguhan di
-deployment mana pun, rotasi kuncinya — allowlist ini hanya menyatakan bahwa
-pemindaian tidak lagi gagal karena contoh tersebut.
+Riwayat publik tidak ditulis ulang. Menulis ulang riwayat untuk tiga nilai
+non-rahasia lebih berisiko daripada manfaatnya.
+
+Bila salah satu nilai di bawah pernah dipakai sebagai JWT_SECRET atau kata sandi
+sungguhan di deployment mana pun, rotasi nilainya — allowlist ini hanya
+menyatakan bahwa pemindaian tidak lagi gagal karena contoh tersebut.
 """
+paths = [
+  '''\.env\.example$''',
+  '''^\.github/workflows/''',
+  '''^\.next/''',
+  '''^node_modules/''',
+  '''^data/.*\.db''',
+  '''^data/.*\.xlsx''',
+]
 regexes = [
+  # Placeholder yang dipakai .env.example, README, dan CI.
+  '''ganti_dengan_secret''',
+  '''_placeholder''',
+  # Nilai historis yang sudah terpublikasi dan bukan kredensial:
+  # contoh JWT_SECRET di README lama, serta dua kata sandi sengaja-salah yang
+  # dipakai skrip regresi untuk membuktikan API menolaknya (400/403).
   '''pelindo_r4_executive_dashboard_secret_key_production_32chars_min''',
   '''Coba-Lewat-Put-2026''',
   '''Ambil-Alih-Akun-2026''',
