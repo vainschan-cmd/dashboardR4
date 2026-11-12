@@ -388,7 +388,7 @@ async function main() {
         name: target.name,
         divisi: target.divisi,
         departemen: target.departemen,
-        password: 'Coba-Lewat-Put-2026',
+        password: 'bukan-kata-sandi-nyata',
       }),
     });
     assert.equal(res.status, 400);
@@ -524,7 +524,7 @@ async function main() {
       headers: { 'Content-Type': 'application/json', Cookie: adminCookie },
       body: JSON.stringify({
         userId: target.id,
-        newPassword: 'Ambil-Alih-Akun-2026',
+        newPassword: 'bukan-kata-sandi-pengganti',
         requireChangeOnNextLogin: false,
       }),
     });

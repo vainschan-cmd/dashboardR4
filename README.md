@@ -98,8 +98,9 @@ Unit test tidak memerlukan server, basis data, atau kredensial. Uji integrasi me
 Salin berkas `.env.example` ke `.env.local` atau `.env` sebelum menjalankan aplikasi:
 
 ```env
-# Kunci rahasia JWT wajib diisi minimal 32 karakter untuk produksi
-JWT_SECRET=pelindo_r4_executive_dashboard_secret_key_production_32chars_min
+# Kunci rahasia JWT wajib diisi minimal 32 karakter untuk produksi.
+# Isi dengan nilai acak, mis. `openssl rand -hex 32` — jangan pakai contoh ini.
+JWT_SECRET=ganti_dengan_secret_kriptografis_minimal_32_karakter_acak_hs256
 
 # Kunci enkripsi kredensial tersimpan (AES-256-GCM). Kosongkan hanya untuk development.
 SECRETS_ENCRYPTION_KEY=

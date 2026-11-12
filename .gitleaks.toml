@@ -33,3 +33,26 @@ regexes = [
 [[allowlists]]
 description = "Generated build output and local data files are not part of the source tree"
 paths = ['''^\.next/''', '''^node_modules/''', '''^data/.*\.db''', '''^data/.*\.xlsx''']
+
+[[allowlists]]
+description = """
+Nilai contoh dokumentasi dan fixture uji yang sudah terlanjur dipublikasikan.
+Ketiganya bukan kredensial: README memuat contoh JWT yang bisa dibaca manusia,
+dan dua entri lain adalah kata sandi sengaja-salah yang dipakai skrip regresi
+untuk membuktikan API menolaknya (400/403). Kode tidak punya nilai cadangan
+untuk JWT_SECRET, jadi contoh README tidak pernah bisa menjadi kunci nyata.
+
+Nilai persisnya di-allowlist, bukan path-nya: kredensial BARU di berkas yang
+sama tetap harus tertangkap. Riwayat tidak ditulis ulang karena sudah
+dipublikasikan, dan menulis ulang riwayat untuk tiga nilai non-rahasia justru
+lebih berisiko daripada manfaatnya.
+
+Bila salah satu dari ini pernah dipakai sebagai JWT_SECRET sungguhan di
+deployment mana pun, rotasi kuncinya — allowlist ini hanya menyatakan bahwa
+pemindaian tidak lagi gagal karena contoh tersebut.
+"""
+regexes = [
+  '''pelindo_r4_executive_dashboard_secret_key_production_32chars_min''',
+  '''Coba-Lewat-Put-2026''',
+  '''Ambil-Alih-Akun-2026''',
+]
