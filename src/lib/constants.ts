@@ -51,6 +51,23 @@ export function getBranchByCode(code: string): OfficialBranch | undefined {
   return OFFICIAL_BRANCHES.find(b => b.code.toUpperCase() === code.trim().toUpperCase());
 }
 
+/**
+ * Owning department for each data module. Used for ABAC reads/writes so a
+ * PIC Departemen only sees modules that belong to their department.
+ */
+export const MODULE_DEPARTMENT_MAP: Record<string, string> = {
+  finansial: 'dept_keu',
+  peralatan: 'dept_tek',
+  fasilitas: 'dept_tek',
+  opkom: 'dept_ops',
+  kinerja: 'dept_ops',
+  utilisasi: 'dept_ops',
+};
+
+export function getModuleDepartmentId(module: string): string {
+  return MODULE_DEPARTMENT_MAP[module] || 'dept_ops';
+}
+
 export function getBranchById(id: string): OfficialBranch | undefined {
   return OFFICIAL_BRANCHES.find(b => b.id === id);
 }

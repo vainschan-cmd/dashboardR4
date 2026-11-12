@@ -1,5 +1,10 @@
 # Konfigurasi & Migrasi PostgreSQL Produksi — PortDash Regional 4
 
+> **Keputusan runtime:** lihat [`ADR-0001-database-runtime.md`](./ADR-0001-database-runtime.md).
+> Ringkasnya: `node:sqlite` dipakai untuk pilot (satu instance), PostgreSQL menjadi
+> target wajib ketika pemicu scale-out/PITR terpenuhi. Dokumen ini adalah panduan
+> teknis migrasinya, bukan instruksi untuk beralih sekarang.
+
 Aplikasi saat ini menggunakan database embedded **SQLite** (`data/ed_dashboard.db` via `node:sqlite`) yang sangat cepat dan bebas ketergantungan daemon eksternal untuk lingkungan lokal.
 
 Skema database PostgreSQL yang setara telah disiapkan secara penuh di file `data/schema.sql`.

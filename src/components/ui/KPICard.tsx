@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { TrendingUp, TrendingDown, Minus, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, Target } from 'lucide-react';
 import { KPIDirection, StatusColor } from '@/lib/types';
 
 interface KPICardProps {
@@ -25,7 +25,6 @@ export default function KPICard({
   unit,
   achievementPct,
   statusColor,
-  direction = 'higher_is_better',
   icon,
   comparisonLabel,
   comparisonPct,
@@ -83,11 +82,11 @@ export default function KPICard({
       </div>
 
       {comparisonLabel && comparisonPct !== undefined && (
-        <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
           <span>{comparisonLabel}:</span>
           <span style={{
             fontWeight: 600,
-            color: comparisonPct > 0 ? '#059669' : comparisonPct < 0 ? '#dc2626' : '#64748b'
+            color: comparisonPct > 0 ? 'var(--status-good-text)' : comparisonPct < 0 ? 'var(--status-danger-text)' : 'var(--text-muted)'
           }}>
             {comparisonPct > 0 ? `+${comparisonPct}%` : `${comparisonPct}%`}
           </span>

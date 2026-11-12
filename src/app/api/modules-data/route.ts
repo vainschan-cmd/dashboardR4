@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode, getModuleDepartmentId } from '@/lib/constants';
 import { getDb } from '@/lib/db';
 import { ingestInputData } from '@/lib/ingestInputData';
+import { resolvePeriodRange } from '@/lib/period';
+import { logError } from '@/lib/logger';
+import { authorize, resolveReadBranchScope } from '@/lib/policy';
 import {
   requireAuth,
   enforceBranchFilterForRead,
+  enforceDepartmentFilterForRead,
   enforceVerificationFilterForRead,
 } from '@/lib/rbac';
 
@@ -100,6 +104,59 @@ function resolveVerificationRow<T extends Record<string, unknown>>(
   return null;
 }
 
+/**
+ * Translate the requested period window into a SQL predicate so the database
+ * returns only the rows we need. Previously every module table was read in full
+ * and filtered in JavaScript, which produced 0.5–0.6 MB responses.
+ *
+ * The range form deliberately avoids the compact `year * 100 + month BETWEEN ...`
+ * trick: wrapping the columns in an expression makes the composite
+ * `(branch_code, year, month)` index unusable for the year/month part, so the
+ * planner could only narrow on branch. Written as plain comparisons, SQLite walks
+ * the index range directly — the common single-year window becomes
+ * `year = ? AND month BETWEEN ? AND ?`.
+ */
+function buildPeriodSql(filters: {
+  exactYear?: number;
+  exactMonth?: number;
+  startYear?: number;
+  startMonth?: number;
+  endYear?: number;
+  endMonth?: number;
+}): { clause: string; params: Array<string | number> } {
+  const { exactYear, exactMonth, startYear, startMonth, endYear, endMonth } = filters;
+
+  if (exactYear && !startYear) {
+    if (exactMonth) {
+      return { clause: ' AND year = ? AND month = ?', params: [exactYear, exactMonth] };
+    }
+    return { clause: ' AND year = ?', params: [exactYear] };
+  }
+
+  if (startYear || endYear) {
+    const sY = startYear || 2020;
+    const sM = startMonth || 1;
+    const eY = endYear || 2035;
+    const eM = endMonth || 12;
+
+    // Same year: a single equality plus a month range keeps the index range scan tight.
+    if (sY === eY) {
+      return {
+        clause: ' AND year = ? AND month BETWEEN ? AND ?',
+        params: [sY, Math.min(sM, eM), Math.max(sM, eM)],
+      };
+    }
+
+    // Cross-year window: two disjoint index ranges instead of an expression scan.
+    return {
+      clause: ' AND ((year = ? AND month >= ?) OR (year > ? AND year < ?) OR (year = ? AND month <= ?))',
+      params: [sY, Math.min(sM, 12), sY, eY, eY, Math.max(eM, 1)],
+    };
+  }
+
+  return { clause: '', params: [] };
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
   if (!auth.authorized) return auth.response;
@@ -163,36 +220,51 @@ export async function GET(req: NextRequest) {
 
     const periodName = searchParams.get('period');
     if (periodName) {
-      const p = periodName.toUpperCase();
-      if (p.includes('FY 2025') || p.includes('2025')) {
-        startYear = 2025;
-        startMonth = 1;
-        endYear = 2025;
-        endMonth = 12;
-      } else if (p.includes('YTD SEP 2026') || p.includes('SEP 2026')) {
-        startYear = 2026;
-        startMonth = 1;
-        endYear = 2026;
-        endMonth = 9;
-      } else if (p.includes('YTD JUN 2026') || p.includes('JUN 2026')) {
-        startYear = 2026;
-        startMonth = 1;
-        endYear = 2026;
-        endMonth = 6;
-      } else if (p.includes('YTD MAR 2026') || p.includes('MAR 2026')) {
-        startYear = 2026;
-        startMonth = 1;
-        endYear = 2026;
-        endMonth = 3;
-      }
+      // Single parser shared with the UI — no duplicated month-name mapping.
+      const range = resolvePeriodRange(periodName);
+      startYear = range.startYear;
+      startMonth = range.startMonth;
+      endYear = range.endYear;
+      endMonth = range.endMonth;
     }
 
     const counters = { verified: 0, pending: 0, revision: 0 };
 
+    // ---- Shared SQL scope --------------------------------------------------
+    const periodSql = buildPeriodSql({
+      exactYear: exactYearParam,
+      exactMonth: exactMonthParam,
+      startYear,
+      startMonth,
+      endYear,
+      endMonth,
+    });
+
+    const noBranchMatch = rawBranch === 'NONE';
+    const branchCodesForSql =
+      targetBranches && targetBranches.length > 0 && !targetBranches.includes('ALL')
+        ? targetBranches
+        : null;
+
+    const branchSql =
+      noBranchMatch
+        ? ' AND 1 = 0'
+        : branchCodesForSql
+          ? ` AND branch_code IN (${branchCodesForSql.map(() => '?').join(',')})`
+          : '';
+
+    const whereSql = `${branchSql}${periodSql.clause}`;
+    const whereParams: Array<string | number> = [
+      ...(branchCodesForSql || []),
+      ...periodSql.params,
+    ];
+
     // 1. Finansial from SQLite module_finansial
     const rawFinRows = db
-      .prepare('SELECT * FROM module_finansial ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as Array<Record<string, unknown>>;
+      .prepare(
+        `SELECT * FROM module_finansial WHERE 1 = 1${whereSql} ORDER BY year DESC, month DESC, branch_code ASC`
+      )
+      .all(...whereParams) as Array<Record<string, unknown>>;
 
     const allFinMapped = rawFinRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -245,26 +317,26 @@ export async function GET(req: NextRequest) {
       const matchingRows = rows.filter(r =>
         matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth)
       );
+      if (matchingRows.length === 0) return;
+
       if (exactYearParam && !startYear) {
-        // Explicit single period filter
+        // Explicit single period filter: return every matching account row.
         finansial.push(...matchingRows);
-      } else if (matchingRows.length > 0 && matchingRows.some(r => r.konsolidasiRp !== 0)) {
-        // Take the most recent matching row for this (branch, account)
-        finansial.push(matchingRows[0]);
-      } else {
-        const baseline = rows.filter(r => r.year === 2025 && r.konsolidasiRp !== 0);
-        if (baseline.length > 0) {
-          finansial.push(baseline[0]);
-        } else if (matchingRows.length > 0) {
-          finansial.push(matchingRows[0]);
-        }
+        return;
       }
+
+      // Range query: use the most recent row for this (branch, account).
+      // No silent fallback to another year — a branch without data in the window
+      // simply has no row, and the UI shows "belum tersedia".
+      finansial.push(matchingRows[0]);
     });
 
     // 2. Opkom from SQLite module_opkom
     const rawOpkomRows = db
-      .prepare('SELECT * FROM module_opkom ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as Array<Record<string, unknown>>;
+      .prepare(
+        `SELECT * FROM module_opkom WHERE 1 = 1${whereSql} ORDER BY year DESC, month DESC, branch_code ASC`
+      )
+      .all(...whereParams) as Array<Record<string, unknown>>;
 
     const opkom = rawOpkomRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -301,8 +373,10 @@ export async function GET(req: NextRequest) {
 
     // 3. Kinerja from SQLite module_kinerja
     const rawKinerjaRows = db
-      .prepare('SELECT * FROM module_kinerja ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as Array<Record<string, unknown>>;
+      .prepare(
+        `SELECT * FROM module_kinerja WHERE 1 = 1${whereSql} ORDER BY year DESC, month DESC, branch_code ASC`
+      )
+      .all(...whereParams) as Array<Record<string, unknown>>;
 
     const kinerja = rawKinerjaRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -334,8 +408,10 @@ export async function GET(req: NextRequest) {
 
     // 4. Utilisasi from SQLite module_utilisasi
     const rawUtilRows = db
-      .prepare('SELECT * FROM module_utilisasi ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as Array<Record<string, unknown>>;
+      .prepare(
+        `SELECT * FROM module_utilisasi WHERE 1 = 1${whereSql} ORDER BY year DESC, month DESC, branch_code ASC`
+      )
+      .all(...whereParams) as Array<Record<string, unknown>>;
 
     const utilisasi = rawUtilRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -368,8 +444,10 @@ export async function GET(req: NextRequest) {
 
     // 5. Peralatan from SQLite module_peralatan
     const rawAlatRows = db
-      .prepare('SELECT * FROM module_peralatan ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as Array<Record<string, unknown>>;
+      .prepare(
+        `SELECT * FROM module_peralatan WHERE 1 = 1${whereSql} ORDER BY year DESC, month DESC, branch_code ASC`
+      )
+      .all(...whereParams) as Array<Record<string, unknown>>;
 
     const peralatan = rawAlatRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -404,8 +482,10 @@ export async function GET(req: NextRequest) {
 
     // 6. Fasilitas from SQLite module_fasilitas
     const rawFasRows = db
-      .prepare('SELECT * FROM module_fasilitas ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as Array<Record<string, unknown>>;
+      .prepare(
+        `SELECT * FROM module_fasilitas WHERE 1 = 1${whereSql} ORDER BY year DESC, month DESC, branch_code ASC`
+      )
+      .all(...whereParams) as Array<Record<string, unknown>>;
 
     const fasilitas = rawFasRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -451,6 +531,12 @@ export async function GET(req: NextRequest) {
     }));
 
     // 8. Additional KPI Records from SQLite monthly_records (e.g. kpi_rfu, kpi_sla, kpi_csat)
+    const kpiPeriodSql = periodSql.clause.replace(/\byear\b/g, 'r.year').replace(/\bmonth\b/g, 'r.month');
+    const kpiBranchSql = noBranchMatch
+      ? ' AND 1 = 0'
+      : branchCodesForSql
+        ? ` AND UPPER(b.code) IN (${branchCodesForSql.map(() => '?').join(',')})`
+        : '';
     const rawKpiRecords = db
       .prepare(`
         SELECT r.id, r.indicator_id, r.year, r.month, r.target, r.realization, r.unit,
@@ -458,8 +544,10 @@ export async function GET(req: NextRequest) {
         FROM monthly_records r
         JOIN branches b ON r.branch_id = b.id
         WHERE r.indicator_id IN ('kpi_rfu', 'kpi_sla', 'kpi_csat')
+        ${kpiBranchSql}
+        ${kpiPeriodSql}
       `)
-      .all() as Array<Record<string, unknown>>;
+      .all(...whereParams) as Array<Record<string, unknown>>;
 
     const kpiRecords = rawKpiRecords
       .filter(r => {
@@ -482,10 +570,35 @@ export async function GET(req: NextRequest) {
         verificationStatus: String(r.verification_status || 'verified'),
       }));
 
-    const scopedOfficialBranches =
-      auth.session.role === 'pic_cabang' && auth.session.branch_id && auth.session.branch_id !== 'R99'
-        ? OFFICIAL_BRANCHES.filter(b => b.code.toUpperCase() === auth.session.branch_id!.toUpperCase())
-        : OFFICIAL_BRANCHES;
+    const branchScope = resolveReadBranchScope(
+      {
+        role: auth.session.role,
+        branch_id: auth.session.branch_id,
+        department_id: auth.session.department_id,
+        sub: auth.session.sub,
+      },
+      undefined
+    );
+    const scopedOfficialBranches = branchScope
+      ? OFFICIAL_BRANCHES.filter((b) => b.code.toUpperCase() === branchScope.toUpperCase())
+      : OFFICIAL_BRANCHES;
+
+    // Department-scoped roles only receive modules owned by their department.
+    const scopedDepartmentId = enforceDepartmentFilterForRead(auth.session, undefined);
+    const canViewModule = (module: string) =>
+      !scopedDepartmentId || getModuleDepartmentId(module) === scopedDepartmentId;
+
+    // Executive viewers are not told how much unverified data exists; that would
+    // be operational detail they cannot act on.
+    const viewerSeesCounters = authorize(
+      {
+        role: auth.session.role,
+        branch_id: auth.session.branch_id,
+        department_id: auth.session.department_id,
+        sub: auth.session.sub,
+      },
+      'data:verify'
+    ).allowed;
 
     return NextResponse.json({
       success: true,
@@ -493,22 +606,25 @@ export async function GET(req: NextRequest) {
       verifiedOnly,
       verificationSummary: {
         verifiedCount: counters.verified,
-        pendingCount: auth.session.role === 'viewer' ? 0 : counters.pending,
-        revisionCount: auth.session.role === 'viewer' ? 0 : counters.revision,
+        pendingCount: viewerSeesCounters ? counters.pending : 0,
+        revisionCount: viewerSeesCounters ? counters.revision : 0,
       },
       branches: scopedOfficialBranches,
-      finansial,
-      opkom,
-      kinerja,
-      utilisasi,
-      peralatan,
-      fasilitas,
-      equipmentCatalog,
-      kpiRecords,
+      finansial: canViewModule('finansial') ? finansial : [],
+      opkom: canViewModule('opkom') ? opkom : [],
+      kinerja: canViewModule('kinerja') ? kinerja : [],
+      utilisasi: canViewModule('utilisasi') ? utilisasi : [],
+      peralatan: canViewModule('peralatan') ? peralatan : [],
+      fasilitas: canViewModule('fasilitas') ? fasilitas : [],
+      equipmentCatalog: canViewModule('peralatan') ? equipmentCatalog : [],
+      kpiRecords: canViewModule('kinerja') ? kpiRecords : [],
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Gagal memuat data modul.';
-    console.error('Error in /api/modules-data:', error);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/modules-data', error, { requestId: req.headers.get('x-request-id') });
+    return NextResponse.json(
+      { success: false, error: message, requestId: req.headers.get('x-request-id') },
+      { status: 500 }
+    );
   }
 }

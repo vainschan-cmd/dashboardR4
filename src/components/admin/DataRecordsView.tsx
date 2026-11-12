@@ -99,10 +99,10 @@ export default function DataRecordsView({
             <Database size={15} color="#38bdf8" />
             <span>Total Record Tersimpan</span>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#ffffff', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', marginTop: '6px' }}>
             {totalCount.toLocaleString('id-ID')}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             Database Pelindo Regional 4
           </div>
         </div>
@@ -112,10 +112,10 @@ export default function DataRecordsView({
             <CheckCircle2 size={15} color="#34d399" />
             <span>Terverifikasi Resmi</span>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#34d399', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-good-text)', marginTop: '6px' }}>
             {verifiedCount.toLocaleString('id-ID')}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             Dipublikasikan di Dashboard
           </div>
         </div>
@@ -125,10 +125,10 @@ export default function DataRecordsView({
             <Clock size={15} color="#fbbf24" />
             <span>Menunggu Verifikasi</span>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#fbbf24', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-alert-text)', marginTop: '6px' }}>
             {pendingCount.toLocaleString('id-ID')}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             Antrean Pengesahan Admin
           </div>
         </div>
@@ -138,10 +138,10 @@ export default function DataRecordsView({
             <AlertTriangle size={15} color="#f87171" />
             <span>Perlu Revisi</span>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#f87171', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-danger-text)', marginTop: '6px' }}>
             {revisionCount.toLocaleString('id-ID')}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             Dikembalikan ke PIC Cabang
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function DataRecordsView({
       <div className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title" style={{ fontSize: '18px' }}>
+            <h2 className="card-title" style={{ fontSize: '16px' }}>
               <Database size={20} color="#38bdf8" />
               <span>Daftar Data Record Kinerja Pelabuhan (Raw Data)</span>
             </h2>
@@ -180,7 +180,7 @@ export default function DataRecordsView({
             <input
               type="text"
               className="form-input"
-              style={{ paddingLeft: '36px', height: '36px', fontSize: '12.5px' }}
+              style={{ paddingLeft: '36px', height: '36px', fontSize: '12px' }}
               placeholder="Cari indikator, terminal, atau catatan..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -207,7 +207,7 @@ export default function DataRecordsView({
           >
             {!isPicCabang && <option value="ALL">🏢 Semua Terminal</option>}
             {(isPicCabang && userBranchObj ? [userBranchObj] : branches).map((b) => (
-              <option key={b.id} value={b.id} style={{ background: '#122137' }}>
+              <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
@@ -222,7 +222,7 @@ export default function DataRecordsView({
           >
             <option value="ALL">📂 Semua Departemen</option>
             {departments.map((d) => (
-              <option key={d.id} value={d.id} style={{ background: '#122137' }}>
+              <option key={d.id} value={d.id}>
                 {d.code} - {d.name}
               </option>
             ))}
@@ -237,7 +237,7 @@ export default function DataRecordsView({
           >
             <option value="ALL">📅 Semua Bulan (YTD)</option>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => (
-              <option key={m} value={m} style={{ background: '#122137' }}>
+              <option key={m} value={m}>
                 Bulan {m} (2026)
               </option>
             ))}
@@ -251,16 +251,16 @@ export default function DataRecordsView({
             onChange={(e) => setSelectedStatus(e.target.value)}
           >
             <option value="ALL">🛡️ Semua Status Verifikasi</option>
-            <option value="verified" style={{ background: '#122137' }}>Terverifikasi</option>
-            <option value="pending_verification" style={{ background: '#122137' }}>Menunggu Verifikasi</option>
-            <option value="revision_needed" style={{ background: '#122137' }}>Perlu Revisi</option>
+            <option value="verified">Terverifikasi</option>
+            <option value="pending_verification">Menunggu Verifikasi</option>
+            <option value="revision_needed">Perlu Revisi</option>
           </select>
         </div>
 
         {/* Counter Info */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
           <div>
-            Menampilkan <strong style={{ color: '#ffffff' }}>{filteredRecords.length}</strong> baris data dari total {records.length} record
+            Menampilkan <strong style={{ color: 'var(--text-title)' }}>{filteredRecords.length}</strong> baris data dari total {records.length} record
           </div>
           {(selectedBranch !== 'ALL' || selectedDept !== 'ALL' || selectedMonth !== 'ALL' || selectedStatus !== 'ALL' || searchQuery) && (
             <button
@@ -271,7 +271,7 @@ export default function DataRecordsView({
                 setSelectedStatus('ALL');
                 setSearchQuery('');
               }}
-              style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '12px' }}
+              style={{ background: 'none', border: 'none', color: 'var(--accent-blue-text)', cursor: 'pointer', fontSize: '12px' }}
             >
               Reset Filter
             </button>
@@ -280,34 +280,34 @@ export default function DataRecordsView({
 
         {/* Table Content */}
         {isLoading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <RefreshCw size={24} className="spin" style={{ margin: '0 auto 10px' }} />
             <div>Memuat data kinerja pelabuhan...</div>
           </div>
         ) : filteredRecords.length === 0 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', backgroundColor: '#101c2e', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
+          <div style={{ padding: '40px 20px', textAlign: 'center', backgroundColor: 'var(--bg-inner)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
             <Database size={36} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
-            <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>Tidak Ada Data Ditemukan</h4>
-            <p style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '4px' }}>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>Tidak Ada Data Ditemukan</h4>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
               Tidak ada record kinerja yang cocok dengan kombinasi filter yang dipilih.
             </p>
           </div>
         ) : (
           <div className="table-responsive" style={{ maxHeight: '620px', overflowY: 'auto' }}>
-            <table className="data-table">
+            <table className="card-table data-table">
               <thead>
                 <tr style={{ position: 'sticky', top: 0, zIndex: 5 }}>
-                  <th>Terminal / Cabang</th>
-                  <th>Departemen</th>
-                  <th>Periode</th>
-                  <th>Indikator KPI</th>
-                  <th style={{ textAlign: 'right' }}>Target RKAP</th>
-                  <th style={{ textAlign: 'right' }}>Realisasi</th>
-                  <th style={{ textAlign: 'center' }}>Satuan</th>
-                  <th style={{ textAlign: 'right' }}>Capaian</th>
-                  <th style={{ textAlign: 'center' }}>Status KPI</th>
-                  <th style={{ textAlign: 'center' }}>Verifikasi</th>
-                  <th>Pengunggah</th>
+                  <th scope="col">Terminal / Cabang</th>
+                  <th scope="col">Departemen</th>
+                  <th scope="col">Periode</th>
+                  <th scope="col">Indikator KPI</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>Target RKAP</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>Realisasi</th>
+                  <th scope="col" style={{ textAlign: 'center' }}>Satuan</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>Capaian</th>
+                  <th scope="col" style={{ textAlign: 'center' }}>Status KPI</th>
+                  <th scope="col" style={{ textAlign: 'center' }}>Verifikasi</th>
+                  <th scope="col">Pengunggah</th>
                 </tr>
               </thead>
               <tbody>
@@ -317,45 +317,45 @@ export default function DataRecordsView({
 
                   return (
                     <tr key={r.id}>
-                      <td style={{ fontWeight: 600, color: '#ffffff' }}>
+                      <td data-label="Terminal / Cabang" style={{ fontWeight: 600, color: 'var(--text-title)' }}>
                         <div>{r.branch_name || branchObj?.name || r.branch_id}</div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{branchObj?.code}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{branchObj?.code}</div>
                       </td>
-                      <td>
+                      <td data-label="Departemen">
                         <span className="badge badge-neutral">
                           {deptObj?.code || r.department_id}
                         </span>
                       </td>
-                      <td style={{ whiteSpace: 'nowrap', color: '#cbd5e1' }}>
+                      <td data-label="Periode" style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                         Bln {r.month}/{r.year}
                       </td>
-                      <td>
-                        <div style={{ fontWeight: 600, color: '#ffffff' }}>{r.indicator_name || r.indicator_id}</div>
-                        <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>{r.indicator_code || r.indicator_id}</div>
+                      <td data-label="Indikator KPI">
+                        <div style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.indicator_name || r.indicator_id}</div>
+                        <div style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--accent-blue-text)' }}>{r.indicator_code || r.indicator_id}</div>
                       </td>
-                      <td style={{ textAlign: 'right', color: '#cbd5e1' }}>
+                      <td data-label="Target RKAP" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
                         {r.target?.toLocaleString('id-ID')}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>
+                      <td data-label="Realisasi" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-title)' }}>
                         {r.realization?.toLocaleString('id-ID')}
                       </td>
-                      <td style={{ textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>
+                      <td data-label="Satuan" style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
                         {r.unit}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                        <span style={{ color: r.status_color === 'green' ? '#34d399' : r.status_color === 'yellow' ? '#fbbf24' : '#f87171' }}>
+                      <td data-label="Capaian" style={{ textAlign: 'right', fontWeight: 700 }}>
+                        <span style={{ color: r.status_color === 'green' ? 'var(--status-good-text)' : r.status_color === 'yellow' ? 'var(--status-alert-text)' : 'var(--status-danger-text)' }}>
                           {r.achievement_pct}%
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td data-label="Status KPI" style={{ textAlign: 'center' }}>
                         <StatusBadge type="traffic_light" color={r.status_color} />
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td data-label="Verifikasi" style={{ textAlign: 'center' }}>
                         <StatusBadge type="verification" verificationStatus={r.verification_status} />
                       </td>
-                      <td style={{ fontSize: '12px' }}>
-                        <div style={{ color: '#cbd5e1' }}>{r.uploaded_by}</div>
-                        <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                      <td data-label="Pengunggah" style={{ fontSize: '12px' }}>
+                        <div style={{ color: 'var(--text-secondary)' }}>{r.uploaded_by}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                           {r.verification_status === 'verified' && r.verified_by ? `Disahkan: ${r.verified_by}` : r.verification_status === 'revision_needed' ? 'Perlu Revisi' : 'Menunggu'}
                         </div>
                       </td>

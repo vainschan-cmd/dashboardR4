@@ -53,7 +53,7 @@ export default function AuditTrailView() {
       <div className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title" style={{ fontSize: '18px' }}>
+            <h2 className="card-title" style={{ fontSize: '16px' }}>
               <History size={20} color="#38bdf8" />
               <span>Audit Trail & Log Aktivitas Sistem</span>
             </h2>
@@ -74,53 +74,53 @@ export default function AuditTrailView() {
             <input
               type="text"
               className="form-input"
-              style={{ paddingLeft: '36px', height: '38px', fontSize: '13px' }}
+              style={{ paddingLeft: '36px', height: '38px', fontSize: '12px' }}
               placeholder="Cari audit log, nama user, aksi..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-            Total <strong style={{ color: '#ffffff' }}>{filtered.length}</strong> rekam jejak audit tersimpan
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Total <strong style={{ color: 'var(--text-title)' }}>{filtered.length}</strong> rekam jejak audit tersimpan
           </div>
         </div>
 
         {isLoading ? (
-          <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>Memuat rekam audit...</div>
+          <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Memuat rekam audit...</div>
         ) : (
           <div className="table-responsive">
-            <table className="data-table">
+            <table className="card-table data-table">
               <thead>
                 <tr>
-                  <th>Waktu / Timestamp</th>
-                  <th>Pengguna (User)</th>
-                  <th>Role</th>
-                  <th>Tindakan (Action)</th>
-                  <th>Entitas Objek</th>
-                  <th>Rincian Aktivitas</th>
-                  <th>IP Address</th>
+                  <th scope="col">Waktu / Timestamp</th>
+                  <th scope="col">Pengguna (User)</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Tindakan (Action)</th>
+                  <th scope="col">Entitas Objek</th>
+                  <th scope="col">Rincian Aktivitas</th>
+                  <th scope="col">IP Address</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((log) => (
                   <tr key={log.id}>
-                    <td style={{ fontSize: '12px', whiteSpace: 'nowrap', color: '#94a3b8' }}>
+                    <td data-label="Waktu / Timestamp" style={{ fontSize: '12px', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
                       {new Date(log.timestamp).toLocaleString('id-ID')}
                     </td>
-                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{log.user_name}</td>
-                    <td>
-                      <span className="badge badge-neutral" style={{ fontSize: '10px' }}>
+                    <td data-label="Pengguna (User)" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{log.user_name}</td>
+                    <td data-label="Role">
+                      <span className="badge badge-neutral" style={{ fontSize: '12px' }}>
                         {log.user_role}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Tindakan (Action)">
                       <span className={`badge ${getActionBadge(log.action)}`}>
                         {log.action}
                       </span>
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11.5px', color: '#38bdf8' }}>{log.entity}</td>
-                    <td style={{ fontSize: '12.5px', color: '#cbd5e1', maxWidth: '380px' }}>{log.details}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#94a3b8' }}>
+                    <td data-label="Entitas Objek" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--accent-blue-text)' }}>{log.entity}</td>
+                    <td data-label="Rincian Aktivitas" style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '380px' }}>{log.details}</td>
+                    <td data-label="IP Address" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' }}>
                       {log.ip_address || '127.0.0.1'}
                     </td>
                   </tr>

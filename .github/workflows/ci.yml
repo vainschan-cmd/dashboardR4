@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so a credential committed and later removed is still caught.
+          fetch-depth: 0
+
+      - name: Scan git history for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  quality:
+    name: Typecheck, Lint, Unit tests & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          # `node:sqlite` requires Node >= 22.5
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Warnings must stay at zero; a new warning fails the build.
+      - name: Lint
+        run: npx eslint . --max-warnings 0
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Dependency audit (high/critical)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Build
+        run: npm run build
+        env:
+          JWT_SECRET: ci_build_secret_placeholder_value_at_least_32_chars
+          BOOTSTRAP_PIC_PASSWORD: ci_build_password_placeholder
+          NODE_ENV: production
+
+  regression:
+    name: Security regression suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quality
+    env:
+      JWT_SECRET: ci_regression_secret_placeholder_value_32_chars
+      BOOTSTRAP_PIC_PASSWORD: ci_regression_password_placeholder
+      ALLOW_PUBLIC_REGISTRATION: 'false'
+      DATABASE_PATH: data/ci_dashboard.db
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start server
+        run: |
+          npm run build
+          npm run start &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/api/users/login >/dev/null 2>&1 || curl -s -o /dev/null http://localhost:3000/; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run regression tests
+        run: node scripts/regression-test.mjs
+        env:
+          TEST_BASE_URL: http://localhost:3000
+          TEST_PIC_PASSWORD: ${{ env.BOOTSTRAP_PIC_PASSWORD }}

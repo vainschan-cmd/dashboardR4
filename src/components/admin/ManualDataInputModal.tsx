@@ -18,7 +18,7 @@ import {
   Info
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
-import { formatRupiahFull } from '@/lib/formatters';
+import { formatRupiahFull, formatNumber } from '@/lib/formatters';
 import { User } from '@/lib/types';
 
 export type ModuleType = 'finansial' | 'opkom' | 'kinerja' | 'utilisasi' | 'peralatan' | 'fasilitas';
@@ -34,12 +34,12 @@ interface ManualDataInputModalProps {
 }
 
 const MODULES_CONFIG = [
-  { id: 'finansial' as ModuleType, label: 'Finance (Keuangan)', icon: DollarSign, color: '#38bdf8' },
-  { id: 'opkom' as ModuleType, label: 'Opkom (Operasi & Komersial)', icon: Ship, color: '#34d399' },
-  { id: 'kinerja' as ModuleType, label: 'Kinerja Pelayanan', icon: Activity, color: '#fbbf24' },
-  { id: 'utilisasi' as ModuleType, label: 'Utilisasi (BOR/YOR/SOR)', icon: Anchor, color: '#a855f7' },
-  { id: 'peralatan' as ModuleType, label: 'Peralatan Pelabuhan', icon: Wrench, color: '#f97316' },
-  { id: 'fasilitas' as ModuleType, label: 'Fasilitas & Dermaga', icon: Warehouse, color: '#ec4899' },
+  { id: 'finansial' as ModuleType, label: 'Finance (Keuangan)', icon: DollarSign, color: 'var(--accent-blue-text)' },
+  { id: 'opkom' as ModuleType, label: 'Opkom (Operasi & Komersial)', icon: Ship, color: 'var(--status-good-text)' },
+  { id: 'kinerja' as ModuleType, label: 'Kinerja Pelayanan', icon: Activity, color: 'var(--status-alert-text)' },
+  { id: 'utilisasi' as ModuleType, label: 'Utilisasi (BOR/YOR/SOR)', icon: Anchor, color: 'var(--series-purple-text)' },
+  { id: 'peralatan' as ModuleType, label: 'Peralatan Pelabuhan', icon: Wrench, color: 'var(--accent-orange-text)' },
+  { id: 'fasilitas' as ModuleType, label: 'Fasilitas & Dermaga', icon: Warehouse, color: 'var(--series-pink-text)' },
 ];
 
 const MONTHS_LIST = [
@@ -289,7 +289,7 @@ export default function ManualDataInputModal({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--accent-blue)',
+                color: 'var(--accent-blue-text)',
               }}
             >
               <PlusCircle size={20} />
@@ -298,7 +298,7 @@ export default function ManualDataInputModal({
               <h3 className="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
                 Input Data Manual Operasional & Keuangan
               </h3>
-              <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-muted)' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
                 Field input diselaraskan persis dengan struktur spreadsheet <strong>input_data.xlsx</strong>
               </p>
             </div>
@@ -349,7 +349,7 @@ export default function ManualDataInputModal({
                   background: isSelected ? 'var(--bg-card)' : 'transparent',
                   color: isSelected ? 'var(--accent-blue)' : 'var(--text-secondary)',
                   fontWeight: isSelected ? 700 : 500,
-                  fontSize: '11.5px',
+                  fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
@@ -366,7 +366,7 @@ export default function ManualDataInputModal({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit}>
+        <form method="post" onSubmit={handleSubmit}>
           <div
             className="modal-body"
             style={{
@@ -388,7 +388,7 @@ export default function ManualDataInputModal({
                   backgroundColor: 'rgba(239, 68, 68, 0.12)',
                   border: '1px solid #ef4444',
                   borderRadius: '8px',
-                  color: '#f87171',
+                  color: 'var(--status-danger-text)',
                   fontSize: '12px',
                 }}
               >
@@ -407,7 +407,7 @@ export default function ManualDataInputModal({
                   backgroundColor: 'rgba(16, 185, 129, 0.12)',
                   border: '1px solid #10b981',
                   borderRadius: '8px',
-                  color: '#34d399',
+                  color: 'var(--status-good-text)',
                   fontSize: '12px',
                 }}
               >
@@ -429,13 +429,13 @@ export default function ManualDataInputModal({
               }}
             >
               <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Building2 size={12} color="var(--accent-cyan)" />
                     <span>Cabang Pelabuhan (KODE_CBG)</span>
                   </span>
                   {isBranchLocked && (
-                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)', backgroundColor: 'rgba(2, 132, 199, 0.2)', padding: '1px 6px', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--accent-cyan)', backgroundColor: 'rgba(2, 132, 199, 0.2)', padding: '1px 6px', borderRadius: '8px' }}>
                       🔒 Terkunci PIC
                     </span>
                   )}
@@ -469,7 +469,7 @@ export default function ManualDataInputModal({
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <Calendar size={12} color="var(--accent-orange)" />
                   <span>Tahun (TAHUN)</span>
                 </label>
@@ -486,7 +486,7 @@ export default function ManualDataInputModal({
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <Calendar size={12} color="var(--accent-orange)" />
                   <span>Bulan (BULAN)</span>
                 </label>
@@ -512,7 +512,7 @@ export default function ManualDataInputModal({
             {activeModule === 'finansial' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
-                  <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                     Rekening Akuntansi (REKENING)
                   </label>
                   <select
@@ -531,7 +531,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Porsi Cabang Rp (CABANG)
                     </label>
                     <input
@@ -542,13 +542,13 @@ export default function ManualDataInputModal({
                       placeholder="Contoh: 170176612011"
                       required
                     />
-                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>
                       {formatRupiahFull(finCabang)}
                     </span>
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Porsi PMT Rp (PMT)
                     </label>
                     <input
@@ -557,13 +557,13 @@ export default function ManualDataInputModal({
                       onChange={(e) => setFinPmt(Number(e.target.value))}
                       className="form-control"
                     />
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                       {formatRupiahFull(finPmt)}
                     </span>
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Porsi PTP Rp (PTP)
                     </label>
                     <input
@@ -575,7 +575,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Porsi PSL Rp (PSL)
                     </label>
                     <input
@@ -587,7 +587,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Porsi PJM Rp (PJM)
                     </label>
                     <input
@@ -599,7 +599,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Eliminasi Rp (ELIMINASI)
                     </label>
                     <input
@@ -624,21 +624,21 @@ export default function ManualDataInputModal({
                   }}
                 >
                   <div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block' }}>
                       Total Konsolidasi Otomatis (KONSOLIDASI):
                     </span>
-                    <strong style={{ fontSize: '16px', color: '#38bdf8' }}>
+                    <strong style={{ fontSize: '16px', color: 'var(--accent-blue-text)' }}>
                       {formatRupiahFull(computedKonsolidasi)}
                     </strong>
                   </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    ({(computedKonsolidasi / 1_000_000_000).toFixed(2)} Miliar)
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    ({formatNumber(computedKonsolidasi / 1_000_000_000, 2)} miliar)
                   </span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Pertumbuhan YoY % (YOY)
                     </label>
                     <input
@@ -651,7 +651,7 @@ export default function ManualDataInputModal({
                     />
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Pencapaian RKA % (RKA)
                     </label>
                     <input
@@ -672,7 +672,7 @@ export default function ManualDataInputModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Layanan Operasional (LAYANAN)
                     </label>
                     <select
@@ -690,7 +690,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Satuan Ukuran (SATUAN)
                     </label>
                     <select
@@ -710,7 +710,7 @@ export default function ManualDataInputModal({
                 </div>
 
                 <div className="form-group">
-                  <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                     Nilai Realisasi (JUMLAH)
                   </label>
                   <input
@@ -722,7 +722,7 @@ export default function ManualDataInputModal({
                     required
                   />
                   {opSatuan === 'Rp' && (
-                    <span style={{ fontSize: '11px', color: 'var(--accent-cyan)' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>
                       {formatRupiahFull(opJumlah)}
                     </span>
                   )}
@@ -730,7 +730,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       YoY % (YOY)
                     </label>
                     <input
@@ -743,7 +743,7 @@ export default function ManualDataInputModal({
                     />
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Pencapaian RKA % (RKA)
                     </label>
                     <input
@@ -764,7 +764,7 @@ export default function ManualDataInputModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Nama Kinerja (NM_KINE)
                     </label>
                     <select
@@ -790,7 +790,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Kode Kinerja (KD_KINE)
                     </label>
                     <input
@@ -806,7 +806,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Satuan Indikator (SATUAN)
                     </label>
                     <select
@@ -824,7 +824,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Nilai Capaian (NILAI)
                     </label>
                     <input
@@ -845,7 +845,7 @@ export default function ManualDataInputModal({
             {activeModule === 'utilisasi' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
-                  <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                     Nama / Jenis Dermaga (DERMAGA)
                   </label>
                   <select
@@ -866,7 +866,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       BOR % (Berth Occupancy)
                     </label>
                     <input
@@ -881,7 +881,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       YOR % (Yard Occupancy)
                     </label>
                     <input
@@ -896,7 +896,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       SOR % (Shed Occupancy)
                     </label>
                     <input
@@ -918,7 +918,7 @@ export default function ManualDataInputModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Nama Alat (NM_ALAT)
                     </label>
                     <select
@@ -950,7 +950,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Kode Alat (KD_ALAT)
                     </label>
                     <input
@@ -966,7 +966,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Singkatan (SINGKATAN_ALAT)
                     </label>
                     <input
@@ -979,7 +979,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Jenis Alat (JNS_ALAT)
                     </label>
                     <select
@@ -997,7 +997,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Populasi Unit (JUMLAH)
                     </label>
                     <input
@@ -1011,7 +1011,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Utilisasi Jam / % (UTILISASI)
                     </label>
                     <input
@@ -1033,7 +1033,7 @@ export default function ManualDataInputModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Nama Fasilitas (nm_pasfel)
                     </label>
                     <input
@@ -1047,7 +1047,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Jenis Fasilitas (jns_faspel)
                     </label>
                     <select
@@ -1068,7 +1068,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Panjang m (panjang)
                     </label>
                     <input
@@ -1081,7 +1081,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Lebar m (lebar)
                     </label>
                     <input
@@ -1094,7 +1094,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Kedalaman (mLws)
                     </label>
                     <input
@@ -1108,7 +1108,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Satuan (satuan)
                     </label>
                     <input
@@ -1123,7 +1123,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Luas / Kapasitas Nilai (nilai)
                     </label>
                     <input
@@ -1136,7 +1136,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Keterangan / Segmen (ket)
                     </label>
                     <input
@@ -1164,7 +1164,7 @@ export default function ManualDataInputModal({
               backgroundColor: 'var(--bg-inner)',
             }}
           >
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Info size={14} color="var(--accent-blue)" />
               <span>Tersimpan ke file Excel & database real-time</span>
             </div>
@@ -1175,7 +1175,7 @@ export default function ManualDataInputModal({
                 onClick={onClose}
                 className="btn-dark"
                 disabled={loading}
-                style={{ padding: '8px 16px', fontSize: '12.5px' }}
+                style={{ padding: '8px 16px', fontSize: '12px' }}
               >
                 Batal
               </button>
@@ -1185,7 +1185,7 @@ export default function ManualDataInputModal({
                 disabled={loading}
                 style={{
                   padding: '8px 18px',
-                  fontSize: '12.5px',
+                  fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',

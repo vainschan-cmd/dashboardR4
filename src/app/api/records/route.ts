@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
       year: searchParams.get('year') || undefined,
       verified_only: searchParams.get('verified_only') || undefined,
       verification_status: searchParams.get('verification_status') || undefined,
+      limit: searchParams.get('limit') || undefined,
+      offset: searchParams.get('offset') || undefined,
     };
 
     const parsed = parseWithSchema(recordsQuerySchema, rawQuery);
@@ -40,18 +42,29 @@ export async function GET(req: NextRequest) {
       parsed.data.verification_status
     );
 
-    const records = dbQueries.getMonthlyRecords({
+    const filters = {
       branch_id,
       department_id,
       month: parsed.data.month,
       year: parsed.data.year,
       verified_only,
       verification_status,
+    };
+
+    const records = dbQueries.getMonthlyRecords({
+      ...filters,
+      limit: parsed.data.limit,
+      offset: parsed.data.offset,
     });
+    const total = dbQueries.countMonthlyRecords(filters);
 
     return NextResponse.json({
       success: true,
       count: records.length,
+      total,
+      limit: parsed.data.limit,
+      offset: parsed.data.offset,
+      hasMore: parsed.data.offset + records.length < total,
       records,
     });
   } catch (error: unknown) {

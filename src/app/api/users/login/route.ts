@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dbQueries, toSafeUser } from '@/lib/db';
+import { dbQueries, toSafeUser, maybeRunAuthHousekeeping } from '@/lib/db';
 import {
   checkLoginRateLimit,
   recordLoginFailure,
@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Authenticate User against scrypt password hash
-    const user = dbQueries.authenticateUser(inputNipp, inputPassword);
+    // 2. Authenticate User against scrypt password hash (non-blocking)
+    const user = await dbQueries.authenticateUserAsync(inputNipp, inputPassword);
 
     if (!user) {
       recordLoginFailure(clientIp, inputNipp);
@@ -109,15 +109,18 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         {
+          // Same message/status as invalid credentials to reduce account enumeration.
           success: false,
-          error: 'Akun Anda sedang dinonaktifkan oleh Administrator.',
+          error: 'NIPP atau kata sandi yang Anda masukkan tidak sesuai.',
         },
-        { status: 403 }
+        { status: 401 }
       );
     }
 
     // 3. Reset rate limit & Issue HttpOnly JWT Cookies
     resetLoginRateLimit(clientIp, inputNipp);
+    // Throttled to once per hour; keeps auth_sessions/auth_rate_limits bounded.
+    maybeRunAuthHousekeeping();
     const systemParams = dbQueries.getSystemParameters();
     const safeUser = toSafeUser(user);
 
@@ -135,13 +138,22 @@ export async function POST(req: NextRequest) {
         role: safeUser.role,
         branch_id: safeUser.branch_id,
         department_id: safeUser.department_id,
+        must_change_password: Boolean(safeUser.must_change_password),
       },
       session: {
         timeoutMinutes: systemParams.session_timeout_minutes || 30,
       },
     });
 
-    await issueSessionCookies(response, safeUser, systemParams.session_timeout_minutes || 30);
+    await issueSessionCookies(
+      response,
+      safeUser,
+      systemParams.session_timeout_minutes || 30,
+      {
+        ipAddress: clientIp,
+        userAgent: req.headers.get('user-agent') || undefined,
+      }
+    );
 
     // 4. Record successful LOGIN in audit_logs
     try {

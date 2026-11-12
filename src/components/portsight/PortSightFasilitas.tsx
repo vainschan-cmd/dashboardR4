@@ -10,8 +10,9 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { Building2, Compass, Layers, Warehouse, Search, Waves, PlusCircle } from 'lucide-react';
+import { Building2, Layers, Warehouse, Search, Waves, PlusCircle } from 'lucide-react';
 import { isBranchMatch } from '@/lib/constants';
+import LoadingState from '@/components/ui/LoadingState';
 
 interface FasilitasItem {
   year: number;
@@ -34,8 +35,8 @@ interface PortSightFasilitasProps {
 }
 
 export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightFasilitasProps) {
-  const [data, setData] = useState<FasilitasItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<FasilitasItem[]>([]);
   const [selectedJenis, setSelectedJenis] = useState('ALL');
   const [search, setSearch] = useState('');
 
@@ -123,6 +124,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
       panjang: b.panjang,
     }));
 
+  if (loading) {
+    return <LoadingState label="Memuat data Fasilitas…" />;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 4 Summary Cards */}
@@ -132,10 +137,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Total Panjang Dermaga</span>
             <Building2 size={20} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {totalDermagaM.toLocaleString('id-ID')} Meter
           </div>
-          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Tambatan kapal operasional Regional 4
           </div>
         </div>
@@ -145,10 +150,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Total Luas Lapangan</span>
             <Layers size={20} color="#10b981" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {(totalLapanganSqm / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} ribu m&sup2;
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Kapasitas lapangan penumpukan kargo & box
           </div>
         </div>
@@ -158,10 +163,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Total Luas Gudang</span>
             <Warehouse size={20} color="#f59e0b" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {totalGudangSqm.toLocaleString('id-ID')} m&sup2;
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Gudang tertutup CFS & general cargo
           </div>
         </div>
@@ -171,10 +176,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Kedalaman Kolam Maksimum</span>
             <Waves size={20} color="#06b6d4" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {maxDepthMlws} mLWS
           </div>
-          <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: 'var(--status-good-text)', fontWeight: 600 }}>
             Dapat disandari kapal kargo samudera
           </div>
         </div>
@@ -187,21 +192,21 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
             <div className="dark-card-title" style={{ margin: 0 }}>
               Kapasitas Panjang Dermaga Total (Meter) per Cabang Utama
             </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Panjang fasilitas dermaga tambat kapal komersial
             </div>
           </div>
-          <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700 }}>Sumber: Sheet fasilitas (2)</span>
+          <span style={{ fontSize: '12px', color: 'var(--accent-blue-text)', fontWeight: 700 }}>Sumber: Sheet fasilitas (2)</span>
         </div>
 
         <div style={{ height: '240px', width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-              <XAxis dataKey="name" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
+                contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
                 formatter={(val: unknown) => [`${String(val ?? '')} Meter`, 'Panjang Dermaga']}
               />
               <Bar dataKey="panjang" fill="#0284c7" radius={[4, 4, 0, 0]} />
@@ -217,7 +222,7 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
             <div className="dark-card-title" style={{ margin: 0 }}>
               Tabel Inventaris Fasilitas Pelabuhan Regional 4
             </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Menampilkan {filteredData.length} baris dermaga, lapangan, dan gudang dari sheet fasilitas (2)
             </div>
           </div>
@@ -232,9 +237,9 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  backgroundColor: '#ec4899',
-                  borderColor: '#ec4899',
-                  color: '#ffffff',
+                  backgroundColor: 'var(--series-pink-fill)',
+                  borderColor: 'var(--series-pink-fill)',
+                  color: 'var(--text-on-accent)',
                   padding: '6px 12px',
                   fontSize: '12px',
                   borderRadius: '6px',
@@ -250,7 +255,7 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
             )}
 
             <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 className="filter-select"
@@ -275,44 +280,44 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
         </div>
 
         <div className="table-responsive">
-          <table className="dark-table">
+          <table className="card-table dark-table">
             <thead>
               <tr>
-                <th>Kode</th>
-                <th>Cabang</th>
-                <th>Nama Fasilitas</th>
-                <th>Jenis Fasilitas</th>
-                <th style={{ textAlign: 'right' }}>Panjang (m)</th>
-                <th style={{ textAlign: 'right' }}>Lebar (m)</th>
-                <th style={{ textAlign: 'center' }}>Kedalaman (mLWS)</th>
-                <th style={{ textAlign: 'right' }}>Luas (m&sup2;)</th>
-                <th>Kode / Keterangan</th>
+                <th scope="col">Kode</th>
+                <th scope="col">Cabang</th>
+                <th scope="col">Nama Fasilitas</th>
+                <th scope="col">Jenis Fasilitas</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Panjang (m)</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Lebar (m)</th>
+                <th scope="col" style={{ textAlign: 'center' }}>Kedalaman (mLWS)</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Luas (m&sup2;)</th>
+                <th scope="col">Kode / Keterangan</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.slice(0, 100).map((r, i) => (
                 <tr key={i}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{r.branchCode}</td>
-                  <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.branchName}</td>
-                  <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.namaFasilitas}</td>
-                  <td>
+                  <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{r.branchCode}</td>
+                  <td data-label="Cabang" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.branchName}</td>
+                  <td data-label="Nama Fasilitas" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.namaFasilitas}</td>
+                  <td data-label="Jenis Fasilitas">
                     <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
                       {r.jenisFasilitas}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 600, color: '#cbd5e1' }}>
+                  <td data-label="Panjang (m)" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
                     {r.panjangM > 0 ? `${r.panjangM} m` : '-'}
                   </td>
-                  <td style={{ textAlign: 'right', color: '#cbd5e1' }}>
+                  <td data-label="Lebar (m)" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
                     {r.lebarM > 0 ? `${r.lebarM} m` : '-'}
                   </td>
-                  <td style={{ textAlign: 'center', fontWeight: 700, color: '#38bdf8' }}>
+                  <td data-label="Kedalaman (mLWS)" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent-blue-text)' }}>
                     {r.mLws !== 0 ? `${r.mLws} mLWS` : '-'}
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>
+                  <td data-label="Luas (m&sup2;)" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--status-good-text)' }}>
                     {(r.luasSqm || 0) > 0 ? `${(r.luasSqm || 0).toLocaleString('id-ID')} m²` : '-'}
                   </td>
-                  <td style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                  <td data-label="Kode / Keterangan" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                     {r.keterangan || r.kapasitas || '-'}
                   </td>
                 </tr>

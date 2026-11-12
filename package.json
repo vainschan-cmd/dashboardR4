@@ -2,6 +2,9 @@
   "name": "ed-dashboard",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "tunnel": "node scripts/keep_portdash.js",
@@ -9,26 +12,33 @@
     "tunnel:quick": "./cloudflared tunnel --url http://localhost:3000",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:ci": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:security": "node scripts/regression-test.mjs",
+    "backup": "node scripts/backup-db.mjs",
+    "backup:list": "node scripts/backup-db.mjs --list",
+    "restore": "node scripts/backup-db.mjs --restore",
+    "verify": "npm run typecheck && npm run lint:ci && npm run test && npm run test:security"
   },
   "dependencies": {
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.9",
     "lucide-react": "^1.65.0",
     "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^3.10.1",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/jspdf": "^1.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

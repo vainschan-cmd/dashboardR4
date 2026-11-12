@@ -9,17 +9,12 @@ import {
   Activity,
   RotateCcw,
   DollarSign,
-  ChevronRight,
   ExternalLink,
   FileSpreadsheet,
-  Search,
-  X,
   BarChart3,
-  CheckSquare,
   Gauge,
   CheckCircle2,
   Lock,
-  Info,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -35,7 +30,6 @@ import {
   Cell,
 } from 'recharts';
 import { getSelectedBranchLabel } from '@/lib/constants';
-import { formatRupiahFull } from '@/lib/formatters';
 import { User, UserRole } from '@/lib/types';
 import { useBerandaAnalytics, BerandaKpiItem } from '@/hooks/useBerandaAnalytics';
 import ExecutiveKonsolidasiDashboard from './ExecutiveKonsolidasiDashboard';
@@ -63,7 +57,8 @@ export default function PortSightBeranda({
   comparisonMode = 'all',
   onOpenComparisonModal,
 }: PortSightBerandaProps) {
-  const [terminalSearch, setTerminalSearch] = useState<string>('');
+  // Search state is reserved for the branch filter; the input lives in the header.
+  const [terminalSearch] = useState<string>('');
   const [dashboardView, setDashboardView] = useState<'konsolidasi' | 'visual' | 'cards'>('konsolidasi');
 
   const {
@@ -78,14 +73,8 @@ export default function PortSightBeranda({
     isMulti,
     selectedCodes,
     activeBranch,
-    filteredUtilisasi,
     serviceKpis,
     financeKpis,
-    terminalsOverview,
-    filteredTerminalsOverview,
-    selectedBranchesMetrics,
-    branchCommoditiesBreakdown,
-    attentionItems,
     mainCombinedChartData,
     gaugeMetrics,
     servicesGroupedChartData,
@@ -151,20 +140,22 @@ export default function PortSightBeranda({
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                background: 'linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%)',
+                // `UX-02`: a gradient tile with a coloured glow competed with the
+                // banner text for attention and carried no information. A flat
+                // accent surface with a decorative icon reads the same and does
+                // not look like a button.
+                backgroundColor: 'var(--blue-soft)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#ffffff',
-                fontWeight: 800,
-                fontSize: '12px',
-                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+                color: 'var(--accent-blue-text)',
+                flexShrink: 0,
               }}
             >
-              <Building2 size={16} strokeWidth={1.75} />
+              <Building2 size={16} strokeWidth={1.75} aria-hidden="true" />
             </div>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-title)' }}>
+              <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)' }}>
                 {isPicCabang
                   ? `Cabang Penugasan PIC: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`
                   : isNone
@@ -173,7 +164,7 @@ export default function PortSightBeranda({
                   ? `Filter Aktif: ${getSelectedBranchLabel(selectedTerminal)}`
                   : `Filter Aktif: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {isPicCabang
                   ? 'Tampilan dashboard, ringkasan eksekutif, dan data operasional disesuaikan khusus untuk cabang penugasan Anda.'
                   : isNone
@@ -191,7 +182,7 @@ export default function PortSightBeranda({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 700,
                 color: 'var(--accent-cyan)',
                 backgroundColor: 'rgba(2, 132, 199, 0.18)',
@@ -215,7 +206,7 @@ export default function PortSightBeranda({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '5px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     padding: '5px 12px',
                     borderRadius: 'var(--radius-pill)',
                     border: '1px solid rgba(56, 189, 248, 0.4)',
@@ -239,7 +230,7 @@ export default function PortSightBeranda({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    fontSize: '11.5px',
+                    fontSize: '12px',
                     padding: '5px 12px',
                     borderRadius: 'var(--radius-pill)',
                     borderColor: 'var(--accent-blue)',
@@ -275,7 +266,7 @@ export default function PortSightBeranda({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 800,
               color: 'var(--accent-cyan)',
               textTransform: 'uppercase',
@@ -288,7 +279,7 @@ export default function PortSightBeranda({
             <Activity size={14} strokeWidth={1.75} />
             Ikhtisar Kinerja Eksekutif
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             • {isNone
                 ? 'Cabang Dikosongkan'
                 : isAll
@@ -300,22 +291,23 @@ export default function PortSightBeranda({
           <button
             type="button"
             onClick={() => setVerifiedOnly(prev => !prev)}
+            aria-pressed={verifiedOnly}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '5px',
               padding: '3px 10px',
               borderRadius: '999px',
-              fontSize: '10.5px',
+              fontSize: '12px',
               fontWeight: 700,
               cursor: 'pointer',
               border: verifiedOnly
-                ? '1px solid rgba(16, 185, 129, 0.45)'
-                : '1px solid rgba(245, 158, 11, 0.45)',
+                ? '1px solid var(--status-good-border)'
+                : '1px solid var(--status-alert-border)',
               backgroundColor: verifiedOnly
-                ? 'rgba(16, 185, 129, 0.12)'
-                : 'rgba(245, 158, 11, 0.12)',
-              color: verifiedOnly ? '#10b981' : '#f59e0b',
+                ? 'var(--status-good-bg)'
+                : 'var(--status-alert-bg)',
+              color: verifiedOnly ? 'var(--status-good-text)' : 'var(--status-alert-text)',
             }}
             title={
               verifiedOnly
@@ -323,9 +315,15 @@ export default function PortSightBeranda({
                 : 'Menampilkan seluruh data termasuk yang masih menunggu verifikasi (klik untuk memfilter hanya data terverifikasi)'
             }
           >
-            <CheckCircle2 size={12} strokeWidth={1.75} />
-            <span>
-              {verifiedOnly ? 'Filter: Data Terverifikasi Resmi' : 'Filter: Semua Status (Termasuk Pending)'}
+            <CheckCircle2 size={12} strokeWidth={1.75} aria-hidden="true" />
+            {/* `COPY-05`: the old copy ("Filter: Data Terverifikasi Resmi") read as a
+                status label while being a clickable toggle. State first, action
+                second, and the toggle nature is exposed via aria-pressed. */}
+            <span>{verifiedOnly ? 'Hanya data terverifikasi' : 'Semua status data'}</span>
+            <span className="sr-only">
+              {verifiedOnly
+                ? 'Aktif. Klik untuk menampilkan semua status data.'
+                : 'Tidak aktif. Klik untuk hanya menampilkan data terverifikasi.'}
             </span>
           </button>
           {verificationSummary.pendingCount > 0 && (
@@ -336,11 +334,11 @@ export default function PortSightBeranda({
                 gap: '4px',
                 padding: '2px 8px',
                 borderRadius: '999px',
-                fontSize: '10.5px',
+                fontSize: '12px',
                 fontWeight: 700,
                 backgroundColor: 'rgba(245, 158, 11, 0.14)',
                 border: '1px solid rgba(245, 158, 11, 0.35)',
-                color: '#f59e0b',
+                color: 'var(--status-alert-text)',
               }}
               title="Terdapat data input baru yang sedang menunggu persetujuan Admin Regional"
             >
@@ -356,10 +354,10 @@ export default function PortSightBeranda({
             onClick={() => setDashboardView('konsolidasi')}
             style={{
               padding: '5px 12px',
-              fontSize: '11.5px',
+              fontSize: '12px',
               fontWeight: dashboardView === 'konsolidasi' ? 700 : 500,
-              backgroundColor: dashboardView === 'konsolidasi' ? '#0284c7' : 'transparent',
-              color: dashboardView === 'konsolidasi' ? '#ffffff' : 'var(--text-muted)',
+              backgroundColor: dashboardView === 'konsolidasi' ? 'var(--accent-blue)' : 'transparent',
+              color: dashboardView === 'konsolidasi' ? 'var(--text-on-accent)' : 'var(--text-muted)',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -377,10 +375,10 @@ export default function PortSightBeranda({
             onClick={() => setDashboardView('visual')}
             style={{
               padding: '5px 12px',
-              fontSize: '11.5px',
+              fontSize: '12px',
               fontWeight: dashboardView === 'visual' ? 700 : 500,
-              backgroundColor: dashboardView === 'visual' ? '#0284c7' : 'transparent',
-              color: dashboardView === 'visual' ? '#ffffff' : 'var(--text-muted)',
+              backgroundColor: dashboardView === 'visual' ? 'var(--accent-blue)' : 'transparent',
+              color: dashboardView === 'visual' ? 'var(--text-on-accent)' : 'var(--text-muted)',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -398,10 +396,10 @@ export default function PortSightBeranda({
             onClick={() => setDashboardView('cards')}
             style={{
               padding: '5px 12px',
-              fontSize: '11.5px',
+              fontSize: '12px',
               fontWeight: dashboardView === 'cards' ? 700 : 500,
-              backgroundColor: dashboardView === 'cards' ? '#0284c7' : 'transparent',
-              color: dashboardView === 'cards' ? '#ffffff' : 'var(--text-muted)',
+              backgroundColor: dashboardView === 'cards' ? 'var(--accent-blue)' : 'transparent',
+              color: dashboardView === 'cards' ? 'var(--text-on-accent)' : 'var(--text-muted)',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -447,12 +445,12 @@ export default function PortSightBeranda({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <DollarSign size={16} strokeWidth={1.75} style={{ color: '#38bdf8' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                  <DollarSign size={16} strokeWidth={1.75} style={{ color: 'var(--accent-blue-text)' }} />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
                     Kinerja Finansial (Pendapatan, Beban, Laba Usaha)
                   </span>
                 </div>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Realisasi vs RKAP & YoY
                 </span>
               </div>
@@ -473,7 +471,7 @@ export default function PortSightBeranda({
                         color: 'var(--text-main)',
                       }}
                     />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
+                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }} />
                     <Bar yAxisId="left" dataKey="nominalRealisasi" name="Realisasi (Miliar Rp)" fill="#0284c7" radius={[4, 4, 0, 0]} barSize={28} />
                     <Bar yAxisId="left" dataKey="nominalTarget" name="Target RKAP (Miliar Rp)" fill="rgba(148, 163, 184, 0.25)" stroke="#64748b" radius={[4, 4, 0, 0]} barSize={28} />
                     <Line yAxisId="right" type="monotone" dataKey="capaianRkap" name="% Capaian RKAP" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 4, fill: '#f59e0b' }} />
@@ -496,12 +494,12 @@ export default function PortSightBeranda({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Gauge size={16} strokeWidth={1.75} style={{ color: '#10b981' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                  <Gauge size={16} strokeWidth={1.75} style={{ color: 'var(--status-good-text)' }} />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
                     KPI Gauge & Kesiapan Alat (RFU)
                   </span>
                 </div>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Pencapaian vs Target Resmi
                 </span>
               </div>
@@ -534,10 +532,10 @@ export default function PortSightBeranda({
                       title={`${g.title}: ${g.fullRealisasi || g.realisasi} (${g.target})`}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
                           {g.title}
                         </span>
-                        <span className={`status-badge-chip ${g.isGood ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+                        <span className={`status-badge-chip ${g.isGood ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '12px', padding: '1px 5px' }}>
                           {g.isGood ? 'Baik' : 'Waspada'}
                         </span>
                       </div>
@@ -562,10 +560,10 @@ export default function PortSightBeranda({
                           />
                         </svg>
                         <div style={{ textAlign: 'right' }}>
-                          <div className="tabular-nums" style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-title)' }}>
+                          <div className="tabular-nums" style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-title)' }}>
                             {g.percentage}%
                           </div>
-                          <div style={{ fontSize: '9.5px', color: 'var(--text-muted)' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                             Capaian RKAP
                           </div>
                         </div>
@@ -574,12 +572,12 @@ export default function PortSightBeranda({
                       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px' }}>
                         <div
                           className="tabular-nums"
-                          style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--text-title)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                           title={g.fullRealisasi || g.realisasi}
                         >
                           {g.realisasi}
                         </div>
-                        <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                           <span>{g.target}</span>
                           <span className={g.isGood ? 'text-positive' : 'text-alert'}>{g.yoy}</span>
                         </div>
@@ -606,11 +604,11 @@ export default function PortSightBeranda({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Ship size={16} strokeWidth={1.75} style={{ color: 'var(--accent-cyan)' }} />
-                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
                   Kinerja Layanan {isSingle ? `Cabang [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}` : 'Pelabuhan Terintegrasi'} & BOR
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#06b6d4' }} />
                   Capaian RKAP (%)
@@ -641,7 +639,7 @@ export default function PortSightBeranda({
                       name === 'capaianRkap' ? 'Pencapaian RKAP' : 'Pertumbuhan YoY'
                     ]}
                   />
-                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }} />
                   <Bar dataKey="capaianRkap" name="Capaian RKAP (%)" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={24}>
                     {servicesGroupedChartData.map((entry, index) => (
                       <Cell key={`cell-rkap-${index}`} fill={entry.status === 'Baik' ? '#06b6d4' : '#f59e0b'} />
@@ -677,17 +675,17 @@ export default function PortSightBeranda({
                   title={`${s.layanan}: ${s.fullNominal || s.nominal}`}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
                       {s.layanan}
                     </span>
-                    <span className={`status-badge-chip ${s.status === 'Baik' ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '8.5px', padding: '1px 4px' }}>
+                    <span className={`status-badge-chip ${s.status === 'Baik' ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '12px', padding: '1px 4px' }}>
                       {s.status}
                     </span>
                   </div>
                   <div className="tabular-nums" style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', marginTop: '2px' }}>
                     {s.nominal}
                   </div>
-                  <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                     <span>RKAP {s.capaianRkap}%</span>
                     <span className={s.pertumbuhanYoy >= 0 ? 'text-positive' : 'text-alert'}>
                       {s.pertumbuhanYoy >= 0 ? '+' : ''}{s.pertumbuhanYoy}%
@@ -706,7 +704,7 @@ export default function PortSightBeranda({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 800,
                     color: 'var(--accent-cyan)',
                     textTransform: 'uppercase',
@@ -724,7 +722,7 @@ export default function PortSightBeranda({
                   Kinerja Operasional Semua Layanan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
                 </span>
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 {isNone
                   ? 'Pilih cabang untuk melihat data'
                   : isAll
@@ -769,9 +767,9 @@ export default function PortSightBeranda({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 800,
-                    color: '#38bdf8',
+                    color: 'var(--accent-blue-text)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                     display: 'inline-flex',
@@ -787,7 +785,7 @@ export default function PortSightBeranda({
                   Kinerja Finansial, Efisiensi Beban Biaya & Mutu Operasi
                 </span>
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 Pendapatan − Beban Biaya = Laba Usaha
               </span>
             </div>
@@ -822,526 +820,45 @@ export default function PortSightBeranda({
         </>
       )}
 
-      {/* Main Split: Kinerja per Terminal (4x2) vs Perlu Perhatian */}
-      <div className="split-dashboard-layout">
-        {/* Left Section: Kinerja per terminal / Kinerja per Layanan Cabang */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
-                {isPicCabang
-                  ? `Kinerja Cabang: [${currentUser?.branch_id}] ${activeBranch?.name || currentUser?.branch_id}`
-                  : isNone
-                  ? 'Cabang Dikosongkan (Mode Reset)'
-                  : isAll
-                  ? 'Kinerja per terminal'
-                  : isSingle
-                  ? `Kinerja Layanan Cabang: ${activeBranch?.name || selectedTerminal}`
-                  : `Kinerja Masing-Masing Cabang Terpilih (${selectedCodes.length} Cabang - Non-Akumulasi)`}
-              </div>
-              {isPicCabang ? (
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                    color: 'var(--accent-cyan)',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-pill)',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <Lock size={11} strokeWidth={1.75} />
-                  <span>Cabang PIC Terkunci</span>
-                </span>
-              ) : (isAll || isMulti) && (
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    backgroundColor: 'rgba(2, 132, 199, 0.1)',
-                    color: 'var(--accent-blue)',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-pill)',
-                    border: '1px solid rgba(2, 132, 199, 0.25)',
-                  }}
-                >
-                  {isAll ? `${terminalsOverview.length} Cabang` : `${selectedCodes.length} Cabang Terpilih`}
-                </span>
-              )}
-            </div>
-
-            {(isAll || isMulti) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <Search size={13} strokeWidth={1.75} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)' }} />
-                  <input
-                    type="text"
-                    value={terminalSearch}
-                    onChange={(e) => setTerminalSearch(e.target.value)}
-                    placeholder="Cari cabang / kode..."
-                    style={{
-                      padding: '5px 26px 5px 28px',
-                      fontSize: '11.5px',
-                      borderRadius: 'var(--radius-pill)',
-                      border: '1px solid var(--border-subtle)',
-                      backgroundColor: 'var(--bg-inner)',
-                      color: 'var(--text-main)',
-                      outline: 'none',
-                      width: '180px',
-                    }}
-                  />
-                  {terminalSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setTerminalSearch('')}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                      title="Hapus pencarian"
-                    >
-                      <X size={12} strokeWidth={1.75} />
-                    </button>
-                  )}
-                </div>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Klik kartu untuk filter cabang spesifik
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Render content depending on state: isNone / isSingle / (isAll or isMulti) */}
-          {isNone ? (
-            <div
-              style={{
-                padding: '36px 24px',
-                textAlign: 'center',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px dashed var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '12px',
-              }}
-            >
-              <div
-                style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ef4444',
-                }}
-              >
-                <RotateCcw size={22} strokeWidth={1.75} />
-              </div>
-              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-main)' }}>
-                Semua Cabang Telah Dikosongkan (Mode Reset)
-              </div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '480px', lineHeight: 1.5 }}>
-                Tidak ada cabang yang dipilih saat ini. Anda dapat mencentang cabang tertentu pada filter cabang di atas, atau klik tombol di bawah untuk mengaktifkan kembali seluruh cabang.
-              </div>
-              <button
-                type="button"
-                onClick={() => onSelectTerminal && onSelectTerminal('ALL')}
-                className="btn-primary"
-                style={{
-                  marginTop: '8px',
-                  padding: '8px 18px',
-                  fontSize: '12.5px',
-                  fontWeight: 600,
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <CheckSquare size={14} strokeWidth={1.75} />
-                <span>Pilih Semua 28 Cabang</span>
-              </button>
-            </div>
-          ) : isSingle ? (
-            /* Single branch breakdown */
-            <div className="terminal-grid">
-              {branchCommoditiesBreakdown.map((c, i) => (
-                <div key={i} className="terminal-card" title={`Layanan ${c.layanan}: ${c.fullValue || c.value}`}>
-                  <div className="terminal-card-top">
-                    <div>
-                      <div className="terminal-name">Layanan {c.layanan}</div>
-                      <div className="terminal-subtype">Satuan: {c.satuan}</div>
-                    </div>
-                    <span className={`status-badge-chip ${c.isGood ? 'status-baik' : 'status-waspada'}`}>
-                      {c.isGood ? 'Baik' : 'Waspada'}
-                    </span>
-                  </div>
-
-                  <div className="terminal-metric-value tabular-nums">{c.value}</div>
-
-                  <div className="terminal-card-footer tabular-nums">
-                    <span className={c.isGood ? 'text-positive' : 'text-alert'}>
-                      {c.rkap}
-                    </span>{' '}
-                    <span className={c.isGood ? 'text-positive' : 'text-alert'}>
-                      {c.yoy}
-                    </span>
-                  </div>
-                </div>
-              ))}
-
-              {/* Utilisasi Dermaga info if available */}
-              {filteredUtilisasi.length > 0 && (
-                <div className="terminal-card" style={{ borderLeft: '4px solid #06b6d4' }}>
-                  <div className="terminal-card-top">
-                    <div>
-                      <div className="terminal-name">Utilisasi Dermaga (BOR)</div>
-                      <div className="terminal-subtype">{filteredUtilisasi[0]?.dermaga || 'Dermaga Utama'}</div>
-                    </div>
-                    <span className="status-badge-chip status-baik">
-                      Baik
-                    </span>
-                  </div>
-
-                  <div className="terminal-metric-value tabular-nums">{filteredUtilisasi[0]?.bor || 0}%</div>
-
-                  <div className="terminal-card-footer tabular-nums">
-                    <span className="text-positive">
-                      YOR: {filteredUtilisasi[0]?.yor || 0}% • SOR: {filteredUtilisasi[0]?.sor || 0}%
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* isAll or isMulti: Render Grid of Selected Branch Cards */
-            <div>
-              {filteredTerminalsOverview.length === 0 ? (
-                <div
-                  style={{
-                    padding: '24px',
-                    textAlign: 'center',
-                    backgroundColor: 'var(--bg-card)',
-                    border: '1px dashed var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                    color: 'var(--text-muted)',
-                    fontSize: '13px',
-                  }}
-                >
-                  Tidak ditemukan cabang dengan kata kunci &quot;{terminalSearch}&quot;.
-                </div>
-              ) : (
-                <div className="terminal-grid">
-                  {filteredTerminalsOverview.map((t) => (
-                    <div
-                      key={t.id}
-                      className="terminal-card"
-                      onClick={() => onSelectTerminal && onSelectTerminal(t.id)}
-                      style={{ cursor: 'pointer' }}
-                      title={`[${t.code}] ${t.name} — ${t.fullValue || t.value} (Klik untuk memfilter)`}
-                    >
-                      <div className="terminal-card-top">
-                        <div>
-                          <div className="terminal-name">{t.name}</div>
-                          <div className="terminal-subtype">{t.subtype}</div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
-                          <span className={`status-badge-chip ${!t.hasData ? '' : t.isGood ? 'status-baik' : 'status-waspada'}`}>
-                            {t.status}
-                          </span>
-                          {t.hasPending && (
-                            <span
-                              style={{
-                                fontSize: '9px',
-                                fontWeight: 700,
-                                color: '#f59e0b',
-                                backgroundColor: 'rgba(245, 158, 11, 0.14)',
-                                padding: '1px 5px',
-                                borderRadius: '4px',
-                                border: '1px solid rgba(245, 158, 11, 0.35)',
-                              }}
-                            >
-                              Pending Verifikasi
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="terminal-metric-value tabular-nums">{t.value}</div>
-
-                      <div className="terminal-card-footer tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <span className={!t.hasData ? '' : t.isGood ? 'text-positive' : 'text-alert'}>
-                            {t.rkap}
-                          </span>{' '}
-                          <span className={!t.hasData ? '' : t.isGood ? 'text-positive' : 'text-alert'}>
-                            {t.yoy}
-                          </span>
-                        </div>
-                        <ChevronRight size={14} strokeWidth={1.75} color="var(--accent-blue)" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* If Multi-Branch Selected: Render Table of Each Selected Branch's Metrics (NON-AKUMULASI) */}
-              {isMulti && selectedBranchesMetrics.length > 0 && (
-                <div style={{ marginTop: '22px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <FileSpreadsheet size={16} strokeWidth={1.75} color="var(--accent-blue)" />
-                      <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: 'var(--text-title)' }}>
-                        Rincian Capaian Masing-Masing Cabang Terpilih (Bukan Akumulasi)
-                      </h4>
-                    </div>
-                    <span className="tabular-nums" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {selectedBranchesMetrics.length} Cabang Ditampilkan Mandiri
-                    </span>
-                  </div>
-
-                  <div className="table-responsive" style={{ backgroundColor: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                    <table className="dark-table" style={{ width: '100%', fontSize: '12px' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', padding: '10px 12px' }}>Kode</th>
-                          <th style={{ textAlign: 'left', padding: '10px 12px' }}>Cabang Pelabuhan</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Pendapatan Usaha</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Laba Usaha</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Petikemas (TEUs)</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Barang (Ton)</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>% RKAP</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>% YoY</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>RFU Alat</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedBranchesMetrics.map(bm => (
-                          <tr key={bm.code} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue)', padding: '10px 12px' }}>
-                              {bm.code}
-                            </td>
-                            <td style={{ fontWeight: 600, color: 'var(--text-main)', padding: '10px 12px' }}>
-                              {bm.name}
-                            </td>
-                            <td className="num-cell" style={{ fontWeight: 600, color: 'var(--text-main)', padding: '10px 12px' }}>
-                              {bm.revTotal === null ? 'Belum Lapor' : bm.revTotal === 0 ? 'Rp 0' : formatRupiahFull(bm.revTotal)}
-                            </td>
-                            <td className="num-cell" style={{ fontWeight: 600, color: bm.opTotal === null ? 'var(--text-muted)' : '#10b981', padding: '10px 12px' }}>
-                              {bm.opTotal === null ? 'Belum Lapor' : bm.opTotal === 0 ? 'Rp 0' : formatRupiahFull(bm.opTotal)}
-                            </td>
-                            <td className="num-cell" style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                              {bm.teusTotal === null ? 'Belum Lapor' : bm.teusTotal === 0 ? '0 TEUs' : `${bm.teusTotal.toLocaleString('id-ID')} TEUs`}
-                            </td>
-                            <td className="num-cell" style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                              {bm.tonTotal === null ? 'Belum Lapor' : bm.tonTotal === 0 ? '0 Ton' : `${bm.tonTotal.toLocaleString('id-ID')} Ton`}
-                            </td>
-                            <td className="tabular-nums" style={{ textAlign: 'center', padding: '10px 12px' }}>
-                              {bm.avgRka === null ? (
-                                <span style={{ color: 'var(--text-muted)' }}>Belum Lapor</span>
-                              ) : (
-                                <span className={`status-badge-chip ${bm.isGood ? 'status-baik' : 'status-waspada'}`}>
-                                  {bm.avgRka}%
-                                </span>
-                              )}
-                            </td>
-                            <td className="tabular-nums" style={{ textAlign: 'center', padding: '10px 12px' }}>
-                              {bm.avgYoy === null ? (
-                                <span style={{ color: 'var(--text-muted)' }}>—</span>
-                              ) : (
-                                <span className={bm.avgYoy >= 100 ? 'text-positive' : 'text-alert'} style={{ fontWeight: 600 }}>
-                                  {bm.avgYoy >= 100 ? `+${(bm.avgYoy - 100).toFixed(1)}%` : `${(bm.avgYoy - 100).toFixed(1)}%`}
-                                </span>
-                              )}
-                            </td>
-                            <td className="tabular-nums" style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                              {bm.rfu !== null ? `${bm.rfu}%` : 'Belum Lapor'}
-                            </td>
-                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                              {!bm.hasData ? (
-                                <span className="badge" style={{ backgroundColor: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-muted)' }}>
-                                  Belum Lapor
-                                </span>
-                              ) : (
-                                <span className={`badge ${bm.isGood ? 'badge-green' : 'badge-red'}`}>
-                                  {bm.isGood ? 'Baik' : 'Waspada'}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Info size={13} strokeWidth={1.75} style={{ flexShrink: 0, color: 'var(--accent-blue)' }} />
-                    <span>
-                      Data di atas menampilkan capaian riil masing-masing cabang terpilih secara independen (tidak dikalkulasi atau diakumulasi menjadi satu total).
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right Section: Perlu Perhatian Card dengan Link Sumber Informasi */}
-        <div className="attention-card">
-          <div className="attention-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AlertTriangle size={16} strokeWidth={1.75} color="#fbbf24" />
-              <span>Perlu perhatian</span>
-            </div>
-            <span
-              className="tabular-nums"
-              style={{
-                fontSize: '10.5px',
-                color: '#fbbf24',
-                backgroundColor: 'rgba(251, 191, 36, 0.12)',
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-pill)',
-                fontWeight: 700,
-              }}
-            >
-              {attentionItems.length} Isu
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {attentionItems.map((item, idx) => (
-              <div
-                key={idx}
-                className="attention-item"
-                style={{
-                  paddingTop: idx === 0 ? '2px' : '12px',
-                  paddingBottom: '12px',
-                  borderBottom: idx === attentionItems.length - 1 ? 'none' : '1px solid var(--border-subtle)',
-                }}
-              >
-                <div className="attention-item-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-title)' }}>{item.header}</span>
-                  {item.sourceSheet && (
-                    <span
-                      style={{
-                        fontSize: '9.5px',
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--accent-blue)',
-                        backgroundColor: 'rgba(2, 132, 199, 0.1)',
-                        border: '1px solid rgba(2, 132, 199, 0.25)',
-                        padding: '1.5px 6px',
-                        borderRadius: '4px',
-                        whiteSpace: 'nowrap',
-                        fontWeight: 600,
-                      }}
-                      title={`Sumber data: Sheet "${item.sourceSheet}" pada file input_data.xlsx`}
-                    >
-                      Sheet: {item.sourceSheet}
-                    </span>
-                  )}
-                </div>
-
-                <div className="attention-item-desc" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '8px' }}>
-                  {item.desc}
-                </div>
-
-                {item.tabId && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={() => onNavigateTab && onNavigateTab(item.tabId, item.branchCode)}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        backgroundColor: 'transparent',
-                        border: '1px solid var(--border-subtle)',
-                        color: 'var(--accent-blue)',
-                        padding: '3px 9px',
-                        borderRadius: 'var(--radius-pill)',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(2, 132, 199, 0.1)';
-                        e.currentTarget.style.borderColor = 'var(--accent-blue)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                      }}
-                      title={`Buka modul ${item.sourceModule} (${item.branchCode || ''})`}
-                    >
-                      <ExternalLink size={11} strokeWidth={1.75} />
-                      <span>{item.linkText || `Buka ${item.sourceModule}`}</span>
-                    </button>
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                      Sumber: {item.sourceModule.split(' ')[0]}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Footer Sumber Data Utama */}
-          <div
+      {/* Footer Sumber Data Utama */}
+      <div
+        style={{
+          marginTop: '8px',
+          paddingTop: '10px',
+          borderTop: '1px solid var(--border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '12px',
+          color: 'var(--text-muted)',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <FileSpreadsheet size={13} strokeWidth={1.75} color="var(--accent-blue)" />
+          <span>Sumber: data pelaporan cabang Regional 4</span>
+        </span>
+        {onNavigateTab && (
+          <button
+            type="button"
+            onClick={() => onNavigateTab('import_center')}
             style={{
-              marginTop: '12px',
-              paddingTop: '10px',
-              borderTop: '1px solid var(--border-subtle)',
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent-blue-text)',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontSize: '12px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: '11px',
-              color: 'var(--text-muted)',
+              gap: '3px',
+              padding: 0,
             }}
+            title="Buka Pusat Impor & Sinkronisasi Spreadsheet"
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <FileSpreadsheet size={13} strokeWidth={1.75} color="var(--accent-blue)" />
-              <span>Sumber: Basis Data SQLite &amp; input_data.xlsx</span>
-            </span>
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('import_center')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--accent-blue)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  padding: 0,
-                }}
-                title="Buka Pusat Impor & Sinkronisasi Spreadsheet"
-              >
-                <span>Pusat Data</span>
-                <ExternalLink size={10} strokeWidth={1.75} />
-              </button>
-            )}
-          </div>
-        </div>
+            <span>Pusat Data</span>
+            <ExternalLink size={10} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
     </div>
   );

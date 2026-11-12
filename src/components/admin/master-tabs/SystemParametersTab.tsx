@@ -229,7 +229,7 @@ export default function SystemParametersTab({
               height: '42px',
               borderRadius: '10px',
               backgroundColor: 'rgba(2, 132, 199, 0.15)',
-              color: 'var(--accent-blue)',
+              color: 'var(--accent-blue-text)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -238,7 +238,7 @@ export default function SystemParametersTab({
             <Sliders size={22} />
           </div>
           <div>
-            <h3 style={{ fontSize: '15.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
               Konfigurasi Parameter Sistem, Database & Integrasi
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0' }}>
@@ -274,7 +274,7 @@ export default function SystemParametersTab({
             border: '1px solid rgba(34, 197, 94, 0.4)',
             borderRadius: 'var(--radius-md)',
             color: 'var(--status-good-text)',
-            fontSize: '13px',
+            fontSize: '12px',
             fontWeight: 600,
           }}
         >
@@ -294,7 +294,7 @@ export default function SystemParametersTab({
             border: '1px solid rgba(239, 68, 68, 0.4)',
             borderRadius: 'var(--radius-md)',
             color: 'var(--status-danger-text)',
-            fontSize: '13px',
+            fontSize: '12px',
             fontWeight: 600,
           }}
         >
@@ -306,7 +306,7 @@ export default function SystemParametersTab({
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
           <Clock size={16} color="var(--accent-blue)" />
-          <h4 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <h4 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             1. Kebijakan Sesi & Preferensi Tampilan
           </h4>
         </div>
@@ -325,7 +325,7 @@ export default function SystemParametersTab({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Clock size={18} color="var(--accent-blue)" />
-              <h5 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+              <h5 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
                 Batas Waktu Sesi Tidak Aktif
               </h5>
             </div>
@@ -335,7 +335,7 @@ export default function SystemParametersTab({
             </p>
 
             <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
                 Pilihan Durasi:
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -347,7 +347,7 @@ export default function SystemParametersTab({
                     style={{
                       padding: '5px 12px',
                       borderRadius: '6px',
-                      fontSize: '11.5px',
+                      fontSize: '12px',
                       fontWeight: 700,
                       border: sessionTimeoutInput === mins ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
                       backgroundColor: sessionTimeoutInput === mins ? 'rgba(2, 132, 199, 0.18)' : 'var(--bg-inner)',
@@ -391,7 +391,7 @@ export default function SystemParametersTab({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Shield size={18} color="var(--accent-blue)" />
-              <h5 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+              <h5 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
                 Kebijakan Keluar Otomatis & Peringatan
               </h5>
             </div>
@@ -405,17 +405,17 @@ export default function SystemParametersTab({
                 style={{ marginTop: '3px', cursor: 'pointer', width: '16px', height: '16px' }}
               />
               <label htmlFor="chk-auto-logout" style={{ cursor: 'pointer' }}>
-                <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-title)' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
                   Aktifkan Keluar Otomatis saat Tidak Aktif
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   Kembali ke halaman masuk apabila tidak ada aktivitas pengguna.
                 </div>
               </label>
             </div>
 
             <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
                 Peringatan Hitung Mundur:
               </label>
               <select
@@ -444,7 +444,7 @@ export default function SystemParametersTab({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Sun size={18} color="var(--accent-blue)" />
-              <h5 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+              <h5 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
                 Mode Tampilan Bawaan
               </h5>
             </div>
@@ -473,7 +473,7 @@ export default function SystemParametersTab({
                 <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
                   Mode Terang
                 </span>
-                <span style={{ fontSize: '10px', color: 'var(--status-good-text)', fontWeight: 700 }}>
+                <span style={{ fontSize: '12px', color: 'var(--status-good-text)', fontWeight: 700 }}>
                   Rekomendasi
                 </span>
               </button>
@@ -497,7 +497,7 @@ export default function SystemParametersTab({
                 <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
                   Mode Gelap
                 </span>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Opsional
                 </span>
               </button>
@@ -525,7 +525,7 @@ export default function SystemParametersTab({
                 height: '36px',
                 borderRadius: '8px',
                 backgroundColor: 'rgba(2, 132, 199, 0.12)',
-                color: 'var(--accent-blue)',
+                color: 'var(--accent-blue-text)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -534,7 +534,7 @@ export default function SystemParametersTab({
               <HardDrive size={20} />
             </div>
             <div>
-              <h4 style={{ fontSize: '14.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+              <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
                 2. Lokasi Database & Mesin Penyimpanan
               </h4>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
@@ -609,7 +609,7 @@ export default function SystemParametersTab({
         {dbEngineInput === 'sqlite' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-main)' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
                 Lokasi Berkas Database SQLite (.db):
               </label>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -625,7 +625,7 @@ export default function SystemParametersTab({
                   style={{
                     flex: '1 1 340px',
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '13px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     backgroundColor: 'var(--bg-inner)',
                   }}
@@ -639,7 +639,7 @@ export default function SystemParametersTab({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    fontSize: '12.5px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     whiteSpace: 'nowrap',
                   }}
@@ -650,7 +650,7 @@ export default function SystemParametersTab({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Pilihan Lokasi:</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Pilihan Lokasi:</span>
                 {['data/ed_dashboard.db', 'data/ed_dashboard_backup.db', 'data/production.db'].map((p) => (
                   <button
                     key={p}
@@ -662,7 +662,7 @@ export default function SystemParametersTab({
                     style={{
                       padding: '3px 8px',
                       borderRadius: '5px',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       border: '1px solid var(--border-subtle)',
                       backgroundColor: dbSqlitePathInput === p ? 'rgba(2, 132, 199, 0.15)' : 'var(--bg-inner)',
                       color: dbSqlitePathInput === p ? 'var(--accent-blue)' : 'var(--text-muted)',
@@ -705,7 +705,7 @@ export default function SystemParametersTab({
                   {pathValidationResult.message || pathValidationResult.error}
                 </div>
                 {pathValidationResult.resolvedPath && (
-                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '4px', fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
                     <div><strong>Lokasi Relatif:</strong> <code style={{ color: 'var(--text-main)' }}>{pathValidationResult.resolvedPath}</code></div>
                     <div><strong>Ukuran Berkas:</strong> {pathValidationResult.sizeKb || 0} KB</div>
                     <div><strong>Akses Tulis:</strong> <span style={{ color: pathValidationResult.isWritable ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 700 }}>{pathValidationResult.isWritable ? 'Tersedia' : 'Tidak Tersedia'}</span></div>
@@ -720,7 +720,7 @@ export default function SystemParametersTab({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Host / Alamat IP Server:
                 </label>
                 <input
@@ -729,11 +729,11 @@ export default function SystemParametersTab({
                   onChange={(e) => setDbPgHostInput(e.target.value)}
                   placeholder="localhost atau 10.x.x.x"
                   className="form-input"
-                  style={{ width: '100%', fontSize: '12.5px' }}
+                  style={{ width: '100%', fontSize: '12px' }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Port Database:
                 </label>
                 <input
@@ -742,11 +742,11 @@ export default function SystemParametersTab({
                   onChange={(e) => setDbPgPortInput(Number(e.target.value) || 5432)}
                   placeholder="5432"
                   className="form-input tabular-nums"
-                  style={{ width: '100%', fontSize: '12.5px' }}
+                  style={{ width: '100%', fontSize: '12px' }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Nama Database:
                 </label>
                 <input
@@ -755,11 +755,11 @@ export default function SystemParametersTab({
                   onChange={(e) => setDbPgDatabaseInput(e.target.value)}
                   placeholder="ed_dashboard"
                   className="form-input"
-                  style={{ width: '100%', fontSize: '12.5px' }}
+                  style={{ width: '100%', fontSize: '12px' }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Nama Pengguna Database:
                 </label>
                 <input
@@ -768,11 +768,11 @@ export default function SystemParametersTab({
                   onChange={(e) => setDbPgUserInput(e.target.value)}
                   placeholder="postgres"
                   className="form-input"
-                  style={{ width: '100%', fontSize: '12.5px' }}
+                  style={{ width: '100%', fontSize: '12px' }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Kata Sandi Database:
                 </label>
                 <div style={{ position: 'relative' }}>
@@ -782,7 +782,7 @@ export default function SystemParametersTab({
                     onChange={(e) => setDbPgPasswordInput(e.target.value)}
                     placeholder="Kata sandi database"
                     className="form-input"
-                    style={{ width: '100%', fontSize: '12.5px', paddingRight: '32px' }}
+                    style={{ width: '100%', fontSize: '12px', paddingRight: '32px' }}
                   />
                   <button
                     type="button"
@@ -803,7 +803,7 @@ export default function SystemParametersTab({
                 </div>
               </div>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Batas Maksimum Koneksi:
                 </label>
                 <input
@@ -813,7 +813,7 @@ export default function SystemParametersTab({
                   value={dbMaxConnInput}
                   onChange={(e) => setDbMaxConnInput(Number(e.target.value) || 10)}
                   className="form-input tabular-nums"
-                  style={{ width: '100%', fontSize: '12.5px' }}
+                  style={{ width: '100%', fontSize: '12px' }}
                 />
               </div>
             </div>
@@ -838,7 +838,7 @@ export default function SystemParametersTab({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Key size={16} color="var(--accent-blue)" />
-            <h4 style={{ fontSize: '13.5px', fontWeight: 700, margin: 0, color: 'var(--text-title)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               3. Kredensial & Integrasi Eksternal
             </h4>
           </div>
@@ -852,7 +852,7 @@ export default function SystemParametersTab({
               alignItems: 'center',
               gap: '6px',
               padding: '5px 12px',
-              fontSize: '11.5px',
+              fontSize: '12px',
             }}
           >
             {showSecretCredentials ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -879,7 +879,7 @@ export default function SystemParametersTab({
                   height: '32px',
                   borderRadius: '6px',
                   backgroundColor: 'rgba(2, 132, 199, 0.15)',
-                  color: 'var(--accent-blue)',
+                  color: 'var(--accent-blue-text)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -888,15 +888,15 @@ export default function SystemParametersTab({
                 <UploadCloud size={16} />
               </div>
               <div>
-                <h5 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                <h5 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
                   Berkas Spreadsheet Master Lokal
                 </h5>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sinkronisasi berkas input Excel lokal</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sinkronisasi berkas input Excel lokal</span>
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                 Identitas Akun Pengelola:
               </label>
               <input
@@ -905,12 +905,12 @@ export default function SystemParametersTab({
                 onChange={(e) => setGoogleDriveEmailInput(e.target.value)}
                 placeholder="regdashr@gmail.com"
                 className="form-input"
-                style={{ width: '100%', fontSize: '12.5px', fontWeight: 600 }}
+                style={{ width: '100%', fontSize: '12px', fontWeight: 600 }}
               />
             </div>
 
             <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                 Lokasi Berkas Excel Input (Di Dalam Direktori Data):
               </label>
               <input
@@ -921,7 +921,7 @@ export default function SystemParametersTab({
                 className="form-input"
                 style={{ width: '100%', fontSize: '12px', fontFamily: 'var(--font-mono)' }}
               />
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                 Berkas spreadsheet lokal yang menjadi rujukan impor awal sistem.
               </div>
             </div>
@@ -954,15 +954,15 @@ export default function SystemParametersTab({
                 <FileSpreadsheet size={16} />
               </div>
               <div>
-                <h5 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                <h5 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
                   Google Sheets API (Opsional)
                 </h5>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Konfigurasi konektor Google Sheets</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Konfigurasi konektor Google Sheets</span>
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                 ID Spreadsheet:
               </label>
               <input
@@ -977,7 +977,7 @@ export default function SystemParametersTab({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Nama Lembar Kerja:
                 </label>
                 <input
@@ -990,7 +990,7 @@ export default function SystemParametersTab({
                 />
               </div>
               <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                   Kunci API Google:
                 </label>
                 <input
@@ -1023,7 +1023,7 @@ export default function SystemParametersTab({
                   height: '32px',
                   borderRadius: '6px',
                   backgroundColor: 'rgba(2, 132, 199, 0.15)',
-                  color: 'var(--accent-blue)',
+                  color: 'var(--accent-blue-text)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1032,15 +1032,15 @@ export default function SystemParametersTab({
                 <Globe size={16} />
               </div>
               <div>
-                <h5 style={{ fontSize: '13px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
+                <h5 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: 'var(--text-title)' }}>
                   Pelindo Enterprise API Gateway
                 </h5>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Integrasi sistem holding & regional</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Integrasi sistem holding & regional</span>
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                 URL Endpoint Gateway:
               </label>
               <input
@@ -1054,7 +1054,7 @@ export default function SystemParametersTab({
             </div>
 
             <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
                 Token Bearer / Rahasia API:
               </label>
               <input
@@ -1090,28 +1090,28 @@ export default function SystemParametersTab({
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', fontSize: '12px', marginTop: '4px' }}>
           <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Mesin Database Aktif:</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '3px' }}>Mesin Database Aktif:</div>
             <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
               {dbEngineInput === 'sqlite' ? `SQLite (${dbSqlitePathInput})` : `PostgreSQL (${dbPgHostInput}:${dbPgPortInput}/${dbPgDatabaseInput})`}
             </div>
           </div>
 
           <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Pemantau Aktivitas Sesi:</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '3px' }}>Pemantau Aktivitas Sesi:</div>
             <div style={{ fontWeight: 700, color: 'var(--status-good-text)' }}>
               Aktif (Sinkronisasi Lintas Tab)
             </div>
           </div>
 
           <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Terakhir Diperbarui:</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '3px' }}>Terakhir Diperbarui:</div>
             <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-main)' }}>
               {systemParams?.updated_at ? new Date(systemParams.updated_at).toLocaleString('id-ID') : 'Bawaan Sistem'}
             </div>
           </div>
 
           <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-inner)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '3px' }}>Diperbarui Oleh:</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '3px' }}>Diperbarui Oleh:</div>
             <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
               {systemParams?.updated_by || 'Admin Regional'}
             </div>
@@ -1145,7 +1145,7 @@ export default function SystemParametersTab({
             setPathValidationResult(null);
           }}
           className="btn btn-secondary"
-          style={{ fontSize: '13px' }}
+          style={{ fontSize: '12px' }}
         >
           Kembalikan ke Parameter Standar
         </button>
@@ -1155,7 +1155,7 @@ export default function SystemParametersTab({
           onClick={handleSaveParams}
           disabled={paramSaving}
           className="btn btn-primary"
-          style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           {paramSaving ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
           <span>{paramSaving ? 'Menyimpan...' : 'Simpan Parameter Sistem'}</span>

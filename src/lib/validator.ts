@@ -2,6 +2,7 @@ import { dbQueries } from './db';
 import { MonthlyRecord, StatusColor } from './types';
 import type { JwtSessionPayload } from './auth';
 import { validateBranchWriteAccess, validateDepartmentWriteAccess } from './rbac';
+import { buildRecordKey } from './recordKey';
 
 export interface ValidationErrorItem {
   row: number;
@@ -274,7 +275,14 @@ export function validateSpreadsheetRows(
       }
 
       parsedRecords.push({
-        id: `rec_imp_${year}_${month}_${branch.code}_${indicator.code}_${Date.now()}_${index}`.toLowerCase(),
+        // Deterministic id: (year, month, branch, indicator). Re-importing the
+        // same file must update this row, not create a twin.
+        id: buildRecordKey({
+          year,
+          month,
+          branchCode: branch.code,
+          indicatorCode: indicator.code,
+        }),
         branch_id: branch.id,
         department_id: dept.id,
         indicator_id: indicator.id,

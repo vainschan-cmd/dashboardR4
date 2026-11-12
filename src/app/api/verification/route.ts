@@ -5,8 +5,10 @@ import {
   requireAuth,
   enforceBranchFilterForRead,
   enforceDepartmentFilterForRead,
+  resolveBranchIdentity,
 } from '@/lib/rbac';
 import { verificationSchema, parseWithSchema } from '@/lib/validation';
+import { checkSeparationOfDuties, fourEyesMessage } from '@/lib/fourEyes';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'verification:read' });
@@ -126,21 +128,95 @@ export async function POST(req: NextRequest) {
 
     // Four-Eyes Principle: Prevent self-approval of records uploaded by the same user
     const targetRecords = dbQueries.getMonthlyRecordsByIds(recordIds);
-    const sessionNipp = auth.session.nipp.toLowerCase();
-    const sessionName = auth.session.name.toLowerCase();
 
-    const selfUploaded = targetRecords.find(r => {
-      const uploader = String(r.uploaded_by || '').trim().toLowerCase();
-      return uploader && (uploader === sessionNipp || uploader === sessionName);
-    });
-
-    if (selfUploaded) {
+    // Every requested ID must exist: reject partially-valid batches atomically.
+    if (targetRecords.length !== new Set(recordIds).size) {
       return NextResponse.json(
         {
           success: false,
-          message: `Prinsip Four-Eyes: Anda tidak dapat memverifikasi data (${selfUploaded.id}) yang Anda unggah sendiri.`,
-          error: `Prinsip Four-Eyes: Anda tidak dapat memverifikasi data (${selfUploaded.id}) yang Anda unggah sendiri.`,
+          message: 'Sebagian ID rekaman tidak ditemukan. Tidak ada data yang diubah.',
+          error: 'Sebagian ID rekaman tidak ditemukan.',
         },
+        { status: 404 }
+      );
+    }
+
+    // Row-level scope: admin_regional/super_admin are regional, PIC roles stay inside their scope.
+    const scopedBranch = enforceBranchFilterForRead(auth.session, undefined);
+    const scopedDept = enforceDepartmentFilterForRead(auth.session, undefined);
+    const allowedBranchIdentities = new Set<string>();
+    if (scopedBranch) {
+      allowedBranchIdentities.add(scopedBranch.toUpperCase());
+      const resolved = resolveBranchIdentity(scopedBranch);
+      if (resolved) {
+        allowedBranchIdentities.add(resolved.id.toUpperCase());
+        allowedBranchIdentities.add(resolved.code.toUpperCase());
+      }
+    }
+
+    const outOfScope = targetRecords.find((record) => {
+      if (allowedBranchIdentities.size > 0) {
+        const branch = String(record.branch_id || '').toUpperCase();
+        if (!allowedBranchIdentities.has(branch)) return true;
+      }
+      if (scopedDept && String(record.department_id || '') !== scopedDept) {
+        return true;
+      }
+      return false;
+    });
+
+    if (outOfScope) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Akses ditolak: terdapat rekaman di luar cabang/departemen penugasan Anda.',
+          error: 'Akses ditolak: terdapat rekaman di luar cakupan Anda.',
+        },
+        { status: 403 }
+      );
+    }
+
+    // Only records awaiting a decision may be verified or sent back for revision.
+    const invalidState = targetRecords.find(
+      (record) =>
+        record.verification_status !== 'pending_verification' &&
+        record.verification_status !== 'revision_needed'
+    );
+    if (invalidState) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Rekaman ${invalidState.id} berstatus "${invalidState.verification_status}" dan tidak dapat diproses.`,
+          error: 'Status rekaman tidak valid untuk operasi verifikasi.',
+        },
+        { status: 409 }
+      );
+    }
+
+    // Four-eyes check across the whole chain (`RBAC-14`): the actor must not be
+    // the uploader on the monthly record *or* on any of the module rows that
+    // belong to it. Checking only the parent record let a manual-input user
+    // approve module rows they had written themselves.
+    const moduleUploaders = dbQueries.getModuleUploadersByRecordIds(recordIds);
+    const uploaderValues = [
+      ...targetRecords.map((record) => record.uploaded_by),
+      ...moduleUploaders,
+    ];
+    const separation = checkSeparationOfDuties(
+      { nipp: auth.session.nipp, name: auth.session.name, sub: auth.session.sub },
+      { uploaders: uploaderValues }
+    );
+
+    if (!separation.allowed) {
+      // Name the record so support can find it without asking the user to describe
+      // which row was rejected.
+      const conflictLower = separation.conflict.uploader.toLowerCase();
+      const owningRecord = targetRecords.find(
+        (record) => String(record.uploaded_by || '').trim().toLowerCase() === conflictLower
+      );
+      const message = fourEyesMessage(separation.conflict, owningRecord?.id);
+      return NextResponse.json(
+        { success: false, message, error: message, code: 'four_eyes_violation' },
         { status: 403 }
       );
     }

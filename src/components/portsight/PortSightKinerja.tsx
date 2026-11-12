@@ -10,7 +10,6 @@ import {
   Tooltip,
   Legend,
   CartesianGrid,
-  Cell,
 } from 'recharts';
 import {
   Clock,
@@ -20,25 +19,19 @@ import {
   Gauge,
   Search,
   CheckCircle2,
-  AlertTriangle,
   PlusCircle,
   Building2,
   RotateCcw,
-  TrendingUp,
-  Activity,
-  Filter,
   BarChart3,
-  SlidersHorizontal,
 } from 'lucide-react';
 import {
   OFFICIAL_BRANCHES,
   getBranchByCode,
-  getBranchById,
-  getCanonicalBranchCode,
   isBranchMatch,
   getSelectedBranchLabel,
   parseSelectedBranches,
 } from '@/lib/constants';
+import LoadingState from '@/components/ui/LoadingState';
 
 interface KinerjaItem {
   year: number;
@@ -64,8 +57,8 @@ export default function PortSightKinerja({
   onOpenManualInput,
   onSelectTerminal,
 }: PortSightKinerjaProps) {
-  const [data, setData] = useState<KinerjaItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<KinerjaItem[]>([]);
 
   // Filter kontrol untuk grafik
   const [chartMetricView, setChartMetricView] = useState<'ALL' | 'TSD' | 'TGH' | 'WTP' | 'PETIKEMAS'>('ALL');
@@ -223,7 +216,7 @@ export default function PortSightKinerja({
         totalParam: branchFilteredData.length,
       };
     }
-  }, [branchFilteredData, data, isAll, selectedTerminal]);
+  }, [branchFilteredData, isAll, isSingle]);
 
   // 3. Data Grafik Kinerja Sesuai Jenis Operasi & Parameter / Satuan
   const chartGroupedData = useMemo(() => {
@@ -340,7 +333,7 @@ export default function PortSightKinerja({
           BCH: b.BCH,
         }));
     }
-  }, [branchFilteredData, data, isNone, isMulti, isSingle, isAll, selectedTerminal, chartJenisOperasi, chartMetricView]);
+  }, [branchFilteredData, data, isNone, isMulti, isSingle, chartJenisOperasi, chartMetricView]);
 
   // 4. Data Tabel Parameter Kinerja (dengan filter jenis operasi, satuan, dan pencarian)
   const displayTableData = useMemo(() => {
@@ -363,6 +356,10 @@ export default function PortSightKinerja({
       return true;
     });
   }, [branchFilteredData, tableMetricTab, tableSatuanTab, search]);
+
+  if (loading) {
+    return <LoadingState label="Memuat data Kinerja…" />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -397,10 +394,10 @@ export default function PortSightKinerja({
             <Building2 size={18} />
           </div>
           <div>
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
               Filter Cabang Aktif (Menu Kinerja Operasional)
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-title)' }}>
+            <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-title)' }}>
               {branchTitle}
             </div>
           </div>
@@ -416,7 +413,7 @@ export default function PortSightKinerja({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '11.5px',
+                fontSize: '12px',
                 padding: '5px 12px',
                 borderRadius: 'var(--radius-pill)',
                 borderColor: 'var(--accent-blue)',
@@ -440,11 +437,11 @@ export default function PortSightKinerja({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
-                backgroundColor: 'var(--accent-orange, #f97316)',
-                borderColor: 'var(--accent-orange, #f97316)',
-                color: '#ffffff',
+                backgroundColor: 'var(--accent-orange-fill, #c2410c)',
+                borderColor: 'var(--accent-orange-fill, #c2410c)',
+                color: 'var(--text-on-accent)',
                 padding: '5px 12px',
-                fontSize: '11.5px',
+                fontSize: '12px',
                 borderRadius: 'var(--radius-pill)',
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -466,10 +463,10 @@ export default function PortSightKinerja({
             <span className="kpi-header-label">Waiting Time to Pilot (WTP)</span>
             <Clock size={19} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.wtpVal} Jam
           </div>
-          <div style={{ fontSize: '11.5px', color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--status-good-text)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
             <CheckCircle2 size={12} />
             <span>Memenuhi Standar (&lt; 1.00 Jam SK Direksi)</span>
           </div>
@@ -487,7 +484,7 @@ export default function PortSightKinerja({
             </span>
             {metrics.ckTsd > 0 || metrics.isAll ? <Ship size={19} color="#10b981" /> : <Box size={19} color="#10b981" />}
           </div>
-          <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.isAll ? (
               <>
                 {metrics.ckTgh.toLocaleString('id-ID')} TGH{' '}
@@ -513,7 +510,7 @@ export default function PortSightKinerja({
               <span style={{ color: 'var(--text-muted)' }}>- TGH / - TSD</span>
             )}
           </div>
-          <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             {metrics.isAll
               ? `Rata-rata ${metrics.ckTgh} TGH • Total Kapasitas ${metrics.ckTsd.toLocaleString('id-ID')} TSD`
               : metrics.ckTsd > 0
@@ -536,7 +533,7 @@ export default function PortSightKinerja({
             </span>
             <Gauge size={19} color="#f59e0b" />
           </div>
-          <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.isAll ? (
               <>
                 {metrics.ccTgh.toLocaleString('id-ID')} TGH{' '}
@@ -562,7 +559,7 @@ export default function PortSightKinerja({
               <span style={{ color: 'var(--text-muted)' }}>- TGH / - TSD</span>
             )}
           </div>
-          <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             {metrics.isAll
               ? `Rata-rata Pompa ${metrics.ccTgh} TGH • Total ${metrics.ccTsd.toLocaleString('id-ID')} TSD`
               : metrics.ccTsd > 0
@@ -579,10 +576,10 @@ export default function PortSightKinerja({
             <span className="kpi-header-label">Parameter Terdata</span>
             <Layers size={19} color="#a855f7" />
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.totalParam > 0 ? `${metrics.totalParam} Indikator` : '9 Indikator'}
           </div>
-          <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             {!isAll
               ? (isSingle ? `Cabang [${selectedCodes[0]}] ${activeBranch ? activeBranch.name : ''} Terpantau` : `${selectedCodes.length} Cabang Terpantau`)
               : 'Seluruh Wilayah Regional 4 (28 Cabang Terpantau)'}
@@ -612,12 +609,12 @@ export default function PortSightKinerja({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {/* Filter Parameter / Satuan yang Ditampilkan di Grafik */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Parameter:</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Parameter:</span>
               <select
                 className="filter-select"
                 value={chartMetricView}
                 onChange={e => setChartMetricView(e.target.value as 'ALL' | 'TSD' | 'TGH' | 'WTP' | 'PETIKEMAS')}
-                style={{ fontSize: '11.5px', padding: '4px 10px' }}
+                style={{ fontSize: '12px', padding: '4px 10px' }}
                 title="Pilih parameter / satuan yang ingin ditampilkan pada grafik"
               >
                 <option value="ALL">Semua Parameter (TSD & TGH)</option>
@@ -631,12 +628,12 @@ export default function PortSightKinerja({
             {/* Filter Jenis Operasi yang Ditampilkan di Grafik (Khusus Cabang) */}
             {!isAll && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Operasi:</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Operasi:</span>
                 <select
                   className="filter-select"
                   value={chartJenisOperasi}
                   onChange={e => setChartJenisOperasi(e.target.value)}
-                  style={{ fontSize: '11.5px', padding: '4px 10px' }}
+                  style={{ fontSize: '12px', padding: '4px 10px' }}
                   title="Pilih jenis operasi yang ingin difokuskan"
                 >
                   <option value="ALL">Semua Jenis Operasi</option>
@@ -662,7 +659,7 @@ export default function PortSightKinerja({
             backgroundColor: 'var(--bg-inner)',
             borderRadius: '6px',
             marginBottom: '14px',
-            fontSize: '11.5px',
+            fontSize: '12px',
           }}
         >
           <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>Keterangan Satuan:</span>
@@ -737,7 +734,7 @@ export default function PortSightKinerja({
                   labelFormatter={(label) => `Jenis Operasi: ${label}`}
                 />
                 <Legend
-                  wrapperStyle={{ paddingTop: '8px', fontSize: '11.5px' }}
+                  wrapperStyle={{ paddingTop: '8px', fontSize: '12px' }}
                 />
 
                 {/* Bar TSD */}
@@ -795,7 +792,7 @@ export default function PortSightKinerja({
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
               Tidak ada data grafik untuk kombinasi jenis operasi dan parameter/satuan yang dipilih.
             </div>
           )}
@@ -862,37 +859,37 @@ export default function PortSightKinerja({
         </div>
 
         <div className="table-responsive">
-          <table className="dark-table">
+          <table className="card-table dark-table">
             <thead>
               <tr>
-                <th style={{ width: '70px' }}>Kode</th>
-                <th>Cabang Pelabuhan</th>
-                <th style={{ width: '90px' }}>ID Kinerja</th>
-                <th>Jenis Operasi</th>
-                <th>Parameter / Satuan</th>
-                <th style={{ textAlign: 'right' }}>Nilai Riil</th>
-                <th style={{ textAlign: 'center' }}>Evaluasi Standar</th>
+                <th scope="col" style={{ width: '70px' }}>Kode</th>
+                <th scope="col">Cabang Pelabuhan</th>
+                <th scope="col" style={{ width: '90px' }}>ID Kinerja</th>
+                <th scope="col">Jenis Operasi</th>
+                <th scope="col">Parameter / Satuan</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Nilai Riil</th>
+                <th scope="col" style={{ textAlign: 'center' }}>Evaluasi Standar</th>
               </tr>
             </thead>
             <tbody>
               {displayTableData.length > 0 ? (
                 displayTableData.map((r, i) => (
                   <tr key={`${r.branchCode}-${r.kdKine}-${i}`}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                    <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-cyan)' }}>
                       {r.branchCode}
                     </td>
-                    <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>{r.branchName}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{r.kdKine}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{r.nmKine}</td>
-                    <td>
+                    <td data-label="Cabang Pelabuhan" style={{ fontWeight: 600, color: 'var(--text-main)' }}>{r.branchName}</td>
+                    <td data-label="ID Kinerja" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{r.kdKine}</td>
+                    <td data-label="Jenis Operasi" style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{r.nmKine}</td>
+                    <td data-label="Parameter / Satuan">
                       <span className="badge badge-neutral" style={{ fontWeight: 700, letterSpacing: '0.02em' }}>
                         {r.satuan}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--text-title)', fontSize: '13.5px' }}>
+                    <td data-label="Nilai Riil" style={{ textAlign: 'right', fontWeight: 800, color: 'var(--text-title)', fontSize: '12px' }}>
                       {(r.nilai || 0) > 0 ? `${(r.nilai || 0).toLocaleString('id-ID')} ${r.satuan}` : '-'}
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td data-label="Evaluasi Standar" style={{ textAlign: 'center' }}>
                       <span className={`badge ${(r.nilai || 0) > 0 ? 'badge-green' : 'badge-neutral'}`}>
                         {(r.nilai || 0) > 0 ? 'Memenuhi Standar' : 'N/A'}
                       </span>

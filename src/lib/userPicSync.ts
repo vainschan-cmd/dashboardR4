@@ -4,162 +4,33 @@ import os from 'os';
 import * as xlsx from 'xlsx';
 import { User, UserRole } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
+import { resolveBootstrapPassword } from './bootstrap';
+import { readWorkbookSafe, sheetToRows } from './spreadsheet';
 import { dbQueries } from './db';
+// `FEAT-10`: file-imported roles are parsed strictly, never fuzzy-matched.
+import { canGrantRole, describeAllowedRoles, parseRoleStrict } from './roleMapping';
+// `CODE-04`: the seed data lives in a dependency-free module so `db.ts` can read
+// it without importing this file (which imports `db.ts`).
+import { INITIAL_OFFICIAL_PICS, type InitialPicSeed } from './userSeed';
+
+export { INITIAL_OFFICIAL_PICS };
+export type { InitialPicSeed };
 
 export const MASTER_USER_FILE = 'master_user_pic.xlsx';
 export const DRIVE_ACCOUNT = 'regdashr@gmail.com';
 
-export const INITIAL_OFFICIAL_PICS: Omit<User, 'id'>[] = [
-  {
-    username: '10000',
-    nipp: '10000',
-    name: 'Akhirman (BOD)',
-    email: 'bod.r4@pelindo.co.id',
-    divisi: 'Direksi Pelindo Regional 4',
-    departemen: 'Kantor Regional 4',
-    role: 'viewer',
-    branch_id: 'R99',
-    department_id: null,
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10001',
-    nipp: '10001',
-    name: 'M Mansyur',
-    email: 'budi.santoso@pelindo.co.id',
-    divisi: 'Divisi Teknologi Informasi & Digitalisasi',
-    departemen: 'Departemen Tata Kelola & Solusi TI',
-    role: 'super_admin',
-    branch_id: 'R99',
-    department_id: 'dept_tek',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10002',
-    nipp: '10002',
-    name: 'Asqar',
-    email: 'hendra.wijaya@pelindo.co.id',
-    divisi: 'Divisi Strategi & Manajemen Kinerja Regional',
-    departemen: 'Departemen Monitoring & Evaluasi Regional 4',
-    role: 'admin_regional',
-    branch_id: 'R99',
-    department_id: 'dept_ops',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10003',
-    nipp: '10003',
-    name: 'Heiruddin',
-    email: 'rudi.hartono@pelindo.co.id',
-    divisi: 'Divisi Operasi & Pelayanan Kapal',
-    departemen: 'Departemen Pelayanan Kapal & Barang',
-    role: 'pic_dept_regional',
-    branch_id: 'R99',
-    department_id: 'dept_ops',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10004',
-    nipp: '10004',
-    name: 'Nuka',
-    email: 'ahmad.dahlan@pelindo.co.id',
-    divisi: 'Divisi Operasional Terminal Cabang',
-    departemen: 'Departemen Operasi Cabang Makassar',
-    role: 'pic_cabang',
-    branch_id: 'R01',
-    department_id: 'dept_ops',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10005',
-    nipp: '10005',
-    name: 'Rahmat Syukur',
-    email: 'siti.rahma@pelindo.co.id',
-    divisi: 'Divisi Keuangan & Manajemen Risiko',
-    departemen: 'Departemen Akuntansi & Perpajakan',
-    role: 'pic_dept_regional',
-    branch_id: 'R99',
-    department_id: 'dept_keu',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10006',
-    nipp: '10006',
-    name: 'Arkam',
-    email: 'dewi.kartika@pelindo.co.id',
-    divisi: 'Divisi Sumber Daya Manusia & Umum',
-    departemen: 'Departemen SDM & Organisasi',
-    role: 'pic_dept_regional',
-    branch_id: 'R99',
-    department_id: 'dept_sdm',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10007',
-    nipp: '10007',
-    name: 'Abri',
-    email: 'agus.santoso@pelindo.co.id',
-    divisi: 'Divisi Fasilitas & Peralatan Pelabuhan',
-    departemen: 'Departemen Pemeliharaan & Teknik',
-    role: 'pic_dept_regional',
-    branch_id: 'R99',
-    department_id: 'dept_tek',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-10T08:00:00Z',
-  },
-  {
-    username: '10008',
-    nipp: '10008',
-    name: 'Fachruddin',
-    email: 'faisal.ramadhan@pelindo.co.id',
-    divisi: 'Divisi Operasional Terminal Cabang',
-    departemen: 'Departemen Operasi Cabang Balikpapan',
-    role: 'pic_cabang',
-    branch_id: 'R04',
-    department_id: 'dept_ops',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-12T08:00:00Z',
-  },
-  {
-    username: '10009',
-    nipp: '10009',
-    name: 'Angga',
-    email: 'nur.aini@pelindo.co.id',
-    divisi: 'Divisi Operasional Terminal Cabang',
-    departemen: 'Departemen Operasi Cabang Bitung',
-    role: 'pic_cabang',
-    branch_id: 'R05',
-    department_id: 'dept_ops',
-    password: 'password123',
-    active: true,
-    created_at: '2026-01-12T08:00:00Z',
-  },
-];
-
+/**
+ * @deprecated Fuzzy role matching is a privilege-escalation path (`FEAT-10`):
+ * `"Supervisor Operasi"` contains "super" and used to become `super_admin`, and
+ * `"PIC Dept Regional 4"` contains "regional 4" and used to become
+ * `admin_regional`. Use `parseRoleStrict()` from `roleMapping.ts`, which returns
+ * `null` for anything it does not recognise instead of guessing.
+ */
 export function normalizeRole(raw: unknown): UserRole {
-  if (!raw) return 'pic_cabang';
-  const str = String(raw).trim().toLowerCase();
-  if (str.includes('super') || str === 'super_admin' || str === 'superadmin') return 'super_admin';
-  if (str.includes('regional 4') || str.includes('admin regional') || str === 'admin_regional') return 'admin_regional';
-  if (str.includes('dept') || str.includes('regional') || str === 'pic_dept_regional') return 'pic_dept_regional';
-  if (str.includes('viewer') || str.includes('bod') || str === 'viewer') return 'viewer';
-  if (str.includes('cabang') || str === 'pic_cabang') return 'pic_cabang';
+  const parsed = parseRoleStrict(raw);
+  if (parsed) return parsed;
+  // Unrecognised values are reported by the caller; this fallback only exists to
+  // keep the old signature compiling for any external caller.
   return 'pic_cabang';
 }
 
@@ -324,41 +195,70 @@ export interface ImportUserResult {
   totalInSheet: number;
   createdCount: number;
   updatedCount: number;
+  rejectedCount: number;
+  rejected: Array<{ nipp: string; reason: string }>;
   sourcePath: string;
   sourceType: 'downloads' | 'data' | 'buffer' | 'fallback';
   users: User[];
 }
 
+export interface ImportUserOptions {
+  /** Role of the authenticated actor performing the import. Defaults to least privilege. */
+  actorRole?: UserRole;
+  /** NIPP of the actor, so self-modification through a file can be refused. */
+  actorNipp?: string;
+}
+
+/** Rows beyond this are refused rather than partially imported. */
+export const MAX_IMPORTED_USERS = 1000;
+
+/** A NIPP is a numeric employee id; anything else is a spreadsheet typo. */
+const NIPP_PATTERN = /^[0-9]{4,20}$/;
+
 /**
  * Read and import users from spreadsheet into database (Pull from My Drive)
+ *
+ * Every row is an authorisation decision, not just a data transform (`FEAT-10`):
+ *
+ * - The role cell must match a known name exactly; unknown values are rejected
+ *   instead of being guessed into a role.
+ * - An actor may only grant roles strictly below its own rank.
+ * - An existing Super Admin account may not be modified by anyone else, so a file
+ *   cannot be used to demote or deactivate the account that guards the system.
+ * - The importing account itself may not be changed, which would otherwise let an
+ *   actor rewrite their own role or NIPP through an upload.
  */
-export function importUsersFromSpreadsheet(customInput?: string | Buffer): ImportUserResult {
+export function importUsersFromSpreadsheet(
+  customInput?: string | Buffer,
+  options: ImportUserOptions = {}
+): ImportUserResult {
+
   let wb: xlsx.WorkBook;
   let sourcePath = '';
   let sourceType: 'downloads' | 'data' | 'buffer' | 'fallback' = 'data';
 
   if (Buffer.isBuffer(customInput)) {
-    wb = xlsx.read(customInput, { type: 'buffer' });
+    wb = readWorkbookSafe(customInput).workbook;
     sourceType = 'buffer';
     sourcePath = 'Uploaded Buffer';
   } else if (typeof customInput === 'string' && fs.existsSync(customInput)) {
     sourcePath = customInput;
     sourceType = customInput.includes('Downloads') ? 'downloads' : 'data';
     const buf = fs.readFileSync(customInput);
-    wb = xlsx.read(buf, { type: 'buffer' });
+    wb = readWorkbookSafe(buf).workbook;
   } else {
     const latest = findLatestMasterUserSpreadsheet();
     if (latest && fs.existsSync(latest.path)) {
       sourcePath = latest.path;
       sourceType = latest.source;
       const buf = fs.readFileSync(latest.path);
-      wb = xlsx.read(buf, { type: 'buffer' });
+      wb = readWorkbookSafe(buf).workbook;
     } else {
       const defaultPath = ensureMasterUserSpreadsheet();
       sourcePath = defaultPath;
       sourceType = 'fallback';
       const buf = fs.readFileSync(defaultPath);
-      wb = xlsx.read(buf, { type: 'buffer' });
+      wb = readWorkbookSafe(buf).workbook;
     }
   }
 
@@ -372,21 +272,75 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
   if (!rawRows || rawRows.length === 0) {
     throw new Error('Spreadsheet kosong atau tidak memiliki data pengguna pada sheet pertama.');
   }
+  if (rawRows.length > MAX_IMPORTED_USERS) {
+    // Refuse outright: a partially applied import is harder to reason about than a
+    // rejected one, and a file this large is usually the wrong file.
+    throw new Error(
+      `Spreadsheet memuat ${rawRows.length} baris, melebihi batas ${MAX_IMPORTED_USERS} akun per impor. ` +
+        'Pecah berkas menjadi beberapa bagian.'
+    );
+  }
 
   let createdCount = 0;
   let updatedCount = 0;
+  const rejected: Array<{ nipp: string; reason: string }> = [];
+  const actorNipp = options.actorNipp ? String(options.actorNipp).trim() : null;
 
   for (const row of rawRows) {
     const rawNipp = row['NIPP (USERNAME)'] || row['NIPP'] || row['nipp'] || row['Username'] || row['username'] || row['NIP'] || row['nip'];
     if (!rawNipp) continue;
 
     const nipp = String(rawNipp).trim();
+
+    // A malformed NIPP would create an account nobody can log in with, or silently
+    // collide with an existing one after trailing characters are stripped.
+    if (!NIPP_PATTERN.test(nipp)) {
+      rejected.push({
+        nipp,
+        reason: `NIPP tidak valid: "${nipp}". NIPP harus berupa angka 4–20 digit.`,
+      });
+      continue;
+    }
+
+    if (actorNipp && nipp === actorNipp) {
+      rejected.push({
+        nipp,
+        reason: 'Akun Anda sendiri tidak dapat diubah melalui impor berkas.',
+      });
+      continue;
+    }
+
     const rawName = row['NAMA LENGKAP'] || row['NAMA PEGAWAI'] || row['Nama'] || row['name'] || row['NAMA'];
     const name = rawName ? String(rawName).trim() : `Pegawai ${nipp}`;
     const divisi = String(row['DIVISI'] || row['divisi'] || row['Divisi'] || '-').trim();
     const departemen = String(row['DEPARTEMEN'] || row['departemen'] || row['Departemen'] || '-').trim();
+
+    // Strict parse. An unrecognised cell is a rejection, never a default: silently
+    // falling back to `pic_cabang` would hide a typo, and silently fuzzy-matching
+    // ("Supervisor" → super_admin) would hand out access nobody intended.
     const rawRole = row['HAK AKSES (ROLE)'] || row['HAK AKSES'] || row['ROLE'] || row['role'] || row['Role'];
-    const role = normalizeRole(rawRole);
+    const role = parseRoleStrict(rawRole);
+    if (!role) {
+      rejected.push({
+        nipp,
+        reason:
+          `Role "${String(rawRole ?? '').trim() || '(kosong)'}" tidak dikenali. ` +
+          `Nilai yang diterima: ${describeAllowedRoles()}.`,
+      });
+      continue;
+    }
+
+    if (!canGrantRole(options.actorRole, role)) {
+      rejected.push({
+        nipp,
+        reason:
+          `Role ${role} berada di atas kewenangan Anda` +
+          (options.actorRole ? ` (${options.actorRole})` : '') +
+          '. Hanya Super Admin yang dapat menetapkan role setingkat atau lebih tinggi.',
+      });
+      continue;
+    }
+
     const rawBranch = row['CABANG'] || row['PENUGASAN CABANG'] || row['cabang'] || row['branch_id'];
     const branch_id = normalizeBranch(rawBranch);
     const rawEmail = row['EMAIL'] || row['email'];
@@ -407,6 +361,16 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
 
     const existing = dbQueries.getUserByNipp(nipp);
     if (existing) {
+      // A file must not be able to rewrite a Super Admin account (demote it, rename
+      // it, or deactivate it) on behalf of a lesser administrator.
+      if (existing.role === 'super_admin' && options.actorRole !== 'super_admin') {
+        rejected.push({
+          nipp,
+          reason: 'Akun Super Admin hanya dapat diubah oleh Super Admin lain.',
+        });
+        continue;
+      }
+
       dbQueries.updateUser(existing.id, {
         name,
         nipp,
@@ -427,7 +391,9 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
         role,
         branch_id,
         email,
-        password: 'password123',
+        password: resolveBootstrapPassword(nipp),
+        // Imported accounts always start with a temporary password.
+        mustChangePassword: true,
       });
       createdCount++;
     }
@@ -440,6 +406,8 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
     totalInSheet: rawRows.length,
     createdCount,
     updatedCount,
+    rejectedCount: rejected.length,
+    rejected,
     sourcePath,
     sourceType,
     users: allUsers,
@@ -452,8 +420,6 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
 export function readUsersFromSpreadsheet(): Record<string, unknown>[] {
   const filePath = ensureMasterUserSpreadsheet();
   const fileBuffer = fs.readFileSync(filePath);
-  const wb = xlsx.read(fileBuffer, { type: 'buffer' });
-  const sheetName = wb.SheetNames[0];
-  const sheet = wb.Sheets[sheetName];
-  return xlsx.utils.sheet_to_json(sheet);
+  const { workbook, sheetNames } = readWorkbookSafe(fileBuffer, { firstSheetOnly: true });
+  return sheetToRows(workbook, sheetNames[0]);
 }

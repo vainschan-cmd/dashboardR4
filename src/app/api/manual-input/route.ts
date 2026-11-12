@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveManualInputRecord, getModuleDepartmentId, ModuleType } from '@/lib/manualInputService';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
+import { logError } from '@/lib/logger';
+import { resolveReadBranchScope } from '@/lib/policy';
 import {
   requireAuth,
   validateBranchWriteAccess,
   validateDepartmentWriteAccess,
 } from '@/lib/rbac';
 import { manualInputSchema, parseWithSchema } from '@/lib/validation';
+import { ModuleScopeError } from '@/lib/dataIntegrity';
 
 const MODULE_OPTIONS = {
   finansial: {
@@ -58,10 +61,18 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
   if (!auth.authorized) return auth.response;
 
-  const branches =
-    auth.session.role === 'pic_cabang' && auth.session.branch_id && auth.session.branch_id !== 'R99'
-      ? OFFICIAL_BRANCHES.filter(b => b.code === auth.session.branch_id)
-      : OFFICIAL_BRANCHES;
+  const branchScope = resolveReadBranchScope(
+    {
+      role: auth.session.role,
+      branch_id: auth.session.branch_id,
+      department_id: auth.session.department_id,
+      sub: auth.session.sub,
+    },
+    undefined
+  );
+  const branches = branchScope
+    ? OFFICIAL_BRANCHES.filter((b) => b.code === branchScope)
+    : OFFICIAL_BRANCHES;
 
   return NextResponse.json({
     success: true,
@@ -133,8 +144,16 @@ export async function POST(req: NextRequest) {
       record: result.record,
     });
   } catch (error: unknown) {
+    // A rejected scope is the caller's mistake, not a server fault: report it as
+    // 400 with the specific problem so the operator can fix the payload (`DATA-10`).
+    if (error instanceof ModuleScopeError) {
+      return NextResponse.json(
+        { success: false, error: error.message, issues: error.issues, code: 'invalid_scope' },
+        { status: 400 }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Gagal menyimpan data manual.';
-    console.error('Error in POST /api/manual-input:', error);
+    logError('api/manual-input', error, { requestId: req.headers.get('x-request-id') });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

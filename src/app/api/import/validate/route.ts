@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 import path from 'path';
 import { validateSpreadsheetRows } from '@/lib/validator';
 import { requireAuth, validateDepartmentWriteAccess } from '@/lib/rbac';
+import { readWorkbookSafe, sheetToRowsChecked } from '@/lib/spreadsheet';
 import {
   MAX_UPLOAD_FILE_BYTES,
   MAX_IMPORT_JSON_BYTES,
@@ -76,10 +76,27 @@ export async function POST(req: NextRequest) {
 
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
-      const firstSheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[firstSheetName];
-      rows = XLSX.utils.sheet_to_json(sheet) as Array<Record<string, unknown>>;
+      // Hardened parse: row cap, no formula evaluation, no embedded objects.
+      // A corrupt/unsupported workbook is a client error, not a server fault.
+      try {
+        const { workbook, sheetNames } = readWorkbookSafe(buffer, { maxRows: MAX_IMPORT_ROWS });
+        const parsed = sheetToRowsChecked(workbook, sheetNames[0], MAX_IMPORT_ROWS);
+        if (parsed.truncated) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `Berkas memuat lebih dari ${MAX_IMPORT_ROWS} baris data. Pecah berkas menjadi beberapa bagian agar tidak ada baris yang hilang.`,
+              error: `Jumlah baris melebihi batas maksimum ${MAX_IMPORT_ROWS} baris.`,
+            },
+            { status: 413 }
+          );
+        }
+        rows = parsed.rows;
+      } catch (parseError: unknown) {
+        const message =
+          parseError instanceof Error ? parseError.message : 'Berkas spreadsheet tidak dapat dibaca.';
+        return NextResponse.json({ success: false, message, error: message }, { status: 400 });
+      }
     } else {
       if (contentLength > MAX_IMPORT_JSON_BYTES) {
         return NextResponse.json(

@@ -49,3 +49,10 @@ next-env.d.ts
 # sqlite wal temporary files
 *.db-shm
 *.db-wal
+
+# database snapshots and pre-restore copies (may contain personal data)
+/backups/
+*.pre-restore-*
+
+# SQLite database (berisi hash kata sandi akun; jangan di-commit)
+/data/ed_dashboard.db

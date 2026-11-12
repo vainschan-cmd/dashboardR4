@@ -7,8 +7,14 @@ import {
   isBranchMatch,
   parseSelectedBranches,
 } from '@/lib/constants';
-import { formatRupiahFull, formatRupiahCompact } from '@/lib/formatters';
-import { User, UserRole, FinansialRecord, OpkomRecord, PeralatanRecord, KinerjaRecord, UtilisasiRecord, MonthlyRecord } from '@/lib/types';
+import {
+  formatRupiahFull,
+  formatRupiahCompact,
+  formatNumber,
+  formatPercent,
+  formatPercentDelta,
+} from '@/lib/formatters';
+import { User, UserRole, FinansialRecord, OpkomRecord, PeralatanRecord, KinerjaRecord, UtilisasiRecord, ModuleKpiRecord } from '@/lib/types';
 
 export interface BerandaKpiItem {
   title: string;
@@ -46,7 +52,7 @@ export function useBerandaAnalytics({
   const [peralatan, setPeralatan] = useState<PeralatanRecord[]>([]);
   const [kinerja, setKinerja] = useState<KinerjaRecord[]>([]);
   const [utilisasi, setUtilisasi] = useState<UtilisasiRecord[]>([]);
-  const [kpiRecords, setKpiRecords] = useState<MonthlyRecord[]>([]);
+  const [kpiRecords, setKpiRecords] = useState<ModuleKpiRecord[]>([]);
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(isBodViewer);
   const [verificationSummary, setVerificationSummary] = useState<{
     verifiedCount: number;
@@ -163,7 +169,7 @@ export function useBerandaAnalytics({
   const filteredKpiRecords = useMemo(() => {
     if (isNone) return [];
     if (isAll) return kpiRecords;
-    return kpiRecords.filter((r) => isBranchMatch(selectedTerminal, r.branch_code || r.branch_id, r.branch_name));
+    return kpiRecords.filter((r) => isBranchMatch(selectedTerminal, r.branchCode, r.branchName));
   }, [isNone, isAll, selectedTerminal, kpiRecords]);
 
   const serviceKpis: BerandaKpiItem[] = useMemo(() => {
@@ -237,8 +243,8 @@ export function useBerandaAnalytics({
       const totalVal = rows.reduce((a, b) => a + Number(b.jumlahRp ?? 0), 0);
       const avgRka = rows.reduce((a, b) => a + Number(b.rka ?? 0), 0) / rows.length;
       const avgYoy = rows.reduce((a, b) => a + Number(b.yoy ?? 0), 0) / rows.length;
-      const rkaStr = avgRka.toFixed(1);
-      const yoyDiff = (avgYoy - 100).toFixed(1);
+      const rkaStr = formatNumber(avgRka, 1);
+      const yoyDiff = formatNumber(Math.abs(avgYoy - 100), 1);
       const targetVal = avgRka > 0 ? Math.round(totalVal / (avgRka / 100)) : totalVal;
 
       const compactVal = isRupiah
@@ -406,8 +412,8 @@ export function useBerandaAnalytics({
       const totalRp = isCostAccount ? Math.abs(rawSum) : rawSum;
       const avgRka = rows.reduce((a, b) => a + Number(b.rka ?? 0), 0) / rows.length;
       const avgYoy = rows.reduce((a, b) => a + Number(b.yoy ?? 0), 0) / rows.length;
-      const rkaStr = avgRka.toFixed(1);
-      const yoyDiff = (avgYoy - 100).toFixed(1);
+      const rkaStr = formatNumber(avgRka, 1);
+      const yoyDiff = formatNumber(Math.abs(avgYoy - 100), 1);
       const targetRp = avgRka > 0 ? Math.round(totalRp / (avgRka / 100)) : totalRp;
 
       const compactVal = totalRp === 0 ? 'Rp 0' : formatRupiahCompact(totalRp);
@@ -434,20 +440,24 @@ export function useBerandaAnalytics({
     const opRows = filteredFin.filter((f) => (f.rekening || '').toLowerCase() === 'laba usaha');
 
     const validAvailAlat = filteredPeralatan.filter((p) => Number(p.availability || 0) > 0);
-    const rfuKpiRows = filteredKpiRecords.filter((r) => r.indicator_id === 'kpi_rfu');
+    // `/api/modules-data` serialises KPI rows in camelCase (`indicatorId`), so the
+    // old snake_case lookup never matched and this fallback was dead code —
+    // branches without equipment readings showed "Belum Lapor" even though a
+    // verified RFU figure existed in `monthly_records`.
+    const rfuKpiRows = filteredKpiRecords.filter((r) => r.indicatorId === 'kpi_rfu');
     let alatMetric: BerandaKpiItem;
 
     if (validAvailAlat.length > 0) {
       const avgAlatVal =
         validAvailAlat.reduce((a, b) => a + Number(b.availability || 0), 0) / validAvailAlat.length;
-      const avgAlatStr = avgAlatVal.toFixed(1);
+      const avgAlatStr = formatNumber(avgAlatVal, 1);
       alatMetric = {
         title: 'Kesiapan alat',
         value: `${avgAlatStr}%`,
         fullValue: `${avgAlatStr}%`,
         comp1: 'Target 92,0%',
         comp1Good: avgAlatVal >= 92,
-        comp2: `Capaian ${((avgAlatVal / 92) * 100).toFixed(1)}%`,
+        comp2: `Capaian ${formatPercent((avgAlatVal / 92) * 100, 1)}`,
         comp2Good: avgAlatVal >= 92,
         rawTarget: '92,0%',
         rawRealization: `${avgAlatStr}%`,
@@ -459,19 +469,19 @@ export function useBerandaAnalytics({
     } else if (rfuKpiRows.length > 0) {
       const avgRfuVal = rfuKpiRows.reduce((a, b) => a + Number(b.realization || 0), 0) / rfuKpiRows.length;
       const avgTargetVal = rfuKpiRows.reduce((a, b) => a + Number(b.target || 92), 0) / rfuKpiRows.length;
-      const avgRfuStr = avgRfuVal.toFixed(1);
+      const avgRfuStr = formatNumber(avgRfuVal, 1);
       alatMetric = {
         title: 'Kesiapan alat',
         value: `${avgRfuStr}%`,
         fullValue: `${avgRfuStr}%`,
-        comp1: `Target ${avgTargetVal.toFixed(1)}%`,
+        comp1: `Target ${formatPercent(avgTargetVal, 1)}`,
         comp1Good: avgRfuVal >= avgTargetVal,
-        comp2: `Capaian ${((avgRfuVal / (avgTargetVal || 92)) * 100).toFixed(1)}%`,
+        comp2: `Capaian ${formatPercent((avgRfuVal / (avgTargetVal || 92)) * 100, 1)}`,
         comp2Good: avgRfuVal >= avgTargetVal,
-        rawTarget: `${avgTargetVal.toFixed(1)}%`,
+        rawTarget: `${formatPercent(avgTargetVal, 1)}`,
         rawRealization: `${avgRfuStr}%`,
         hasData: true,
-        hasPending: rfuKpiRows.some((r) => r.verification_status === 'pending_verification'),
+        hasPending: rfuKpiRows.some((r) => r.verificationStatus === 'pending_verification'),
       };
     } else {
       alatMetric = {
@@ -489,24 +499,24 @@ export function useBerandaAnalytics({
       };
     }
 
-    const slaKpiRows = filteredKpiRecords.filter((r) => r.indicator_id === 'kpi_sla');
+    const slaKpiRows = filteredKpiRecords.filter((r) => r.indicatorId === 'kpi_sla');
     let slaMetric: BerandaKpiItem;
     if (slaKpiRows.length > 0) {
       const avgSlaVal = slaKpiRows.reduce((a, b) => a + Number(b.realization || 0), 0) / slaKpiRows.length;
       const avgTargetVal = slaKpiRows.reduce((a, b) => a + Number(b.target || 90), 0) / slaKpiRows.length;
-      const avgSlaStr = avgSlaVal.toFixed(1);
+      const avgSlaStr = formatNumber(avgSlaVal, 1);
       slaMetric = {
         title: 'SLA keluhan',
         value: `${avgSlaStr}%`,
         fullValue: `${avgSlaStr}%`,
-        comp1: `Target ${avgTargetVal.toFixed(1)}%`,
+        comp1: `Target ${formatPercent(avgTargetVal, 1)}`,
         comp1Good: avgSlaVal >= avgTargetVal,
-        comp2: `Capaian ${((avgSlaVal / (avgTargetVal || 90)) * 100).toFixed(1)}%`,
+        comp2: `Capaian ${formatPercent((avgSlaVal / (avgTargetVal || 90)) * 100, 1)}`,
         comp2Good: avgSlaVal >= avgTargetVal,
-        rawTarget: `${avgTargetVal.toFixed(1)}%`,
+        rawTarget: `${formatPercent(avgTargetVal, 1)}`,
         rawRealization: `${avgSlaStr}%`,
         hasData: true,
-        hasPending: slaKpiRows.some((r) => r.verification_status === 'pending_verification'),
+        hasPending: slaKpiRows.some((r) => r.verificationStatus === 'pending_verification'),
       };
     } else {
       slaMetric = {
@@ -599,17 +609,17 @@ export function useBerandaAnalytics({
           teusTotal === 0
             ? '0 TEUs'
             : teusTotal >= 1_000_000
-              ? `${(teusTotal / 1_000_000).toFixed(2)} jt TEUs`
-              : `${(teusTotal / 1_000).toFixed(1)} rb TEUs`;
-        fullValueDisplay = `${Math.round(teusTotal).toLocaleString('id-ID')} TEUs`;
+              ? `${formatNumber(teusTotal / 1_000_000, 2)} jt TEUs`
+              : `${formatNumber(teusTotal / 1_000, 1)} rb TEUs`;
+        fullValueDisplay = `${formatNumber(teusTotal)} TEUs`;
       } else if (tonRows.length > 0) {
         valueDisplay =
           tonTotal === 0
             ? '0 ton'
             : tonTotal >= 1_000_000
-              ? `${(tonTotal / 1_000_000).toFixed(2)} jt ton`
-              : `${(tonTotal / 1_000).toFixed(1)} rb ton`;
-        fullValueDisplay = `${Math.round(tonTotal).toLocaleString('id-ID')} ton`;
+              ? `${formatNumber(tonTotal / 1_000_000, 2)} jt ton`
+              : `${formatNumber(tonTotal / 1_000, 1)} rb ton`;
+        fullValueDisplay = `${formatNumber(tonTotal)} ton`;
       } else if (bOp.length > 0) {
         const totalOpkomRp = bOp
           .filter((o) => o.satuan === 'Rp')
@@ -628,14 +638,14 @@ export function useBerandaAnalytics({
         status: !hasAnyData ? 'Belum Lapor' : isGood ? 'Baik' : 'Waspada',
         value: valueDisplay,
         fullValue: fullValueDisplay,
-        rkap: avgRka !== null ? `RKAP ${avgRka}%` : 'RKAP: -',
-        yoy: avgYoy !== null ? `YoY ${avgYoy >= 100 ? '+' : ''}${(avgYoy - 100).toFixed(1)}%` : 'YoY: -',
+        rkap: avgRka !== null ? `RKAP ${formatPercent(avgRka, 1)}` : 'RKAP: -',
+        yoy: avgYoy !== null ? `YoY ${formatPercentDelta(avgYoy, 1)}` : 'YoY: -',
         isGood,
         hasData: hasAnyData,
         hasPending,
       };
     });
-  }, [opkom, finansial, isPicCabang, currentUserBranchId]);
+  }, [opkom, finansial, isPicCabang, currentUser]);
 
   const filteredTerminalsOverview = useMemo(() => {
     if (isPicCabang && currentUserBranchId && currentUserBranchId !== 'R99') {
@@ -680,7 +690,7 @@ export function useBerandaAnalytics({
       const bFin = finansial.filter((f) => f.branchCode === code);
       const bAlat = peralatan.filter((p) => p.branchCode === code);
       const bUtil = utilisasi.filter((u) => u.branchCode === code);
-      const bKpi = kpiRecords.filter((r) => (r.branch_code || r.branch_id) === code);
+      const bKpi = kpiRecords.filter((r) => r.branchCode === code);
 
       const revRows = bFin.filter((f) => (f.rekening || '').toLowerCase().includes('pendapatan'));
       const opRpRows = bOp.filter((o) => o.satuan === 'Rp');
@@ -715,7 +725,7 @@ export function useBerandaAnalytics({
             : null;
 
       const validAlat = bAlat.filter((p) => (p.availability || 0) > 0);
-      const rfuRows = bKpi.filter((r) => r.indicator_id === 'kpi_rfu');
+      const rfuRows = bKpi.filter((r) => r.indicatorId === 'kpi_rfu');
       const rfu =
         validAlat.length > 0
           ? (validAlat.reduce((a, b) => a + (b.availability || 0), 0) / validAlat.length).toFixed(1)
@@ -799,7 +809,7 @@ export function useBerandaAnalytics({
         value: formattedVal,
         fullValue: fullVal,
         rkap: `RKAP ${avgRka}%`,
-        yoy: `YoY ${avgYoy >= 100 ? '+' : ''}${(avgYoy - 100).toFixed(1)}%`,
+        yoy: `YoY ${formatPercentDelta(avgYoy, 1)}`,
         isGood,
       };
     });
@@ -824,7 +834,7 @@ export function useBerandaAnalytics({
     lowOpkom.forEach((o) => {
       alerts.push({
         header: `${o.branchName || o.branchCode} [${o.branchCode}] - ${o.layanan}`,
-        desc: `Realisasi ${o.layanan} (${o.satuan}) mencapai ${o.rka}% RKAP, pertumbuhan ${(Number(o.yoy || 100) - 100).toFixed(1)}% YoY.`,
+        desc: `Realisasi ${o.layanan} (${o.satuan}) mencapai ${o.rka}% RKAP, pertumbuhan ${formatPercentDelta(Number(o.yoy || 100), 1)} YoY.`,
         sourceSheet: 'module_opkom',
         sourceModule: 'Operasi & Komersial',
         tabId: 'opkom',
@@ -959,7 +969,7 @@ export function useBerandaAnalytics({
             : 'Target: Belum Lapor',
         yoy: rev?.comp2 || 'YoY: -',
         isGood: rev?.comp1Good ?? false,
-        color: '#0284c7',
+        color: 'var(--accent-blue-text)',
       },
       {
         title: 'Pengendalian Biaya',
@@ -972,7 +982,7 @@ export function useBerandaAnalytics({
             : 'Target: Belum Lapor',
         yoy: cost?.comp2 || 'YoY: -',
         isGood: cost?.comp1Good ?? false,
-        color: '#38bdf8',
+        color: 'var(--accent-blue-text)',
       },
       {
         title: 'Laba Usaha',
@@ -985,7 +995,7 @@ export function useBerandaAnalytics({
             : 'Target: Belum Lapor',
         yoy: profit?.comp2 || 'YoY: -',
         isGood: profit?.comp1Good ?? false,
-        color: '#10b981',
+        color: 'var(--status-good-text)',
       },
       {
         title: 'Kesiapan Alat (RFU)',
@@ -995,7 +1005,7 @@ export function useBerandaAnalytics({
         target: 'Target 92,0% RFU',
         yoy: rfu?.comp2 || 'Belum Lapor',
         isGood: rfuHasData && rfuVal >= 92,
-        color: '#f59e0b',
+        color: 'var(--status-alert-text)',
       },
     ];
   }, [financeKpis]);

@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { Wrench, CheckCircle2, Gauge, Cpu, Search, Layers, PlusCircle } from 'lucide-react';
 import { isBranchMatch } from '@/lib/constants';
+import LoadingState from '@/components/ui/LoadingState';
 
 interface EquipmentRecord {
   year: number;
@@ -40,9 +41,9 @@ interface PortSightPeralatanProps {
 }
 
 export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightPeralatanProps) {
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<EquipmentRecord[]>([]);
   const [catalog, setCatalog] = useState<EquipmentCatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'operasional' | 'katalog'>('operasional');
   const [search, setSearch] = useState('');
   const [selectedKategori, setSelectedKategori] = useState('ALL');
@@ -116,6 +117,10 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
+  if (loading) {
+    return <LoadingState label="Memuat data Peralatan…" />;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 4 Summary Cards */}
@@ -125,10 +130,10 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Populasi Unit Peralatan</span>
             <Cpu size={20} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {totalUnits.toLocaleString('id-ID')} Unit
           </div>
-          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Tersebar di cabang pelabuhan Regional 4
           </div>
         </div>
@@ -138,10 +143,10 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Kesiapan Alat (RFU)</span>
             <CheckCircle2 size={20} color="#10b981" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgAvail}%
           </div>
-          <div style={{ fontSize: '12px', color: avgAvail >= 90 ? '#34d399' : '#f59e0b', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: avgAvail >= 90 ? 'var(--status-good-text)' : 'var(--status-alert-text)', fontWeight: 600 }}>
             {avgAvail >= 90 ? 'Memenuhi Standar Kesiapan (Target &ge; 90%)' : 'Di Bawah Standar'}
           </div>
         </div>
@@ -151,10 +156,10 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Rata-rata Utilisasi Alat</span>
             <Gauge size={20} color="#f59e0b" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgUtil}%
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Tingkat jam operasi produktif alat
           </div>
         </div>
@@ -164,10 +169,10 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Katalog Jenis Alat</span>
             <Wrench size={20} color="#a855f7" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {catalog.length} Jenis
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             AL01 (QCC) s/d AL21 (Timbangan)
           </div>
         </div>
@@ -200,21 +205,21 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
                 <div className="dark-card-title" style={{ margin: 0 }}>
                   Distribusi Populasi Alat Bongkar Muat Utama (Unit)
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   Jumlah armada alat beroperasi di terminal-terminal Regional 4
                 </div>
               </div>
-              <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700 }}>Sumber: Sheet peralatan</span>
+              <span style={{ fontSize: '12px', color: 'var(--accent-blue-text)', fontWeight: 700 }}>Sumber: Sheet peralatan</span>
             </div>
 
             <div style={{ height: '230px', width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-                  <XAxis dataKey="acronym" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <XAxis dataKey="acronym" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
+                    contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
                     formatter={(val: unknown, _name: unknown, item: { payload?: { name?: string } }) => [`${String(val ?? '')} Unit (${item.payload?.name || ''})`, 'Populasi Unit']}
                   />
                   <Bar dataKey="count" fill="#38bdf8" radius={[4, 4, 0, 0]} />
@@ -230,7 +235,7 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
                 <div className="dark-card-title" style={{ margin: 0 }}>
                   Tabel Data Kesiapan & Utilisasi Alat per Cabang
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   Menampilkan {filteredData.length} baris rekaman alat operasional dari sheet peralatan
                 </div>
               </div>
@@ -245,9 +250,9 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
                       display: 'flex',
                       alignItems: 'center',
                       gap: '5px',
-                      backgroundColor: '#a855f7',
-                      borderColor: '#a855f7',
-                      color: '#ffffff',
+                      backgroundColor: 'var(--series-purple-fill)',
+                      borderColor: 'var(--series-purple-fill)',
+                      color: 'var(--text-on-accent)',
                       padding: '6px 12px',
                       fontSize: '12px',
                       borderRadius: '6px',
@@ -263,7 +268,7 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
                 )}
 
                 <div style={{ position: 'relative' }}>
-                  <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                  <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
                     className="filter-select"
@@ -288,46 +293,46 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
             </div>
 
             <div className="table-responsive">
-              <table className="dark-table">
+              <table className="card-table dark-table">
                 <thead>
                   <tr>
-                    <th>Kode</th>
-                    <th>Cabang</th>
-                    <th>Kode Alat</th>
-                    <th>Nama Alat</th>
-                    <th style={{ textAlign: 'center' }}>Singkatan</th>
-                    <th>Kategori</th>
-                    <th style={{ textAlign: 'center' }}>Jumlah Unit</th>
-                    <th style={{ textAlign: 'center' }}>Kesiapan (RFU)</th>
-                    <th style={{ textAlign: 'center' }}>Utilisasi (%)</th>
+                    <th scope="col">Kode</th>
+                    <th scope="col">Cabang</th>
+                    <th scope="col">Kode Alat</th>
+                    <th scope="col">Nama Alat</th>
+                    <th scope="col" style={{ textAlign: 'center' }}>Singkatan</th>
+                    <th scope="col">Kategori</th>
+                    <th scope="col" style={{ textAlign: 'center' }}>Jumlah Unit</th>
+                    <th scope="col" style={{ textAlign: 'center' }}>Kesiapan (RFU)</th>
+                    <th scope="col" style={{ textAlign: 'center' }}>Utilisasi (%)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredData.slice(0, 100).map((r, i) => (
                     <tr key={i}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{r.branchCode}</td>
-                      <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.branchName}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: '#cbd5e1' }}>{r.kdAlat}</td>
-                      <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.nmAlat}</td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{r.branchCode}</td>
+                      <td data-label="Cabang" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.branchName}</td>
+                      <td data-label="Kode Alat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{r.kdAlat}</td>
+                      <td data-label="Nama Alat" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.nmAlat}</td>
+                      <td data-label="Singkatan" style={{ textAlign: 'center' }}>
                         <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
                           {r.singkatan}
                         </span>
                       </td>
-                      <td style={{ fontSize: '11.5px', color: '#94a3b8' }}>{r.jnsAlat}</td>
-                      <td style={{ textAlign: 'center', fontWeight: 800, color: '#ffffff' }}>
+                      <td data-label="Kategori" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{r.jnsAlat}</td>
+                      <td data-label="Jumlah Unit" style={{ textAlign: 'center', fontWeight: 800, color: 'var(--text-title)' }}>
                         {r.jumlah > 0 ? `${r.jumlah} Unit` : '-'}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td data-label="Kesiapan (RFU)" style={{ textAlign: 'center' }}>
                         {r.availability > 0 ? (
                           <span className={`badge ${r.availability >= 90 ? 'badge-green' : 'badge-yellow'}`}>
                             {r.availability}%
                           </span>
                         ) : (
-                          <span style={{ color: '#64748b' }}>-</span>
+                          <span style={{ color: 'var(--text-muted)' }}>-</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'center', fontWeight: 700, color: r.utilisasi > 50 ? '#38bdf8' : '#cbd5e1' }}>
+                      <td data-label="Utilisasi (%)" style={{ textAlign: 'center', fontWeight: 700, color: r.utilisasi > 50 ? 'var(--accent-blue-text)' : 'var(--text-secondary)' }}>
                         {r.utilisasi > 0 ? `${r.utilisasi}%` : '-'}
                       </td>
                     </tr>
@@ -349,28 +354,28 @@ export default function PortSightPeralatan({ selectedTerminal = 'ALL', onOpenMan
           </p>
 
           <div className="table-responsive">
-            <table className="dark-table">
+            <table className="card-table dark-table">
               <thead>
                 <tr>
-                  <th>Kode Alat</th>
-                  <th>Nama Peralatan Pelabuhan</th>
-                  <th style={{ textAlign: 'center' }}>Singkatan</th>
-                  <th>Kategori Operasional</th>
-                  <th style={{ textAlign: 'center' }}>Status</th>
+                  <th scope="col">Kode Alat</th>
+                  <th scope="col">Nama Peralatan Pelabuhan</th>
+                  <th scope="col" style={{ textAlign: 'center' }}>Singkatan</th>
+                  <th scope="col">Kategori Operasional</th>
+                  <th scope="col" style={{ textAlign: 'center' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {catalog.map(eq => (
                   <tr key={eq.code}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{eq.code}</td>
-                    <td style={{ fontWeight: 600, color: '#ffffff' }}>{eq.name}</td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td data-label="Kode Alat" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{eq.code}</td>
+                    <td data-label="Nama Peralatan Pelabuhan" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{eq.name}</td>
+                    <td data-label="Singkatan" style={{ textAlign: 'center' }}>
                       <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
                         {eq.acronym}
                       </span>
                     </td>
-                    <td style={{ color: '#cbd5e1' }}>{eq.category}</td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td data-label="Kategori Operasional" style={{ color: 'var(--text-secondary)' }}>{eq.category}</td>
+                    <td data-label="Status" style={{ textAlign: 'center' }}>
                       <span className="badge badge-green">Aktif</span>
                     </td>
                   </tr>

@@ -13,6 +13,8 @@ import {
 } from 'recharts';
 import { Gauge, Ship, Layers, Warehouse, Search, PlusCircle } from 'lucide-react';
 import { isBranchMatch } from '@/lib/constants';
+import { formatPercent } from '@/lib/formatters';
+import LoadingState from '@/components/ui/LoadingState';
 
 interface UtilisasiItem {
   year: number;
@@ -31,8 +33,8 @@ interface PortSightUtilisasiProps {
 }
 
 export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightUtilisasiProps) {
-  const [data, setData] = useState<UtilisasiItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<UtilisasiItem[]>([]);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -100,6 +102,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
       SOR: Number((d.sor || 0).toFixed(1)),
     }));
 
+  if (loading) {
+    return <LoadingState label="Memuat data Utilisasi…" />;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 4 Summary Cards */}
@@ -109,10 +115,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Rata-rata BOR (Dermaga)</span>
             <Ship size={20} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgBor}%
           </div>
-          <div style={{ fontSize: '12px', color: avgBor <= 65 ? '#34d399' : '#f59e0b', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: avgBor <= 65 ? 'var(--status-good-text)' : 'var(--status-alert-text)', fontWeight: 600 }}>
             {avgBor <= 65 ? 'Optimal (Batas Aman UNCTAD: &le; 65%)' : 'Mendekati Kejenuhan Dermaga'}
           </div>
         </div>
@@ -122,10 +128,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Rata-rata YOR (Lapangan)</span>
             <Layers size={20} color="#10b981" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgYor}%
           </div>
-          <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: 'var(--status-good-text)', fontWeight: 600 }}>
             Kapasitas Lapangan Sangat Longgar
           </div>
         </div>
@@ -135,10 +141,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Rata-rata SOR (Gudang)</span>
             <Warehouse size={20} color="#f59e0b" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgSor}%
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Tingkat Okupansi Ruang Gudang
           </div>
         </div>
@@ -148,10 +154,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
             <span className="kpi-header-label">Jumlah Titik Fasilitas</span>
             <Gauge size={20} color="#a855f7" />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {filteredData.length} Lokasi
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Dermaga Multipurpose & Petikemas
           </div>
         </div>
@@ -164,21 +170,21 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
             <div className="dark-card-title" style={{ margin: 0 }}>
               Komparasi Utilisasi BOR vs YOR vs SOR (%) per Cabang Pelabuhan
             </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Perbandingan utilisasi tambatan dermaga, lapangan penumpukan, dan gudang
             </div>
           </div>
-          <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700 }}>Sumber: Sheet utilisasi (input_data.xlsx)</span>
+          <span style={{ fontSize: '12px', color: 'var(--accent-blue-text)', fontWeight: 700 }}>Sumber: Sheet utilisasi (input_data.xlsx)</span>
         </div>
 
         <div style={{ height: '260px', width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-              <XAxis dataKey="name" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
+                contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
                 formatter={(val: unknown) => [`${String(val ?? '')}%`, '']}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
@@ -197,7 +203,7 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
             <div className="dark-card-title" style={{ margin: 0 }}>
               Tabel Rekapitulasi BOR, YOR, & SOR per Cabang Pelabuhan
             </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Menampilkan {filteredData.length} baris dermaga resmi dari sheet utilisasi
             </div>
           </div>
@@ -212,9 +218,9 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  backgroundColor: '#06b6d4',
-                  borderColor: '#06b6d4',
-                  color: '#ffffff',
+                  backgroundColor: 'var(--series-cyan-fill)',
+                  borderColor: 'var(--series-cyan-fill)',
+                  color: 'var(--text-on-accent)',
                   padding: '6px 12px',
                   fontSize: '12px',
                   borderRadius: '6px',
@@ -230,7 +236,7 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
             )}
 
             <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 className="filter-select"
@@ -244,38 +250,38 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
         </div>
 
         <div className="table-responsive">
-          <table className="dark-table">
+          <table className="card-table dark-table">
             <thead>
               <tr>
-                <th>Kode</th>
-                <th>Cabang Pelabuhan</th>
-                <th>Peruntukan Dermaga</th>
-                <th style={{ textAlign: 'center' }}>BOR (%)</th>
-                <th style={{ textAlign: 'center' }}>YOR (%)</th>
-                <th style={{ textAlign: 'center' }}>SOR (%)</th>
-                <th style={{ textAlign: 'center' }}>Status Tambatan</th>
+                <th scope="col">Kode</th>
+                <th scope="col">Cabang Pelabuhan</th>
+                <th scope="col">Peruntukan Dermaga</th>
+                <th scope="col" style={{ textAlign: 'center' }}>BOR (%)</th>
+                <th scope="col" style={{ textAlign: 'center' }}>YOR (%)</th>
+                <th scope="col" style={{ textAlign: 'center' }}>SOR (%)</th>
+                <th scope="col" style={{ textAlign: 'center' }}>Status Tambatan</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.map((r, i) => (
                 <tr key={i}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{r.branchCode}</td>
-                  <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.branchName}</td>
-                  <td>
+                  <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{r.branchCode}</td>
+                  <td data-label="Cabang Pelabuhan" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.branchName}</td>
+                  <td data-label="Peruntukan Dermaga">
                     <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
                       {r.dermaga}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center', fontWeight: 800, color: (r.bor || 0) > 70 ? '#f59e0b' : '#38bdf8' }}>
-                    {(r.bor || 0) > 0 ? `${(r.bor || 0).toFixed(1)}%` : '-'}
+                  <td data-label="BOR (%)" style={{ textAlign: 'center', fontWeight: 800, color: (r.bor || 0) > 70 ? 'var(--status-alert-text)' : 'var(--accent-blue-text)' }}>
+                    {(r.bor || 0) > 0 ? formatPercent(r.bor || 0, 1) : '-'}
                   </td>
-                  <td style={{ textAlign: 'center', fontWeight: 700, color: '#10b981' }}>
-                    {(r.yor || 0) > 0 ? `${(r.yor || 0).toFixed(1)}%` : '-'}
+                  <td data-label="YOR (%)" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--status-good-text)' }}>
+                    {(r.yor || 0) > 0 ? formatPercent(r.yor || 0, 1) : '-'}
                   </td>
-                  <td style={{ textAlign: 'center', fontWeight: 700, color: '#cbd5e1' }}>
-                    {(r.sor || 0) > 0 ? `${(r.sor || 0).toFixed(1)}%` : '-'}
+                  <td data-label="SOR (%)" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    {(r.sor || 0) > 0 ? formatPercent(r.sor || 0, 1) : '-'}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Status Tambatan" style={{ textAlign: 'center' }}>
                     <span className={`badge ${(r.bor || 0) <= 65 ? 'badge-green' : (r.bor || 0) <= 75 ? 'badge-yellow' : 'badge-red'}`}>
                       {(r.bor || 0) <= 65 ? 'Optimal' : (r.bor || 0) <= 75 ? 'Padat' : 'Jenuh'}
                     </span>

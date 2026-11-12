@@ -1,0 +1,20 @@
+<USER_REQUEST>
+saya ingin tampilan dashboardnya seperti di atas dan berdasarkan data nya
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-11T15:49:11+08:00.
+
+The user's current state is as follows:
+Active Document: /Users/rekaskuy/Documents/ChatGPT/Dashboard BOD/dashboardR4/src/lib/userPicSync.ts (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 1
+Other open documents:
+- /Users/rekaskuy/Documents/ChatGPT/Dashboard BOD/dashboardR4/src/hooks/useBerandaAnalytics.ts (LANGUAGE_UNSPECIFIED)
+- /Users/rekaskuy/Documents/ChatGPT/Dashboard BOD/dashboardR4/src/components/portsight/PortSightUtilisasi.tsx (LANGUAGE_UNSPECIFIED)
+- /Users/rekaskuy/Documents/ChatGPT/Dashboard BOD/dashboardR4/src/components/portsight/PortSightPeriode.tsx (LANGUAGE_UNSPECIFIED)
+- /Users/rekaskuy/Documents/ChatGPT/Dashboard BOD/dashboardR4/src/components/portsight/PortSightPeralatan.tsx (LANGUAGE_UNSPECIFIED)
+- /Users/rekaskuy/Documents/ChatGPT/Dashboard BOD/dashboardR4/src/components/portsight/PortSightOpkom.tsx (LANGUAGE_UNSPECIFIED)
+
+The user has uploaded 1 image(s):
+- /Users/rekaskuy/.gemini/antigravity/brain/275cc606-d832-47b9-8b21-59e3de4ee300/.user_uploaded/media_1794383312664_40ed5d07.jpg
+You can embed this image in an artifact if you need the USER to review it.
+</ADDITIONAL_METADATA>

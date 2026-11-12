@@ -12,6 +12,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { Branch, Department, ImportBatch, UserRole, ValidationSummary, ValidationErrorItem, MonthlyRecord } from '@/lib/types';
+import { formatNumber } from '@/lib/formatters';
 
 interface ImportCenterProps {
   branches: Branch[];
@@ -134,7 +135,9 @@ export default function ImportCenter({
 
       setMessage({
         type: 'success',
-        text: `Sukses! ${data.savedCount} record data kinerja berhasil disimpan ke database. Status: Menunggu Verifikasi.`
+        // The server distinguishes new / updated / unchanged rows so a repeated
+        // upload does not look like it created 40 fresh records.
+        text: data.message || `Impor selesai: ${data.savedCount} baris diproses.`
       });
       setFile(null);
       setValidationResult(null);
@@ -260,7 +263,7 @@ export default function ImportCenter({
       <div className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title" style={{ fontSize: '18px' }}>
+            <h2 className="card-title" style={{ fontSize: '16px' }}>
               <FileSpreadsheet size={20} color="#38bdf8" />
               <span>Pusat Impor Data Kinerja & Integrasi Google Sheets</span>
             </h2>
@@ -339,7 +342,7 @@ export default function ImportCenter({
                   className="form-input"
                   disabled
                   value={`${username} (${userRole})`}
-                  style={{ backgroundColor: '#101c2e' }}
+                  style={{ backgroundColor: 'var(--bg-inner)' }}
                 />
               </div>
             </div>
@@ -351,7 +354,7 @@ export default function ImportCenter({
                 borderRadius: 'var(--radius-lg)',
                 padding: '36px 20px',
                 textAlign: 'center',
-                backgroundColor: '#101c2e',
+                backgroundColor: 'var(--bg-inner)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
               }}
@@ -365,15 +368,15 @@ export default function ImportCenter({
                 onChange={handleFileChange}
               />
               <UploadCloud size={40} color="#38bdf8" style={{ margin: '0 auto 12px' }} />
-              <div style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff' }}>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-title)' }}>
                 {file ? file.name : 'Klik untuk memilih file hasil ekspor spreadsheet'}
               </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
                 Mendukung format Microsoft Excel (.xlsx, .xls) dan CSV (.csv) hingga 10MB
               </div>
               {file && (
-                <div style={{ marginTop: '10px', fontSize: '12px', color: '#38bdf8', fontWeight: 600 }}>
-                  Ukuran: {(file.size / 1024).toFixed(1)} KB • Klik untuk mengganti file
+                <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--accent-blue-text)', fontWeight: 600 }}>
+                  Ukuran: {formatNumber(file.size / 1024, 1)} KB • Klik untuk mengganti berkas
                 </div>
               )}
             </div>
@@ -417,17 +420,17 @@ export default function ImportCenter({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#38bdf8',
+                      color: 'var(--accent-blue-text)',
                     }}
                   >
                     <FileSpreadsheet size={24} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
                       Sinkronisasi My Drive (input_data.xlsx)
                     </div>
-                    <div style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '2px' }}>
-                      Akun Google Drive: <strong style={{ color: '#38bdf8' }}>regdashr@gmail.com</strong> • Master & Kinerja Multi-Sheet (10 Sheet)
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Akun Google Drive: <strong style={{ color: 'var(--accent-blue-text)' }}>regdashr@gmail.com</strong> • Master & Kinerja Multi-Sheet (10 Sheet)
                     </div>
                   </div>
                 </div>
@@ -436,7 +439,7 @@ export default function ImportCenter({
                   onClick={handleDriveSync}
                   disabled={isSyncingDrive}
                   className="btn btn-primary"
-                  style={{ backgroundColor: '#0284c7', borderColor: '#38bdf8', minWidth: '220px', justifyContent: 'center' }}
+                  style={{ backgroundColor: 'var(--accent-blue)', borderColor: 'var(--accent-blue)', minWidth: '220px', justifyContent: 'center' }}
                 >
                   <RefreshCw size={15} className={isSyncingDrive ? 'spin' : ''} />
                   <span>{isSyncingDrive ? 'Memproses Data Drive...' : 'Sinkronkan My Drive Sekarang'}</span>
@@ -446,7 +449,7 @@ export default function ImportCenter({
               {driveSyncStatus && (
                 <div className={`alert-box ${driveSyncStatus.success ? 'alert-success' : 'alert-error'}`} style={{ margin: 0 }}>
                   <CheckCircle2 size={16} />
-                  <div style={{ fontSize: '12.5px' }}>
+                  <div style={{ fontSize: '12px' }}>
                     {driveSyncStatus.message}
                   </div>
                 </div>
@@ -456,7 +459,7 @@ export default function ImportCenter({
             {/* Google Drive Card 2: Master PIC / User */}
             <div
               style={{
-                backgroundColor: '#101c2e',
+                backgroundColor: 'var(--bg-inner)',
                 border: '1px solid #1e3557',
                 borderRadius: 'var(--radius-md)',
                 padding: '20px',
@@ -476,17 +479,17 @@ export default function ImportCenter({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#10b981',
+                      color: 'var(--status-good-text)',
                     }}
                   >
                     <FileSpreadsheet size={24} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
                       Spreadsheet Master PIC (master_user_pic.xlsx)
                     </div>
-                    <div style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '2px' }}>
-                      Akun Google Drive: <strong style={{ color: '#10b981' }}>regdashr@gmail.com</strong> • Master User PIC, NIPP, Divisi & Hak Akses Login
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Akun Google Drive: <strong style={{ color: 'var(--status-good-text)' }}>regdashr@gmail.com</strong> • Master User PIC, NIPP, Divisi & Hak Akses Login
                     </div>
                   </div>
                 </div>
@@ -518,7 +521,7 @@ export default function ImportCenter({
               {userPicSyncStatus && (
                 <div className={`alert-box ${userPicSyncStatus.success ? 'alert-success' : 'alert-error'}`} style={{ margin: 0 }}>
                   <CheckCircle2 size={16} />
-                  <div style={{ fontSize: '12.5px' }}>
+                  <div style={{ fontSize: '12px' }}>
                     {userPicSyncStatus.message}
                   </div>
                 </div>
@@ -541,8 +544,8 @@ export default function ImportCenter({
                 onChange={(e) => setGsheetUrl(e.target.value)}
                 placeholder="https://docs.google.com/spreadsheets/d/1A2b3C.../edit"
               />
-              <span style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
-                Pastikan Google Spreadsheet telah dibagikan (share) dengan akun: <strong style={{ color: '#38bdf8' }}>regdashr@gmail.com</strong> (Viewer / Editor).
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                Pastikan Google Spreadsheet telah dibagikan (share) dengan akun: <strong style={{ color: 'var(--accent-blue-text)' }}>regdashr@gmail.com</strong> (Viewer / Editor).
               </span>
             </div>
 
@@ -564,7 +567,7 @@ export default function ImportCenter({
                   className="form-input"
                   disabled
                   value="regdashr@gmail.com"
-                  style={{ backgroundColor: '#101c2e', color: '#38bdf8', fontWeight: 700 }}
+                  style={{ backgroundColor: 'var(--bg-inner)', color: 'var(--accent-blue-text)', fontWeight: 700 }}
                 />
               </div>
             </div>
@@ -585,17 +588,17 @@ export default function ImportCenter({
         {/* TAB 3: DOWNLOAD TEMPLATE */}
         {activeTab === 'template' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <p style={{ fontSize: '13.5px', color: '#cbd5e1', lineHeight: 1.6 }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               Unduh format template spreadsheet resmi (.xlsx) yang telah dilengkapi baris contoh data, nama kolom standar, serta daftar kode cabang dan indikator resmi pada tab lembar petunjuk referensi.
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               {departments.map((d) => (
-                <div key={d.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', background: '#101c2e' }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
+                <div key={d.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', background: 'var(--bg-inner)' }}>
+                  <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-title)' }}>
                     Departemen {d.name} ({d.code})
                   </div>
-                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', marginBottom: '14px' }}>
                     PIC: {d.pic_name} • Format Standar v1.2
                   </div>
                   <a
@@ -617,35 +620,35 @@ export default function ImportCenter({
         {activeTab === 'history' && (
           <div>
             {isLoadingHistory ? (
-              <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Memuat riwayat impor...</div>
+              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Memuat riwayat impor...</div>
             ) : historyBatches.length === 0 ? (
-              <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>Belum ada histori impor tercatat.</div>
+              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada histori impor tercatat.</div>
             ) : (
               <div className="table-responsive">
-                <table className="data-table">
+                <table className="card-table data-table">
                   <thead>
                     <tr>
-                      <th>Waktu Upload</th>
-                      <th>Sumber / File</th>
-                      <th>Tipe</th>
-                      <th>Periode</th>
-                      <th>Baris Valid</th>
-                      <th>Baris Gagal</th>
-                      <th>Pengunggah</th>
-                      <th>Status</th>
+                      <th scope="col">Waktu Upload</th>
+                      <th scope="col">Sumber / File</th>
+                      <th scope="col">Tipe</th>
+                      <th scope="col">Periode</th>
+                      <th scope="col">Baris Valid</th>
+                      <th scope="col">Baris Gagal</th>
+                      <th scope="col">Pengunggah</th>
+                      <th scope="col">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {historyBatches.map((b) => (
                       <tr key={b.id}>
-                        <td style={{ fontSize: '12px' }}>{new Date(b.uploaded_at).toLocaleString('id-ID')}</td>
-                        <td style={{ fontWeight: 600 }}>{b.filename_or_url}</td>
-                        <td><span className="badge badge-neutral">{b.source_type}</span></td>
-                        <td>{b.period_month}/{b.period_year}</td>
-                        <td style={{ color: '#059669', fontWeight: 700 }}>{b.valid_rows}</td>
-                        <td style={{ color: b.error_rows > 0 ? '#dc2626' : '#64748b', fontWeight: 700 }}>{b.error_rows}</td>
-                        <td>{b.uploaded_by}</td>
-                        <td><span className="badge badge-green">{b.status}</span></td>
+                        <td data-label="Waktu Upload" style={{ fontSize: '12px' }}>{new Date(b.uploaded_at).toLocaleString('id-ID')}</td>
+                        <td data-label="Sumber / File" style={{ fontWeight: 600 }}>{b.filename_or_url}</td>
+                        <td data-label="Tipe"><span className="badge badge-neutral">{b.source_type}</span></td>
+                        <td data-label="Periode">{b.period_month}/{b.period_year}</td>
+                        <td data-label="Baris Valid" style={{ color: 'var(--status-good-text)', fontWeight: 700 }}>{b.valid_rows}</td>
+                        <td data-label="Baris Gagal" style={{ color: b.error_rows > 0 ? 'var(--status-danger-text)' : 'var(--text-muted)', fontWeight: 700 }}>{b.error_rows}</td>
+                        <td data-label="Pengunggah">{b.uploaded_by}</td>
+                        <td data-label="Status"><span className="badge badge-green">{b.status}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -670,7 +673,7 @@ export default function ImportCenter({
                 <span>Laporan Validasi Spreadsheet</span>
               </h3>
               <p className="card-subtitle">
-                Total Baris: <strong>{validationResult.totalRows}</strong> • Valid: <strong style={{ color: '#059669' }}>{validationResult.validRowsCount}</strong> • Bermasalah: <strong style={{ color: '#dc2626' }}>{validationResult.errorRowsCount}</strong>
+                Total Baris: <strong>{validationResult.totalRows}</strong> • Valid: <strong style={{ color: 'var(--status-good-text)' }}>{validationResult.validRowsCount}</strong> • Bermasalah: <strong style={{ color: 'var(--status-danger-text)' }}>{validationResult.errorRowsCount}</strong>
               </p>
             </div>
 
@@ -697,26 +700,26 @@ export default function ImportCenter({
           {/* Validation Errors Table if any */}
           {validationResult.errors.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
-              <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#dc2626', marginBottom: '8px' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--status-danger-text)', marginBottom: '8px' }}>
                 Daftar Kesalahan yang Wajib Diperbaiki:
               </h4>
               <div className="table-responsive">
-                <table className="data-table">
+                <table className="card-table data-table">
                   <thead>
                     <tr style={{ backgroundColor: '#fef2f2' }}>
-                      <th style={{ color: '#991b1b' }}>Baris #</th>
-                      <th style={{ color: '#991b1b' }}>Kolom / Atribut</th>
-                      <th style={{ color: '#991b1b' }}>Nilai Salah</th>
-                      <th style={{ color: '#991b1b' }}>Pesan Kesalahan</th>
+                      <th scope="col" style={{ color: 'var(--status-danger-text)' }}>Baris #</th>
+                      <th scope="col" style={{ color: 'var(--status-danger-text)' }}>Kolom / Atribut</th>
+                      <th scope="col" style={{ color: 'var(--status-danger-text)' }}>Nilai Salah</th>
+                      <th scope="col" style={{ color: 'var(--status-danger-text)' }}>Pesan Kesalahan</th>
                     </tr>
                   </thead>
                   <tbody>
                     {validationResult.errors.map((err: ValidationErrorItem & { field?: string }, idx: number) => (
                       <tr key={idx}>
-                        <td style={{ fontWeight: 700, color: '#dc2626' }}>Baris {err.row}</td>
-                        <td style={{ fontWeight: 600 }}>{err.column || err.field}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{String(err.value || '(kosong)')}</td>
-                        <td style={{ color: '#991b1b' }}>{err.message}</td>
+                        <td data-label="Baris #" style={{ fontWeight: 700, color: 'var(--status-danger-text)' }}>Baris {err.row}</td>
+                        <td data-label="Kolom / Atribut" style={{ fontWeight: 600 }}>{err.column || err.field}</td>
+                        <td data-label="Nilai Salah" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{String(err.value || '(kosong)')}</td>
+                        <td data-label="Pesan Kesalahan" style={{ color: 'var(--status-danger-text)' }}>{err.message}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -727,36 +730,36 @@ export default function ImportCenter({
 
           {/* Preview of Parsed Rows */}
           <div>
-            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)', marginBottom: '8px' }}>
               Pratinjau Data Valid (15 Baris Pertama):
             </h4>
             <div className="table-responsive">
-              <table className="data-table">
+              <table className="card-table data-table">
                 <thead>
                   <tr>
-                    <th>Kode Cabang</th>
-                    <th>Departemen</th>
-                    <th>Periode</th>
-                    <th>Kode Indikator</th>
-                    <th style={{ textAlign: 'right' }}>Target</th>
-                    <th style={{ textAlign: 'right' }}>Realisasi</th>
-                    <th style={{ textAlign: 'center' }}>Satuan</th>
-                    <th style={{ textAlign: 'right' }}>Capaian</th>
-                    <th style={{ textAlign: 'center' }}>Status KPI</th>
+                    <th scope="col">Kode Cabang</th>
+                    <th scope="col">Departemen</th>
+                    <th scope="col">Periode</th>
+                    <th scope="col">Kode Indikator</th>
+                    <th scope="col" style={{ textAlign: 'right' }}>Target</th>
+                    <th scope="col" style={{ textAlign: 'right' }}>Realisasi</th>
+                    <th scope="col" style={{ textAlign: 'center' }}>Satuan</th>
+                    <th scope="col" style={{ textAlign: 'right' }}>Capaian</th>
+                    <th scope="col" style={{ textAlign: 'center' }}>Status KPI</th>
                   </tr>
                 </thead>
                 <tbody>
                   {validationResult.parsedRecords.slice(0, 15).map((r: MonthlyRecord, idx: number) => (
                     <tr key={idx}>
-                      <td style={{ fontWeight: 600 }}>{r.branch_id}</td>
-                      <td>{r.department_id}</td>
-                      <td>{r.month}/{r.year}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{r.indicator_id}</td>
-                      <td style={{ textAlign: 'right' }}>{r.target.toLocaleString('id-ID')}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{r.realization.toLocaleString('id-ID')}</td>
-                      <td style={{ textAlign: 'center' }}>{r.unit}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{r.achievement_pct}%</td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td data-label="Kode Cabang" style={{ fontWeight: 600 }}>{r.branch_id}</td>
+                      <td data-label="Departemen">{r.department_id}</td>
+                      <td data-label="Periode">{r.month}/{r.year}</td>
+                      <td data-label="Kode Indikator" style={{ fontFamily: 'var(--font-mono)' }}>{r.indicator_id}</td>
+                      <td data-label="Target" style={{ textAlign: 'right' }}>{r.target.toLocaleString('id-ID')}</td>
+                      <td data-label="Realisasi" style={{ textAlign: 'right', fontWeight: 700 }}>{r.realization.toLocaleString('id-ID')}</td>
+                      <td data-label="Satuan" style={{ textAlign: 'center' }}>{r.unit}</td>
+                      <td data-label="Capaian" style={{ textAlign: 'right', fontWeight: 700 }}>{r.achievement_pct}%</td>
+                      <td data-label="Status KPI" style={{ textAlign: 'center' }}>
                         <span className={`badge ${r.status_color === 'green' ? 'badge-green' : r.status_color === 'yellow' ? 'badge-yellow' : 'badge-red'}`}>
                           {r.status_color.toUpperCase()}
                         </span>

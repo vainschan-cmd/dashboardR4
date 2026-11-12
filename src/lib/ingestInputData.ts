@@ -1,5 +1,6 @@
 import { getDb, withTransaction } from './db';
 import * as xlsx from 'xlsx';
+import { readWorkbookSafe } from './spreadsheet';
 import path from 'path';
 import fs from 'fs';
 import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from './constants';
@@ -97,7 +98,8 @@ export function ingestInputData(filePath?: string) {
   const db = getDb();
   console.log(`[Ingest] Membaca file spreadsheet lokal: ${excelPath}`);
   const fileBuffer = fs.readFileSync(excelPath);
-  const wb = xlsx.read(fileBuffer, { type: 'buffer' });
+  // Hardened parse: row cap and no formula/macro evaluation.
+  const { workbook: wb } = readWorkbookSafe(fileBuffer);
 
   return withTransaction(db, () => {
     // 0. Pastikan Semua KPI Indicators Terdaftar (mencegah foreign key error)

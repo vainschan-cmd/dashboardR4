@@ -20,11 +20,12 @@ import {
   TrendingDown,
   Percent,
   Search,
-  Filter,
   RotateCcw,
-  PlusCircle,
-  FileSpreadsheet,
+  X,
+  Check,
 } from 'lucide-react';
+import Term from '@/components/ui/Term';
+import { formatPercent } from '@/lib/formatters';
 
 interface KonsolidasiData {
   filters: {
@@ -33,10 +34,10 @@ interface KonsolidasiData {
     selectedBranches: string[];
   };
   kpi: {
-    labaArea: { realisasi: number; yoy: number; rka: number };
-    pendapatan: { realisasi: number; yoy: number; rka: number };
-    beban: { realisasi: number; yoy: number; rka: number };
-    bopo: { percentage: number };
+    labaArea: { realisasi: number; yoy: number | null; rka: number | null };
+    pendapatan: { realisasi: number; yoy: number | null; rka: number | null };
+    beban: { realisasi: number; yoy: number | null; rka: number | null };
+    bopo: { percentage: number | null };
   };
   charts: {
     topLabaBranches: Array<{
@@ -97,7 +98,6 @@ const ENTITAS_COLORS: Record<string, string> = {
 
 export default function ExecutiveKonsolidasiDashboard({
   selectedTerminal = 'ALL',
-  onOpenManualInput,
 }: ExecutiveKonsolidasiDashboardProps) {
   // Slicer States
   const [selectedYear, setSelectedYear] = useState<number>(2026);
@@ -107,7 +107,6 @@ export default function ExecutiveKonsolidasiDashboard({
 
   // Data state
   const [dashboardData, setDashboardData] = useState<KonsolidasiData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   const [, startTransition] = useTransition();
 
   // Load available data
@@ -115,7 +114,6 @@ export default function ExecutiveKonsolidasiDashboard({
     let isMounted = true;
     async function fetchData() {
       try {
-        setLoading(true);
         const params = new URLSearchParams({
           year: selectedYear.toString(),
           month: selectedMonth.toString(),
@@ -135,10 +133,7 @@ export default function ExecutiveKonsolidasiDashboard({
           setDashboardData(json);
         }
       } catch (err) {
-        console.error('Error loading konsolidasi data:', err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
+        console.error('Error loading konsolidasi data:', err);      }
     }
 
     fetchData();
@@ -162,6 +157,10 @@ export default function ExecutiveKonsolidasiDashboard({
     return `${prefix}Rp ${inM.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} M`;
   };
 
+  /** Comparison metrics are null when the source has no YoY/RKA value — never invent a number. */
+  const formatPctOrDash = (val: number | null | undefined) =>
+    val === null || val === undefined || Number.isNaN(val) ? '—' : formatPercent(val, 2);
+
   const formatBillionAxis = (val: number) => {
     const b = val / 1_000_000_000;
     return b.toLocaleString('id-ID', { maximumFractionDigits: 0 });
@@ -178,11 +177,21 @@ export default function ExecutiveKonsolidasiDashboard({
 
   const toggleBranch = (branchName: string) => {
     startTransition(() => {
-      setSelectedBranchList((prev) =>
-        prev.includes(branchName)
+      setSelectedBranchList((prev) => {
+        if (prev.length === 0) {
+          return [branchName];
+        }
+        return prev.includes(branchName)
           ? prev.filter((b) => b !== branchName)
-          : [...prev, branchName]
-      );
+          : [...prev, branchName];
+      });
+    });
+  };
+
+  const selectAllBranches = () => {
+    startTransition(() => {
+      setSelectedBranchList([]);
+      setBranchSearch('');
     });
   };
 
@@ -195,37 +204,36 @@ export default function ExecutiveKonsolidasiDashboard({
   const charts = dashboardData?.charts;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: '#1e293b' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: 'var(--text-main)' }}>
       {/* Top Main Grid: Left Slicers (TAHUN, BULAN, NM_CBG) & Right Main Dashboard */}
-      <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '16px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '14px', alignItems: 'start' }}>
         
         {/* ================= LEFT SLICERS PANEL ================= */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           
           {/* SLICER 1: TAHUN */}
           <div
             style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #cbd5e1',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '6px',
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              padding: '6px 8px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
             }}
           >
             <div
               style={{
-                backgroundColor: '#ffffff',
-                borderBottom: '1px solid #e2e8f0',
-                padding: '6px 10px',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 800,
-                color: '#0f172a',
+                color: 'var(--text-title)',
                 letterSpacing: '0.5px',
+                marginBottom: '6px',
+                paddingLeft: '2px',
               }}
             >
               TAHUN
             </div>
-            <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {[2025, 2026].map((yr) => {
                 const isSelected = selectedYear === yr;
                 return (
@@ -236,18 +244,31 @@ export default function ExecutiveKonsolidasiDashboard({
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '5px 10px',
+                      padding: '4px 8px',
                       fontSize: '12px',
                       fontWeight: isSelected ? 700 : 500,
                       borderRadius: '4px',
-                      border: isSelected ? '1px solid #60a5fa' : '1px solid transparent',
-                      backgroundColor: isSelected ? '#bfdbfe' : '#f8fafc',
-                      color: isSelected ? '#1e3a8a' : '#334155',
+                      border: isSelected ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
+                      backgroundColor: isSelected ? 'var(--blue-soft)' : 'var(--bg-card)',
+                      color: isSelected ? 'var(--text-title)' : 'var(--text-secondary)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                     }}
                   >
-                    {yr}
+                    <span>{yr}</span>
+                    {isSelected && (
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--accent-blue)',
+                        }}
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -257,27 +278,26 @@ export default function ExecutiveKonsolidasiDashboard({
           {/* SLICER 2: BULAN */}
           <div
             style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #cbd5e1',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '6px',
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              padding: '6px 8px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
             }}
           >
             <div
               style={{
-                backgroundColor: '#ffffff',
-                borderBottom: '1px solid #e2e8f0',
-                padding: '6px 10px',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 800,
-                color: '#0f172a',
+                color: 'var(--text-title)',
                 letterSpacing: '0.5px',
+                marginBottom: '6px',
+                paddingLeft: '2px',
               }}
             >
               BULAN
             </div>
-            <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {[8, 9].map((m) => {
                 const isSelected = selectedMonth === m;
                 return (
@@ -288,18 +308,31 @@ export default function ExecutiveKonsolidasiDashboard({
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '5px 10px',
+                      padding: '4px 8px',
                       fontSize: '12px',
                       fontWeight: isSelected ? 700 : 500,
                       borderRadius: '4px',
-                      border: isSelected ? '1px solid #60a5fa' : '1px solid transparent',
-                      backgroundColor: isSelected ? '#bfdbfe' : '#f8fafc',
-                      color: isSelected ? '#1e3a8a' : '#334155',
+                      border: isSelected ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
+                      backgroundColor: isSelected ? 'var(--blue-soft)' : 'var(--bg-card)',
+                      color: isSelected ? 'var(--text-title)' : 'var(--text-secondary)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                     }}
                   >
-                    {m}
+                    <span>{m}</span>
+                    {isSelected && (
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--accent-blue)',
+                        }}
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -309,84 +342,146 @@ export default function ExecutiveKonsolidasiDashboard({
           {/* SLICER 3: NM_CBG (Multi-select list) */}
           <div
             style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #cbd5e1',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '6px',
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              padding: '6px 8px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
               display: 'flex',
               flexDirection: 'column',
             }}
           >
             <div
               style={{
-                backgroundColor: '#ffffff',
-                borderBottom: '1px solid #e2e8f0',
-                padding: '6px 10px',
-                fontSize: '11px',
-                fontWeight: 800,
-                color: '#0f172a',
-                letterSpacing: '0.5px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                marginBottom: '6px',
+                paddingLeft: '2px',
               }}
             >
-              <span>NM_CBG</span>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  color: 'var(--text-title)',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                Cabang
+              </span>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: selectedBranchList.length > 0 ? 'var(--accent-blue-text)' : 'var(--text-muted)',
+                  backgroundColor: 'var(--bg-inner)',
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                }}
+              >
+                {selectedBranchList.length === 0 ? 'Semua' : `${selectedBranchList.length}`}
+              </span>
+            </div>
+
+            {/* Quick Actions: Semua & Reset */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+              <button
+                type="button"
+                onClick={selectAllBranches}
+                style={{
+                  flex: 1,
+                  padding: '2.5px 6px',
+                  fontSize: '12px',
+                  fontWeight: selectedBranchList.length === 0 ? 700 : 500,
+                  borderRadius: '3px',
+                  border: '1px solid var(--border-subtle)',
+                  backgroundColor: selectedBranchList.length === 0 ? 'var(--blue-soft)' : 'var(--bg-card)',
+                  color: selectedBranchList.length === 0 ? 'var(--accent-blue-text)' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                Pilih Semua
+              </button>
               {selectedBranchList.length > 0 && (
                 <button
                   type="button"
                   onClick={clearBranchFilter}
                   title="Reset Filter Cabang"
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
+                    padding: '2.5px 6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '3px',
+                    border: '1px solid var(--status-danger-border)',
+                    backgroundColor: 'var(--status-danger-bg)',
+                    color: 'var(--status-danger-text)',
                     cursor: 'pointer',
-                    color: '#ef4444',
                     display: 'flex',
                     alignItems: 'center',
+                    gap: '2px',
                   }}
                 >
-                  <RotateCcw size={11} />
+                  <RotateCcw size={9} />
+                  <span>Reset</span>
                 </button>
               )}
             </div>
 
             {/* Branch search */}
-            <div style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <Search size={11} style={{ position: 'absolute', left: '6px', color: '#94a3b8' }} />
-                <input
-                  type="text"
-                  placeholder="Cari..."
-                  value={branchSearch}
-                  onChange={(e) => setBranchSearch(e.target.value)}
+            <div style={{ position: 'relative', marginBottom: '6px' }}>
+              <Search size={11} style={{ position: 'absolute', left: '7px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                placeholder="Cari cabang..."
+                value={branchSearch}
+                onChange={(e) => setBranchSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '3px 20px 3px 22px',
+                  fontSize: '12px',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '4px',
+                  outline: 'none',
+                  backgroundColor: 'var(--bg-inner)',
+                  color: 'var(--text-on-accent)',
+                }}
+              />
+              {branchSearch && (
+                <button
+                  type="button"
+                  onClick={() => setBranchSearch('')}
                   style={{
-                    width: '100%',
-                    padding: '3px 6px 3px 22px',
-                    fontSize: '11px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    outline: 'none',
+                    position: 'absolute',
+                    right: '5px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
                   }}
-                />
-              </div>
+                >
+                  <X size={10} />
+                </button>
+              )}
             </div>
 
             {/* Scrollable branch list items */}
             <div
               style={{
-                maxHeight: '380px',
+                maxHeight: '430px',
                 overflowY: 'auto',
-                padding: '4px 6px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '2px',
+                gap: '3px',
+                paddingRight: '2px',
               }}
             >
               {branches.map((b) => {
                 const isSelected = selectedBranchList.includes(b.branch_name);
+                const isAllMode = selectedBranchList.length === 0;
                 return (
                   <button
                     key={b.branch_code}
@@ -395,21 +490,36 @@ export default function ExecutiveKonsolidasiDashboard({
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '4px 8px',
-                      fontSize: '11.5px',
-                      fontWeight: isSelected ? 700 : 400,
-                      borderRadius: '3px',
-                      border: isSelected ? '1px solid #60a5fa' : '1px solid #e2e8f0',
-                      backgroundColor: isSelected ? '#bfdbfe' : '#ffffff',
-                      color: isSelected ? '#1e3a8a' : '#1e293b',
+                      padding: '4px 7px',
+                      fontSize: '12px',
+                      fontWeight: isSelected ? 700 : (isAllMode ? 600 : 400),
+                      borderRadius: '4px',
+                      border: isSelected
+                        ? '1px solid var(--accent-blue)'
+                        : '1px solid var(--border-subtle)',
+                      backgroundColor: isSelected
+                        ? 'var(--accent-blue)'
+                        : isAllMode
+                        ? 'var(--blue-soft)'
+                        : 'var(--bg-card)',
+                      color: isSelected
+                        ? 'var(--text-on-accent)'
+                        : isAllMode
+                        ? 'var(--accent-blue-text)'
+                        : 'var(--text-muted)',
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      transition: 'all 0.12s ease',
                     }}
                     title={b.branch_name}
                   >
-                    {b.branch_name}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.branch_name}</span>
+                    {isSelected && <Check size={11} strokeWidth={2.5} style={{ flexShrink: 0, color: 'var(--text-on-accent)' }} />}
                   </button>
                 );
               })}
@@ -424,15 +534,15 @@ export default function ExecutiveKonsolidasiDashboard({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1.2fr 1.2fr 1.2fr 1fr',
+              gridTemplateColumns: 'repeat(4, 1fr)',
               gap: '14px',
             }}
           >
             {/* 1. Laba Area */}
             <div
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '12px',
                 padding: '14px 18px',
                 display: 'flex',
@@ -446,23 +556,23 @@ export default function ExecutiveKonsolidasiDashboard({
                   width: '46px',
                   height: '46px',
                   borderRadius: '8px',
-                  backgroundColor: '#e0f2fe',
+                  backgroundColor: 'var(--blue-soft)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#0284c7',
+                  color: 'var(--accent-blue-text)',
                 }}
               >
                 <Wallet size={24} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Laba Area</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#0284c7', margin: '2px 0' }}>
-                  {kpi ? formatM(kpi.labaArea.realisasi) : 'Rp 751,82 M'}
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Laba Area</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--accent-blue-text)', margin: '2px 0' }}>
+                  {kpi ? formatM(kpi.labaArea.realisasi) : '—'}
                 </div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  YoY: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.labaArea.yoy ?? 99.01}</span>{' '}
-                  RKA: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.labaArea.rka ?? 99.01}</span>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  YoY: <span style={{ color: 'var(--status-good-text)', fontWeight: 700 }}>{formatPctOrDash(kpi?.labaArea.yoy ?? null)}</span>{' '}
+                  RKA: <span style={{ color: 'var(--status-good-text)', fontWeight: 700 }}>{formatPctOrDash(kpi?.labaArea.rka ?? null)}</span>
                 </div>
               </div>
             </div>
@@ -470,8 +580,8 @@ export default function ExecutiveKonsolidasiDashboard({
             {/* 2. Pendapatan */}
             <div
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '12px',
                 padding: '14px 18px',
                 display: 'flex',
@@ -485,23 +595,23 @@ export default function ExecutiveKonsolidasiDashboard({
                   width: '46px',
                   height: '46px',
                   borderRadius: '8px',
-                  backgroundColor: '#dcfce7',
+                  backgroundColor: 'var(--status-good-bg)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#16a34a',
+                  color: 'var(--status-good-text)',
                 }}
               >
                 <Coins size={24} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Pendapatan</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#16a34a', margin: '2px 0' }}>
-                  {kpi ? formatT(kpi.pendapatan.realisasi) : 'Rp 3,19 T'}
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Pendapatan</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--status-good-text)', margin: '2px 0' }}>
+                  {kpi ? formatT(kpi.pendapatan.realisasi) : '—'}
                 </div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  YoY: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.pendapatan.yoy ?? 99.01}</span>{' '}
-                  RKA: <span style={{ color: '#16a34a', fontWeight: 700 }}>{kpi?.pendapatan.rka ?? 99.01}</span>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  YoY: <span style={{ color: 'var(--status-good-text)', fontWeight: 700 }}>{formatPctOrDash(kpi?.pendapatan.yoy ?? null)}</span>{' '}
+                  RKA: <span style={{ color: 'var(--status-good-text)', fontWeight: 700 }}>{formatPctOrDash(kpi?.pendapatan.rka ?? null)}</span>
                 </div>
               </div>
             </div>
@@ -509,8 +619,8 @@ export default function ExecutiveKonsolidasiDashboard({
             {/* 3. Beban */}
             <div
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '12px',
                 padding: '14px 18px',
                 display: 'flex',
@@ -524,54 +634,72 @@ export default function ExecutiveKonsolidasiDashboard({
                   width: '46px',
                   height: '46px',
                   borderRadius: '8px',
-                  backgroundColor: '#ffedd5',
+                  backgroundColor: 'var(--status-alert-bg)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#ea580c',
+                  color: 'var(--accent-orange-text)',
                 }}
               >
                 <TrendingDown size={24} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Beban</div>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#ea580c', margin: '2px 0' }}>
-                  {kpi ? formatT(kpi.beban.realisasi) : '- Rp 2,42 T'}
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Beban</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--accent-orange-text)', margin: '2px 0' }}>
+                  {kpi ? formatT(kpi.beban.realisasi) : '—'}
                 </div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  YoY: <span style={{ color: '#ea580c', fontWeight: 700 }}>{kpi?.beban.yoy ?? 99.01}</span>{' '}
-                  RKA: <span style={{ color: '#ea580c', fontWeight: 700 }}>{kpi?.beban.rka ?? 99.01}</span>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  YoY: <span style={{ color: 'var(--accent-orange-text)', fontWeight: 700 }}>{formatPctOrDash(kpi?.beban.yoy ?? null)}</span>{' '}
+                  RKA: <span style={{ color: 'var(--accent-orange-text)', fontWeight: 700 }}>{formatPctOrDash(kpi?.beban.rka ?? null)}</span>
                 </div>
               </div>
             </div>
 
-            {/* 4. BOPO (Dark Blue Background Card) */}
+            {/* 4. BOPO (Navy Blue Card with Yellow Text, styled like the other cards) */}
             <div
               style={{
-                backgroundColor: '#0a192f',
-                border: '1px solid #1e3a5f',
+                backgroundColor: 'var(--navy-900)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '12px',
                 padding: '14px 18px',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
                 alignItems: 'center',
-                boxShadow: '0 2px 4px rgba(10,25,47,0.15)',
+                gap: '14px',
+                boxShadow: '0 2px 6px rgba(0, 32, 96, 0.25)',
               }}
             >
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#cbd5e1', letterSpacing: '0.3px' }}>
-                Bopo
-              </div>
               <div
                 style={{
-                  fontSize: '24px',
-                  fontWeight: 900,
-                  color: '#facc15', // Vibrant Gold
-                  marginTop: '4px',
-                  letterSpacing: '0.5px',
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(250, 204, 21, 0.16)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--status-alert-text)',
                 }}
               >
-                {kpi?.bopo?.percentage?.toFixed(2) ?? '75,84'}%
+                <Percent size={24} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-on-dark-muted)' }}>
+                  <Term term="BOPO" style={{ color: 'inherit' }} />
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--status-alert-on-dark)', margin: '2px 0' }} className="tabular-nums">
+                  {kpi?.bopo?.percentage === null || kpi?.bopo?.percentage === undefined
+                    ? '—'
+                    : formatPercent(kpi.bopo.percentage, 2)}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-on-dark-muted)' }}>
+                  {/* These two figures were hardcoded to "99,01": the BOPO card
+                      displayed a fake comparison that never came from data.
+                      The BOPO endpoint does not return YoY/RKA, so say so. */}
+                  YoY:{' '}
+                  <span style={{ color: 'var(--status-alert-on-dark)', fontWeight: 700 }}>—</span>{' '}
+                  RKA:{' '}
+                  <span style={{ color: 'var(--status-alert-on-dark)', fontWeight: 700 }}>—</span>
+                </div>
               </div>
             </div>
           </div>
@@ -591,8 +719,8 @@ export default function ExecutiveKonsolidasiDashboard({
               {/* Card 1: 10 Cabang Terbesar Laba Area */}
               <div
                 style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: '10px',
                   padding: '12px 14px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -606,10 +734,10 @@ export default function ExecutiveKonsolidasiDashboard({
                     marginBottom: '8px',
                   }}
                 >
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)' }}>
                     10 Cabang Terbesar Laba Area
                   </div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Billions</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>dalam miliar Rupiah</div>
                 </div>
 
                 <div style={{ height: '240px', width: '100%' }}>
@@ -619,16 +747,16 @@ export default function ExecutiveKonsolidasiDashboard({
                       data={charts?.topLabaBranches || []}
                       margin={{ top: 5, right: 15, left: 35, bottom: 5 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-subtle)" />
                       <XAxis
                         type="number"
                         tickFormatter={formatBillionAxis}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        tick={{ fontSize: 12, fill: 'var(--text-muted)' }}
                       />
                       <YAxis
                         dataKey="branchName"
                         type="category"
-                        tick={{ fontSize: 9.5, fill: '#334155' }}
+                        tick={{ fontSize: 12, fill: 'var(--text-secondary)' }}
                         width={90}
                       />
                       <Tooltip
@@ -638,7 +766,7 @@ export default function ExecutiveKonsolidasiDashboard({
                         ]}
                       />
                       <Legend
-                        wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }}
+                        wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }}
                         iconSize={8}
                       />
                       <Bar dataKey="CABANG" stackId="a" fill={ENTITAS_COLORS.CABANG} name="CABANG" />
@@ -654,8 +782,8 @@ export default function ExecutiveKonsolidasiDashboard({
               {/* Card 2: 10 Cabang Terbesar Pendapatan Area */}
               <div
                 style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: '10px',
                   padding: '12px 14px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -669,10 +797,10 @@ export default function ExecutiveKonsolidasiDashboard({
                     marginBottom: '8px',
                   }}
                 >
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)' }}>
                     10 Cabang Terbesar Pendapatan Area
                   </div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Billions</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>dalam miliar Rupiah</div>
                 </div>
 
                 <div style={{ height: '240px', width: '100%' }}>
@@ -682,16 +810,16 @@ export default function ExecutiveKonsolidasiDashboard({
                       data={charts?.topPendapatanBranches || []}
                       margin={{ top: 5, right: 15, left: 35, bottom: 5 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-subtle)" />
                       <XAxis
                         type="number"
                         tickFormatter={formatBillionAxis}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        tick={{ fontSize: 12, fill: 'var(--text-muted)' }}
                       />
                       <YAxis
                         dataKey="branchName"
                         type="category"
-                        tick={{ fontSize: 9.5, fill: '#334155' }}
+                        tick={{ fontSize: 12, fill: 'var(--text-secondary)' }}
                         width={90}
                       />
                       <Tooltip
@@ -701,7 +829,7 @@ export default function ExecutiveKonsolidasiDashboard({
                         ]}
                       />
                       <Legend
-                        wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }}
+                        wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }}
                         iconSize={8}
                       />
                       <Bar dataKey="CABANG" stackId="a" fill={ENTITAS_COLORS.CABANG} name="CABANG" />
@@ -718,8 +846,8 @@ export default function ExecutiveKonsolidasiDashboard({
             {/* COLUMN 2: BOPO AREA PER CABANG (Horizontal Bar List Table) */}
             <div
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '10px',
                 overflow: 'hidden',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -729,9 +857,9 @@ export default function ExecutiveKonsolidasiDashboard({
             >
               <div
                 style={{
-                  backgroundColor: '#2563eb', // Corporate Header Blue
+                  backgroundColor: 'var(--accent-blue)', // Corporate header
                   padding: '10px 14px',
-                  color: '#ffffff',
+                  color: 'var(--text-on-accent)',
                   fontSize: '12px',
                   fontWeight: 800,
                   textAlign: 'center',
@@ -763,13 +891,13 @@ export default function ExecutiveKonsolidasiDashboard({
                         gridTemplateColumns: '85px 1fr 50px',
                         alignItems: 'center',
                         gap: '8px',
-                        fontSize: '10.5px',
+                        fontSize: '12px',
                       }}
                     >
                       <div
                         style={{
                           textAlign: 'right',
-                          color: '#334155',
+                          color: 'var(--text-secondary)',
                           fontWeight: 500,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -784,7 +912,7 @@ export default function ExecutiveKonsolidasiDashboard({
                       <div
                         style={{
                           height: '14px',
-                          backgroundColor: '#f1f5f9',
+                          backgroundColor: 'var(--bg-table-header)',
                           borderRadius: '2px',
                           overflow: 'hidden',
                           position: 'relative',
@@ -794,7 +922,7 @@ export default function ExecutiveKonsolidasiDashboard({
                           style={{
                             height: '100%',
                             width: `${pct}%`,
-                            backgroundColor: isHigh ? '#3b82f6' : '#2563eb',
+                            backgroundColor: isHigh ? 'var(--accent-blue)' : 'var(--blue-primary)',
                             borderRadius: '2px',
                           }}
                         />
@@ -804,11 +932,11 @@ export default function ExecutiveKonsolidasiDashboard({
                         style={{
                           textAlign: 'right',
                           fontWeight: 700,
-                          color: isHigh ? '#dc2626' : '#1e3a8a',
+                          color: isHigh ? 'var(--status-danger-text)' : 'var(--accent-blue-text)',
                           fontVariantNumeric: 'tabular-nums',
                         }}
                       >
-                        {item.bopoPct.toFixed(2)}%
+                        {formatPercent(item.bopoPct, 2)}
                       </div>
                     </div>
                   );
@@ -822,8 +950,8 @@ export default function ExecutiveKonsolidasiDashboard({
               {/* Card 1: % Kontribusi Laba Area per Entitas (Donut Chart) */}
               <div
                 style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: '10px',
                   padding: '12px 14px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -833,7 +961,7 @@ export default function ExecutiveKonsolidasiDashboard({
                   style={{
                     fontSize: '12px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: 'var(--text-title)',
                     textAlign: 'center',
                     marginBottom: '6px',
                   }}
@@ -853,13 +981,13 @@ export default function ExecutiveKonsolidasiDashboard({
                         innerRadius={46}
                         outerRadius={74}
                         paddingAngle={2}
-                        label={({ payload }) => `${payload.percentage}%`}
+                        label={({ payload }) => formatPercent(Number(payload.percentage), 1)}
                         labelLine={false}
                       >
                         {(charts?.kontribusiEntitas || []).map((entry) => (
                           <Cell
                             key={entry.entitas}
-                            fill={ENTITAS_COLORS[entry.entitas] || '#64748b'}
+                            fill={ENTITAS_COLORS[entry.entitas] || 'var(--text-muted)'}
                           />
                         ))}
                       </Pie>
@@ -870,7 +998,7 @@ export default function ExecutiveKonsolidasiDashboard({
                         ]}
                       />
                       <Legend
-                        wrapperStyle={{ fontSize: '10px', paddingTop: '2px' }}
+                        wrapperStyle={{ fontSize: '12px', paddingTop: '2px' }}
                         iconSize={8}
                       />
                     </PieChart>
@@ -881,8 +1009,8 @@ export default function ExecutiveKonsolidasiDashboard({
               {/* Card 2: 10 Cabang Terendah Laba Area PJM (Red Ranked Horizontal Bars) */}
               <div
                 style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: '10px',
                   padding: '12px 14px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -892,7 +1020,7 @@ export default function ExecutiveKonsolidasiDashboard({
                   style={{
                     fontSize: '12px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: 'var(--text-title)',
                     textAlign: 'center',
                     marginBottom: '10px',
                   }}
@@ -921,9 +1049,9 @@ export default function ExecutiveKonsolidasiDashboard({
                           <div
                             style={{
                               width: `${barWidth}%`,
-                              backgroundColor: '#b91c1c', // Deep Crimson Red
-                              color: '#ffffff',
-                              fontSize: '9.5px',
+                              backgroundColor: 'var(--status-danger-text)',
+                              color: 'var(--text-on-alert)',
+                              fontSize: '12px',
                               fontWeight: 700,
                               textAlign: 'right',
                               padding: '2px 6px',
@@ -939,9 +1067,9 @@ export default function ExecutiveKonsolidasiDashboard({
                         {/* Branch Name Label */}
                         <div
                           style={{
-                            fontSize: '10px',
+                            fontSize: '12px',
                             fontWeight: 600,
-                            color: '#334155',
+                            color: 'var(--text-secondary)',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',

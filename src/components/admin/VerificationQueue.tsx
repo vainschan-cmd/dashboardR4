@@ -158,7 +158,7 @@ export default function VerificationQueue({
       <div className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title" style={{ fontSize: '18px' }}>
+            <h2 className="card-title" style={{ fontSize: '16px' }}>
               <FileCheck size={20} color="#38bdf8" />
               <span>Pusat Verifikasi & Tata Kelola Validasi Data</span>
             </h2>
@@ -218,8 +218,8 @@ export default function VerificationQueue({
 
             {/* Action Bar */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ fontSize: '13px', color: '#cbd5e1' }}>
-                Terpilih: <strong style={{ color: '#38bdf8' }}>{selectedRecordIds.length}</strong> dari {pendingRecords.length} indikator
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Terpilih: <strong style={{ color: 'var(--accent-blue-text)' }}>{selectedRecordIds.length}</strong> dari {pendingRecords.length} indikator
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
@@ -245,73 +245,74 @@ export default function VerificationQueue({
 
             {/* Pending List Table */}
             {isLoading ? (
-              <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>Memuat data antrean...</div>
+              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Memuat data antrean...</div>
             ) : pendingRecords.length === 0 ? (
               <div style={{
                 padding: '40px 20px',
                 textAlign: 'center',
-                backgroundColor: '#101c2e',
+                backgroundColor: 'var(--bg-inner)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px dashed var(--border-subtle)'
               }}>
                 <CheckCircle2 size={40} color="#34d399" style={{ margin: '0 auto 10px' }} />
-                <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>Tidak Ada Antrean Verifikasi Baru</h4>
-                <p style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '4px' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>Tidak Ada Antrean Verifikasi Baru</h4>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                   Seluruh data kinerja periode {selectedMonth}/{selectedYear} telah terverifikasi resmi oleh BOD Regional 4.
                 </p>
               </div>
             ) : (
               <div className="table-responsive">
-                <table className="data-table">
+                <table className="card-table data-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '40px', textAlign: 'center' }}>
+                      <th scope="col" style={{ width: '40px', textAlign: 'center' }}>
                         <input
                           type="checkbox"
                           checked={selectedRecordIds.length === pendingRecords.length && pendingRecords.length > 0}
                           onChange={handleSelectAll}
                         />
                       </th>
-                      <th>Cabang</th>
-                      <th>Departemen</th>
-                      <th>Kode</th>
-                      <th>Nama Indikator</th>
-                      <th style={{ textAlign: 'right' }}>Target</th>
-                      <th style={{ textAlign: 'right' }}>Realisasi</th>
-                      <th style={{ textAlign: 'center' }}>Satuan</th>
-                      <th style={{ textAlign: 'right' }}>Capaian</th>
-                      <th style={{ textAlign: 'center' }}>Status KPI</th>
-                      <th>Pengunggah</th>
+                      <th scope="col">Cabang</th>
+                      <th scope="col">Departemen</th>
+                      <th scope="col">Kode</th>
+                      <th scope="col">Nama Indikator</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Target</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Realisasi</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>Satuan</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Capaian</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>Status KPI</th>
+                      <th scope="col">Pengunggah</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pendingRecords.map((r) => (
                       <tr key={r.id}>
-                        <td style={{ textAlign: 'center' }}>
+                        <td data-label="Pilih" style={{ textAlign: 'center' }}>
                           <input
                             type="checkbox"
+                            aria-label={`Pilih rekaman ${r.indicator_name || r.id}`}
                             checked={selectedRecordIds.includes(r.id)}
                             onChange={() => handleToggleRecord(r.id)}
                           />
                         </td>
-                        <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.branch_name || r.branch_code}</td>
-                        <td style={{ color: '#cbd5e1' }}>{r.department_name || r.department_id}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#38bdf8' }}>{r.indicator_code}</td>
-                        <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.indicator_name}</td>
-                        <td style={{ textAlign: 'right', color: '#cbd5e1' }}>{r.target.toLocaleString('id-ID')}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>{r.realization.toLocaleString('id-ID')}</td>
-                        <td style={{ textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>{r.unit}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                          <span style={{ color: r.status_color === 'green' ? '#34d399' : r.status_color === 'yellow' ? '#fbbf24' : '#f87171' }}>
+                        <td data-label="Cabang" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.branch_name || r.branch_code}</td>
+                        <td data-label="Departemen" style={{ color: 'var(--text-secondary)' }}>{r.department_name || r.department_id}</td>
+                        <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--accent-blue-text)' }}>{r.indicator_code}</td>
+                        <td data-label="Nama Indikator" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.indicator_name}</td>
+                        <td data-label="Target" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>{r.target.toLocaleString('id-ID')}</td>
+                        <td data-label="Realisasi" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-title)' }}>{r.realization.toLocaleString('id-ID')}</td>
+                        <td data-label="Satuan" style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>{r.unit}</td>
+                        <td data-label="Capaian" style={{ textAlign: 'right', fontWeight: 700 }}>
+                          <span style={{ color: r.status_color === 'green' ? 'var(--status-good-text)' : r.status_color === 'yellow' ? 'var(--status-alert-text)' : 'var(--status-danger-text)' }}>
                             {r.achievement_pct}%
                           </span>
                         </td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td data-label="Status KPI" style={{ textAlign: 'center' }}>
                           <StatusBadge type="traffic_light" color={r.status_color} />
                         </td>
-                        <td style={{ fontSize: '12px' }}>
-                          <div style={{ color: '#ffffff' }}>{r.uploaded_by}</div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                        <td data-label="Pengunggah" style={{ fontSize: '12px' }}>
+                          <div style={{ color: 'var(--text-title)' }}>{r.uploaded_by}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                             {new Date(r.uploaded_at).toLocaleDateString('id-ID')}
                           </div>
                         </td>
@@ -335,13 +336,13 @@ export default function VerificationQueue({
             </div>
 
             <div className="table-responsive">
-              <table className="data-table">
+              <table className="card-table data-table">
                 <thead>
                   <tr>
-                    <th>Cabang Pelabuhan</th>
-                    <th>Wilayah</th>
+                    <th scope="col">Cabang Pelabuhan</th>
+                    <th scope="col">Wilayah</th>
                     {matrixData[0]?.departments?.map((d: MatrixDepartmentStatus) => (
-                      <th key={d.department_id} style={{ textAlign: 'center' }}>
+                      <th scope="col" key={d.department_id} style={{ textAlign: 'center' }}>
                         {d.department_code}
                       </th>
                     ))}
@@ -350,10 +351,10 @@ export default function VerificationQueue({
                 <tbody>
                   {matrixData.map((row: MatrixBranchRow) => (
                     <tr key={row.branch_id}>
-                      <td style={{ fontWeight: 700, color: '#ffffff' }}>{row.branch_name}</td>
-                      <td style={{ fontSize: '12px', color: '#94a3b8' }}>{row.region}</td>
+                      <td data-label="Cabang Pelabuhan" style={{ fontWeight: 700, color: 'var(--text-title)' }}>{row.branch_name}</td>
+                      <td data-label="Wilayah" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{row.region}</td>
                       {row.departments.map((d: MatrixDepartmentStatus) => (
-                        <td key={d.department_id} style={{ textAlign: 'center' }}>
+                        <td key={d.department_id} data-label={d.department_id} style={{ textAlign: 'center' }}>
                           <StatusBadge type="verification" verificationStatus={d.status} />
                         </td>
                       ))}
@@ -389,7 +390,7 @@ export default function VerificationQueue({
               </button>
             </div>
             <div className="modal-body">
-              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '14px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px' }}>
                 Anda akan mengembalikan <strong>{selectedRecordIds.length}</strong> indikator ke status <strong>&ldquo;Perlu Revisi&rdquo;</strong>. Masukkan alasan atau catatan perbaikan yang wajib ditindaklanjuti oleh PIC cabang:
               </p>
               <textarea

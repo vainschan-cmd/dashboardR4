@@ -72,6 +72,10 @@ export async function POST(req: NextRequest) {
       message: result.message,
       batchId: result.batchId,
       savedCount: result.savedCount,
+      createdCount: result.createdCount,
+      updatedCount: result.updatedCount,
+      unchangedCount: result.unchangedCount,
+      revertedVerifiedCount: result.revertedVerifiedCount,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Kesalahan internal server.';

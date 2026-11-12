@@ -1,5 +1,9 @@
 # Audit & Governance Checklist — PortDash Regional 4
 
+> [!WARNING]
+> **Checkbox di dokumen ini tidak dapat dipercaya sebagai status.** Audit ulang 2026-11-11 menemukan beberapa item `[x]` yang belum benar di kode (kredensial default, sesi opaque vs JWT, fallback angka, PostgreSQL, Google Drive).
+> Status resmi dan acceptance criteria ada di [`TASKLIST-REMEDIASI.md`](TASKLIST-REMEDIASI.md).
+
 ## P0 — Keamanan kritis sebelum penggunaan data sensitif
 
 - [x] Hapus bypass password universal `1` dan `password123`.

@@ -70,6 +70,11 @@ export interface User {
   branch_id?: string | null;
   department_id?: string | null;
   active: boolean;
+  /** Incremented whenever credentials, role, or scope change; invalidates existing sessions. */
+  token_version?: number;
+  /** True when the account still uses an administratively assigned password. */
+  must_change_password?: boolean;
+  password_updated_at?: string;
   created_at?: string;
 }
 
@@ -138,6 +143,30 @@ export interface MonthlyRecord {
   direction?: KPIDirection;
 }
 
+/**
+ * KPI rows as serialised by `/api/modules-data` (`kpiRecords`).
+ *
+ * Deliberately a separate type from `MonthlyRecord`: the endpoint reshapes the
+ * database row into camelCase and drops most columns. Typing it as
+ * `MonthlyRecord` let code read `indicator_id` / `branch_code` against objects
+ * that only have `indicatorId` / `branchCode` — which type-checked but always
+ * evaluated to `undefined`, silently disabling the RFU and SLA fallbacks on
+ * Beranda.
+ */
+export interface ModuleKpiRecord {
+  id: string;
+  indicatorId: string;
+  year: number;
+  month: number;
+  branchCode: string;
+  branchName: string;
+  target: number;
+  realization: number;
+  unit: string;
+  achievementPct: number;
+  verificationStatus: string;
+}
+
 export interface ImportBatch {
   id: string;
   filename_or_url: string;
@@ -160,7 +189,7 @@ export interface AuditLog {
   user_id: string;
   user_name: string;
   user_role: string;
-  action: 'LOGIN' | 'UPLOAD' | 'VALIDATE' | 'IMPORT' | 'APPROVE' | 'REVISE' | 'CONFIG_UPDATE' | 'EXPORT' | 'UPDATE_MANUAL_DATA' | 'CREATE_MANUAL_DATA';
+  action: 'LOGIN' | 'UPLOAD' | 'VALIDATE' | 'IMPORT' | 'APPROVE' | 'REVISE' | 'CONFIG_UPDATE' | 'EXPORT' | 'UPDATE_MANUAL_DATA' | 'CREATE_MANUAL_DATA' | 'RESTORE_SNAPSHOT';
   entity: string;
   entity_id?: string | null;
   details: string;

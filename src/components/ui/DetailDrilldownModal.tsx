@@ -3,13 +3,10 @@
 import React from 'react';
 import {
   X,
-  Target,
-  TrendingUp,
   CheckCircle2,
   Calendar,
   Building,
   User,
-  Info,
   Clock,
   Layers,
   AlertTriangle
@@ -44,7 +41,7 @@ export default function DetailDrilldownModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 700,
                 backgroundColor: 'var(--blue-soft)',
                 color: 'var(--blue-primary)',
@@ -67,7 +64,7 @@ export default function DetailDrilldownModal({
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: '#64748b',
+              color: 'var(--text-muted)',
               padding: '6px'
             }}
           >
@@ -87,39 +84,39 @@ export default function DetailDrilldownModal({
             padding: '16px'
           }}>
             <div>
-              <div style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase' }}>Target Rencana</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Target Rencana</div>
               <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--navy-900)', marginTop: '4px' }}>
                 {record.target.toLocaleString('id-ID')}
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>{record.unit}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{record.unit}</div>
             </div>
 
             <div>
-              <div style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase' }}>Realisasi Aktual</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: '#1d4ed8', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Realisasi Aktual</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-blue-text)', marginTop: '4px' }}>
                 {record.realization.toLocaleString('id-ID')}
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>{record.unit}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{record.unit}</div>
             </div>
 
             <div>
-              <div style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase' }}>Pencapaian (%)</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pencapaian (%)</div>
               <div style={{
                 fontSize: '20px',
                 fontWeight: 800,
                 marginTop: '4px',
-                color: record.status_color === 'green' ? '#059669' : record.status_color === 'yellow' ? '#d97706' : '#dc2626'
+                color: record.status_color === 'green' ? 'var(--status-good-text)' : record.status_color === 'yellow' ? 'var(--status-alert-text)' : 'var(--status-danger-text)'
               }}>
                 {record.achievement_pct}%
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 {record.direction === 'higher_is_better' ? 'Higher is Better' : 'Lower is Better'}
               </div>
             </div>
           </div>
 
           {/* Metadata Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', fontSize: '13px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', fontSize: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Building size={16} color="#64748b" />
               <span>Cabang: <strong>{record.branch_name || record.branch_code}</strong></span>
@@ -160,28 +157,28 @@ export default function DetailDrilldownModal({
           {/* Historical trend for this metric */}
           {history.length > 1 && (
             <div>
-              <h4 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy-800)', marginBottom: '8px' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--navy-800)', marginBottom: '8px' }}>
                 Histori Perkembangan 6 Periode Terakhir:
               </h4>
               <div className="table-responsive">
-                <table className="data-table">
+                <table className="card-table data-table">
                   <thead>
                     <tr>
-                      <th>Periode</th>
-                      <th style={{ textAlign: 'right' }}>Target</th>
-                      <th style={{ textAlign: 'right' }}>Realisasi</th>
-                      <th style={{ textAlign: 'right' }}>Capaian</th>
-                      <th style={{ textAlign: 'center' }}>Status</th>
+                      <th scope="col">Periode</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Target</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Realisasi</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Capaian</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {history.map((h) => (
                       <tr key={h.id}>
-                        <td>{h.month}/{h.year}</td>
-                        <td style={{ textAlign: 'right' }}>{h.target.toLocaleString('id-ID')}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{h.realization.toLocaleString('id-ID')}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{h.achievement_pct}%</td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td data-label="Periode">{h.month}/{h.year}</td>
+                        <td data-label="Target" style={{ textAlign: 'right' }}>{h.target.toLocaleString('id-ID')}</td>
+                        <td data-label="Realisasi" style={{ textAlign: 'right', fontWeight: 600 }}>{h.realization.toLocaleString('id-ID')}</td>
+                        <td data-label="Capaian" style={{ textAlign: 'right', fontWeight: 700 }}>{h.achievement_pct}%</td>
+                        <td data-label="Status" style={{ textAlign: 'center' }}>
                           <StatusBadge type="traffic_light" color={h.status_color} />
                         </td>
                       </tr>

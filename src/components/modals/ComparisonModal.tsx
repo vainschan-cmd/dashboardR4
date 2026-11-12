@@ -4,19 +4,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   BarChart3,
-  TrendingUp,
-  Target,
-  Calendar,
-  Building2,
   Printer,
-  Download,
-  Filter,
   Search,
-  CheckCircle2,
-  AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
-  Layers
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -25,10 +16,9 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid
 } from 'recharts';
-import { formatRupiahFull } from '@/lib/formatters';
+import { formatRupiahFull, formatPercentDelta } from '@/lib/formatters';
 import { isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
 import { FinansialRecord, OpkomRecord } from '@/lib/types';
 
@@ -269,10 +259,10 @@ export default function ComparisonModal({
                   alignItems: 'center',
                   gap: '5px',
                   backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                  color: '#38bdf8',
+                  color: 'var(--accent-blue-text)',
                   padding: '3px 9px',
                   borderRadius: '20px',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.02em',
                 }}
@@ -283,10 +273,10 @@ export default function ComparisonModal({
               <span
                 style={{
                   backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  color: '#94a3b8',
+                  color: 'var(--text-muted)',
                   padding: '3px 9px',
                   borderRadius: '20px',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 600,
                 }}
               >
@@ -295,20 +285,20 @@ export default function ComparisonModal({
               <span
                 style={{
                   backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                  color: '#34d399',
+                  color: 'var(--status-good-text)',
                   padding: '3px 9px',
                   borderRadius: '20px',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 700,
                 }}
               >
                 Cabang: {branchLabel}
               </span>
             </div>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', margin: 0 }}>
               Matriks Komparasi Realisasi 2026 vs RKAP vs Realisasi 2025
             </h2>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0' }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
               Membandingkan realisasi tahun berjalan terhadap target RKAP 2026 dan baseline tahun lalu (2025 YoY) secara menyeluruh.
             </p>
           </div>
@@ -324,7 +314,7 @@ export default function ComparisonModal({
                 backgroundColor: 'rgba(255, 255, 255, 0.08)',
                 border: '1px solid #1e3557',
                 borderRadius: '6px',
-                color: '#cbd5e1',
+                color: 'var(--text-secondary)',
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -339,7 +329,7 @@ export default function ComparisonModal({
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#94a3b8',
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
                 padding: '4px',
                 borderRadius: '6px',
@@ -364,7 +354,7 @@ export default function ComparisonModal({
           }}
         >
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+            <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: '14px', fontWeight: 600 }}>Memuat data komparasi vs RKAP & 2025...</div>
             </div>
           ) : (
@@ -393,12 +383,12 @@ export default function ComparisonModal({
                       onClick={() => setCategoryFilter(tab.id)}
                       style={{
                         padding: '6px 12px',
-                        fontSize: '11.5px',
+                        fontSize: '12px',
                         fontWeight: 600,
                         borderRadius: '6px',
                         border: categoryFilter === tab.id ? '1px solid #38bdf8' : '1px solid #1e3557',
                         backgroundColor: categoryFilter === tab.id ? 'rgba(56, 189, 248, 0.18)' : '#0d1f38',
-                        color: categoryFilter === tab.id ? '#ffffff' : '#94a3b8',
+                        color: categoryFilter === tab.id ? 'var(--text-on-accent)' : 'var(--text-muted)',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
                       }}
@@ -410,7 +400,7 @@ export default function ComparisonModal({
 
                 {/* Search */}
                 <div style={{ position: 'relative', width: '220px' }}>
-                  <Search size={13} style={{ position: 'absolute', left: '10px', top: '9px', color: '#64748b' }} />
+                  <Search size={13} style={{ position: 'absolute', left: '10px', top: '9px', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
                     placeholder="Cari indikator..."
@@ -422,8 +412,8 @@ export default function ComparisonModal({
                       backgroundColor: '#0d1f38',
                       border: '1px solid #1e3557',
                       borderRadius: '6px',
-                      color: '#ffffff',
-                      fontSize: '11.5px',
+                      color: 'var(--text-title)',
+                      fontSize: '12px',
                       outline: 'none',
                     }}
                   />
@@ -441,10 +431,10 @@ export default function ComparisonModal({
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
                       Visualisasi Perbandingan 3 Dimensi (Miliar Rp)
                     </div>
-                    <div style={{ display: 'flex', gap: '14px', fontSize: '11px', color: '#94a3b8' }}>
+                    <div style={{ display: 'flex', gap: '14px', fontSize: '12px', color: 'var(--text-muted)' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ width: 10, height: 10, backgroundColor: '#64748b', borderRadius: '2px' }} />
                         Realisasi 2025
@@ -464,14 +454,14 @@ export default function ComparisonModal({
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-                        <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                        <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: '#0f223d',
                             border: '1px solid #1e3557',
                             borderRadius: '8px',
-                            color: '#ffffff',
+                            color: 'var(--text-title)',
                             fontSize: '12px',
                           }}
                         />
@@ -494,25 +484,25 @@ export default function ComparisonModal({
                 }}
               >
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }} className="card-table">
                     <thead>
-                      <tr style={{ backgroundColor: '#13284a', borderBottom: '1px solid #1e3557', color: '#94a3b8' }}>
-                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Indikator / Rekening</th>
-                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Satuan</th>
-                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Realisasi 2025</th>
-                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Target RKAP 2026</th>
-                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right', color: '#38bdf8' }}>
+                      <tr style={{ backgroundColor: '#13284a', borderBottom: '1px solid #1e3557', color: 'var(--text-muted)' }}>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700 }}>Indikator / Rekening</th>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Satuan</th>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Realisasi 2025</th>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Target RKAP 2026</th>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right', color: 'var(--accent-blue-text)' }}>
                           Realisasi 2026
                         </th>
-                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>% RKAP</th>
-                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>YoY Growth</th>
-                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Status</th>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>% RKAP</th>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>YoY Growth</th>
+                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredItems.length === 0 ? (
                         <tr>
-                          <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                          <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
                             Tidak ada data komparasi yang sesuai dengan filter pencarian.
                           </td>
                         </tr>
@@ -534,55 +524,55 @@ export default function ComparisonModal({
                                 backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)',
                               }}
                             >
-                              <td style={{ padding: '10px 14px', fontWeight: 600, color: '#f1f5f9' }}>
+                              <td data-label="Indikator / Rekening" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-title)' }}>
                                 {item.name}
                               </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>
+                              <td data-label="Satuan" style={{ padding: '10px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
                                 {item.satuan}
                               </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right', color: '#94a3b8' }}>
+                              <td data-label="Realisasi 2025" style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text-muted)' }}>
                                 {formatVal(item.real2025)}
                               </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right', color: '#f59e0b', fontWeight: 600 }}>
+                              <td data-label="Target RKAP 2026" style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--status-alert-text)', fontWeight: 600 }}>
                                 {formatVal(item.targetRkap)}
                               </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right', color: '#38bdf8', fontWeight: 700 }}>
+                              <td data-label="Realisasi 2026" style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--accent-blue-text)', fontWeight: 700 }}>
                                 {formatVal(item.real2026)}
                               </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                              <td data-label="% RKAP" style={{ padding: '10px 14px', textAlign: 'right' }}>
                                 <span
                                   style={{
                                     fontWeight: 700,
-                                    color: item.rkaPct >= 100 ? '#34d399' : '#f87171',
+                                    color: item.rkaPct >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)',
                                   }}
                                 >
                                   {item.rkaPct}%
                                 </span>
                               </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                              <td data-label="YoY Growth" style={{ padding: '10px 14px', textAlign: 'right' }}>
                                 <span
                                   style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '2px',
                                     fontWeight: 700,
-                                    color: isYoYPos ? '#34d399' : '#f87171',
+                                    color: isYoYPos ? 'var(--status-good-text)' : 'var(--status-danger-text)',
                                   }}
                                 >
                                   {isYoYPos ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                                  {isYoYPos ? '+' : ''}{yoyGrowth.toFixed(1)}%
+                                  {formatPercentDelta(yoyGrowth + 100, 1)}
                                 </span>
                               </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                              <td data-label="Status" style={{ padding: '10px 14px', textAlign: 'center' }}>
                                 <span
                                   style={{
                                     display: 'inline-block',
                                     padding: '2px 8px',
                                     borderRadius: '12px',
-                                    fontSize: '10px',
+                                    fontSize: '12px',
                                     fontWeight: 700,
                                     backgroundColor: item.isGood ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                    color: item.isGood ? '#34d399' : '#f87171',
+                                    color: item.isGood ? 'var(--status-good-text)' : 'var(--status-danger-text)',
                                     border: item.isGood ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
                                   }}
                                 >
@@ -615,7 +605,7 @@ export default function ComparisonModal({
             borderBottomRightRadius: '14px',
           }}
         >
-          <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Sumber Data: Lembar Kerja Keuangan & Operasional Pelabuhan Terverifikasi
           </div>
           <button
@@ -625,7 +615,7 @@ export default function ComparisonModal({
               backgroundColor: '#1e3557',
               border: '1px solid #2d4f7c',
               borderRadius: '6px',
-              color: '#ffffff',
+              color: 'var(--text-title)',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',

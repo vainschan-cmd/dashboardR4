@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Lock,
   UserPlus,
   Eye,
   EyeOff,
-  CheckCircle2,
-  AlertCircle,
   FileSpreadsheet,
   Clock
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
+import Alert from '@/components/ui/Alert';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -30,7 +30,10 @@ export default function AuthModal({
   onLoginSuccess,
   initialMode = 'login',
 }: AuthModalProps) {
-  const canRegisterUser = !currentUser || currentUser.role === 'super_admin' || currentUser.role === 'admin_regional';
+  const canRegisterUser =
+    currentUser
+      ? currentUser.role === 'super_admin' || currentUser.role === 'admin_regional'
+      : process.env.NEXT_PUBLIC_ALLOW_PUBLIC_REGISTRATION === 'true';
   const [mode, setMode] = useState<'login' | 'register'>(canRegisterUser ? initialMode : 'login');
 
   // Login form state
@@ -53,6 +56,7 @@ export default function AuthModal({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -63,11 +67,10 @@ export default function AuthModal({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  // `A11Y-04`: keep Tab inside the dialog and restore focus to the trigger.
+  useFocusTrap(dialogRef, isOpen, onClose);
 
-  const showDemoQuickLogin =
-    process.env.NODE_ENV !== 'production' ||
-    process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === 'true';
+  if (!isOpen) return null;
 
   const submitLogin = async (nippToUse?: string, passToUse?: string) => {
     setErrorMsg(null);
@@ -166,6 +169,8 @@ export default function AuthModal({
         role="dialog"
         aria-modal="true"
         aria-label={mode === 'login' ? 'Masuk ke Pelindo R4 PortDash' : 'Daftar Akun Baru PIC / Pengguna'}
+        ref={dialogRef}
+        tabIndex={-1}
         style={{ maxWidth: '540px', width: '100%', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -181,7 +186,7 @@ export default function AuthModal({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--accent-blue)',
+                color: 'var(--accent-blue-text)',
               }}
             >
               {mode === 'login' ? <Lock size={18} /> : <UserPlus size={18} />}
@@ -190,10 +195,10 @@ export default function AuthModal({
               <h3 className="modal-title" style={{ margin: 0, fontSize: '16px' }}>
                 {mode === 'login' ? 'Masuk ke Pelindo R4 PortDash' : 'Daftar Akun Baru PIC / Pengguna'}
               </h3>
-              <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-muted)' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
                 {mode === 'login'
-                  ? 'Gunakan NIPP sebagai username Anda'
-                  : 'Data tersimpan di basis data SQLite dan diekspor ke master_user_pic.xlsx'}
+                  ? 'Gunakan NIPP sebagai nama pengguna Anda'
+                  : 'Akun baru dapat langsung dipakai setelah formulir ini disimpan'}
               </p>
             </div>
           </div>
@@ -235,7 +240,7 @@ export default function AuthModal({
               background: mode === 'login' ? 'var(--bg-card)' : 'transparent',
               color: mode === 'login' ? 'var(--accent-blue)' : 'var(--text-muted)',
               fontWeight: mode === 'login' ? 700 : 500,
-              fontSize: '13px',
+              fontSize: '12px',
               borderBottom: mode === 'login' ? '2px solid var(--accent-blue)' : '2px solid transparent',
               cursor: 'pointer',
               display: 'flex',
@@ -263,7 +268,7 @@ export default function AuthModal({
                 background: mode === 'register' ? 'var(--bg-card)' : 'transparent',
                 color: mode === 'register' ? 'var(--accent-blue)' : 'var(--text-muted)',
                 fontWeight: mode === 'register' ? 700 : 500,
-                fontSize: '13px',
+                fontSize: '12px',
                 borderBottom: mode === 'register' ? '2px solid var(--accent-blue)' : '2px solid transparent',
                 cursor: 'pointer',
                 display: 'flex',
@@ -283,48 +288,23 @@ export default function AuthModal({
         <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '20px' }}>
           {/* Notifications */}
           {errorMsg && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '8px',
-                padding: '10px 14px',
-                backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid #ef4444',
-                borderRadius: '8px',
-                color: '#f87171',
-                fontSize: '12px',
-                marginBottom: '16px',
-              }}
-            >
-              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span>{errorMsg}</span>
-            </div>
+            <Alert tone="error" style={{ marginBottom: '16px' }}>
+              {errorMsg}
+            </Alert>
           )}
 
           {successMsg && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '8px',
-                padding: '10px 14px',
-                backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                border: '1px solid #10b981',
-                borderRadius: '8px',
-                color: '#34d399',
-                fontSize: '12px',
-                marginBottom: '16px',
-              }}
-            >
-              <CheckCircle2 size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span>{successMsg}</span>
-            </div>
+            <Alert tone="success" style={{ marginBottom: '16px' }}>
+              {successMsg}
+            </Alert>
           )}
 
           {/* TAB 1: FORM LOGIN */}
           {mode === 'login' ? (
             <form
+              // See `LoginScreen`: a native submit before hydration defaults to
+              // GET, which would put the password in the URL and the access log.
+              method="post"
               onSubmit={(e) => {
                 e.preventDefault();
                 submitLogin();
@@ -332,11 +312,12 @@ export default function AuthModal({
               style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
             >
               <div className="form-group">
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <label className="form-label" htmlFor="modal-login-nipp" style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>NIPP (Nomor Induk Pegawai Pelindo)</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 400 }}>Sebagai Username</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 400 }}>Sebagai Username</span>
                 </label>
                 <input
+                  id="modal-login-nipp"
                   type="text"
                   className="form-input"
                   placeholder="Contoh: 10001, 10002, 10003..."
@@ -344,36 +325,45 @@ export default function AuthModal({
                   onChange={(e) => setLoginNipp(e.target.value)}
                   required
                   autoFocus
+                  autoComplete="username"
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Kata Sandi (Password)</label>
+                <label className="form-label" htmlFor="modal-login-password">Kata Sandi</label>
                 <div style={{ position: 'relative' }}>
                   <input
+                    id="modal-login-password"
                     type={showLoginPassword ? 'text' : 'password'}
                     className="form-input"
                     placeholder="Masukkan kata sandi..."
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     required
-                    style={{ paddingRight: '36px' }}
+                    autoComplete="current-password"
+                    style={{ paddingRight: '44px' }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    aria-label={showLoginPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                    aria-pressed={showLoginPassword}
+                    className="icon-button-touch"
                     style={{
                       position: 'absolute',
-                      right: '10px',
+                      right: '4px',
                       top: '50%',
                       transform: 'translateY(-50%)',
                       background: 'none',
                       border: 'none',
                       color: 'var(--text-muted)',
                       cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
-                    {showLoginPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    {showLoginPassword ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
                   </button>
                 </div>
               </div>
@@ -386,7 +376,7 @@ export default function AuthModal({
                   width: '100%',
                   padding: '10px',
                   borderRadius: '8px',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   marginTop: '4px',
                   display: 'flex',
@@ -396,8 +386,8 @@ export default function AuthModal({
                   cursor: loading ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? <Clock size={15} strokeWidth={1.75} /> : <Lock size={15} strokeWidth={1.75} />}
-                <span>{loading ? 'Memverifikasi...' : 'Masuk ke Dashboard'}</span>
+                {loading ? <Clock size={15} strokeWidth={1.75} aria-hidden="true" /> : <Lock size={15} strokeWidth={1.75} aria-hidden="true" />}
+                <span>{loading ? 'Memverifikasi...' : 'Masuk'}</span>
               </button>
 
               {canRegisterUser && (
@@ -413,7 +403,7 @@ export default function AuthModal({
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: 'var(--accent-blue)',
+                      color: 'var(--accent-blue-text)',
                       fontSize: '12px',
                       fontWeight: 700,
                       cursor: 'pointer',
@@ -424,128 +414,10 @@ export default function AuthModal({
                   </button>
                 </div>
               )}
-
-              {/* Quick Role & Branch Selector for Demo / Dev Switching */}
-              {showDemoQuickLogin && (
-              <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
-                <div
-                  style={{
-                    fontSize: '10.5px',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    marginBottom: '6px',
-                    textTransform: 'uppercase',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span>Ganti Cepat Akun / Role (Mode Demo):</span>
-                  <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>Sesi JWT Aktif</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                  {/* PIC Cabang Makassar [R01] */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginNipp('10004');
-                      setLoginPassword('password123');
-                      submitLogin('10004', 'password123');
-                    }}
-                    className="btn-dark"
-                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
-                    title="Login sebagai PIC Cabang Makassar - Nuka (10004)"
-                  >
-                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R01]</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Nuka (Makassar) • 10004</span>
-                  </button>
-
-                  {/* PIC Cabang Balikpapan [R04] */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginNipp('10008');
-                      setLoginPassword('password123');
-                      submitLogin('10008', 'password123');
-                    }}
-                    className="btn-dark"
-                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
-                    title="Login sebagai PIC Cabang Balikpapan - Fachruddin (10008)"
-                  >
-                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Cabang [R04]</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Fachruddin (Balikpapan) • 10008</span>
-                  </button>
-
-                  {/* Super Admin */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginNipp('10001');
-                      setLoginPassword('password123');
-                      submitLogin('10001', 'password123');
-                    }}
-                    className="btn-dark"
-                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
-                    title="Login sebagai Super Admin - M Mansyur (10001)"
-                  >
-                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Super Admin</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M Mansyur • 10001</span>
-                  </button>
-
-                  {/* Admin Regional 4 */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginNipp('10002');
-                      setLoginPassword('password123');
-                      submitLogin('10002', 'password123');
-                    }}
-                    className="btn-dark"
-                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
-                    title="Login sebagai Admin Regional 4 - Asqar (10002)"
-                  >
-                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>Admin Regional 4</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Asqar • 10002</span>
-                  </button>
-
-                  {/* PIC Dept Operasi */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginNipp('10003');
-                      setLoginPassword('password123');
-                      submitLogin('10003', 'password123');
-                    }}
-                    className="btn-dark"
-                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
-                    title="Login sebagai PIC Dept Operasi Regional - Heiruddin (10003)"
-                  >
-                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>PIC Dept Operasi</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Heiruddin • 10003</span>
-                  </button>
-
-                  {/* BOD Regional 4 (Viewer) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginNipp('10000');
-                      setLoginPassword('password123');
-                      submitLogin('10000', 'password123');
-                    }}
-                    className="btn-dark"
-                    style={{ padding: '6px 8px', fontSize: '10.5px', textAlign: 'left', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}
-                    title="Login sebagai BOD Regional 4 (Viewer) - Akhirman (10000)"
-                  >
-                    <span style={{ fontWeight: 700, color: 'var(--accent-blue)' }}>BOD Regional 4</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Akhirman (BOD) • 10000</span>
-                  </button>
-                </div>
-              </div>
-              )}
             </form>
           ) : (
             /* TAB 2: FORM DAFTAR AKUN BARU */
-            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <form method="post" onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {/* Info Sinkronisasi My Drive */}
               <div
                 style={{
@@ -556,38 +428,42 @@ export default function AuthModal({
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '8px',
                   padding: '8px 12px',
-                  fontSize: '11.5px',
-                  color: 'var(--accent-blue)',
+                  fontSize: '12px',
+                  color: 'var(--accent-blue-text)',
                 }}
               >
                 <FileSpreadsheet size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
                 <span>
-                  Data akun disimpan di basis data SQLite dan diekspor ke berkas <strong>master_user_pic.xlsx</strong>
+                  Data akun tersimpan otomatis dan langsung aktif untuk masuk.
                 </span>
               </div>
 
               {/* Input Nama & NIPP */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '10px' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Lengkap Pegawai *</label>
+                  <label className="form-label" htmlFor="modal-reg-name">Nama Lengkap Pegawai *</label>
                   <input
+                    id="modal-reg-name"
                     type="text"
                     className="form-input"
                     placeholder="Contoh: Bambang Sudiro, S.T."
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     required
+                    autoComplete="name"
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">NIPP (Username) *</label>
+                  <label className="form-label" htmlFor="modal-reg-nipp">NIPP (Username) *</label>
                   <input
+                    id="modal-reg-nipp"
                     type="text"
                     className="form-input"
                     placeholder="Contoh: 10025"
                     value={regNipp}
                     onChange={(e) => setRegNipp(e.target.value)}
                     required
+                    autoComplete="username"
                   />
                 </div>
               </div>
@@ -595,8 +471,9 @@ export default function AuthModal({
               {/* Input Divisi & Departemen */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
-                  <label className="form-label">Divisi *</label>
+                  <label className="form-label" htmlFor="modal-reg-divisi">Divisi *</label>
                   <input
+                    id="modal-reg-divisi"
                     type="text"
                     className="form-input"
                     placeholder="Contoh: Divisi Operasi Pelabuhan"
@@ -606,8 +483,9 @@ export default function AuthModal({
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Departemen / Unit *</label>
+                  <label className="form-label" htmlFor="modal-reg-dept">Departemen / Unit *</label>
                   <input
+                    id="modal-reg-dept"
                     type="text"
                     className="form-input"
                     placeholder="Contoh: Dept Pelayanan Kapal"
@@ -621,23 +499,30 @@ export default function AuthModal({
               {/* Role & Cabang */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
-                  <label className="form-label">Hak Akses / Role *</label>
+                  <label className="form-label" htmlFor="modal-reg-role">Hak Akses / Role *</label>
                   <select
+                    id="modal-reg-role"
                     className="form-select"
                     value={regRole}
                     onChange={(e) => setRegRole(e.target.value as UserRole)}
                   >
+                    {/* Only roles the actor may actually grant. `admin_regional`
+                        used to be offered `super_admin` here, so the form let them
+                        submit a request the server always rejected with 403. */}
                     <option value="pic_cabang">PIC Cabang (Terminal)</option>
                     <option value="pic_dept_regional">PIC Dept Regional 4</option>
                     <option value="admin_regional">Admin Regional 4</option>
-                    <option value="super_admin">Super Admin</option>
+                    {currentUser?.role === 'super_admin' && (
+                      <option value="super_admin">Super Admin</option>
+                    )}
                     <option value="viewer">BOD Regional 4 (Viewer)</option>
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Penugasan Cabang *</label>
+                  <label className="form-label" htmlFor="modal-reg-branch">Penugasan Cabang *</label>
                   <select
+                    id="modal-reg-branch"
                     className="form-select"
                     value={regBranch}
                     onChange={(e) => setRegBranch(e.target.value)}
@@ -656,28 +541,32 @@ export default function AuthModal({
               {/* Password & Konfirmasi Password */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
-                  <label className="form-label">Kata Sandi (Password) *</label>
+                  <label className="form-label" htmlFor="modal-reg-password">Kata Sandi *</label>
                   <div style={{ position: 'relative' }}>
                     <input
+                      id="modal-reg-password"
                       type={showRegPassword ? 'text' : 'password'}
                       className="form-input"
                       placeholder="Minimal 6 karakter"
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                       required
+                      autoComplete="new-password"
                     />
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Konfirmasi Kata Sandi *</label>
+                  <label className="form-label" htmlFor="modal-reg-password-confirm">Konfirmasi Kata Sandi *</label>
                   <div style={{ position: 'relative' }}>
                     <input
+                      id="modal-reg-password-confirm"
                       type={showRegPassword ? 'text' : 'password'}
                       className="form-input"
                       placeholder="Ulangi kata sandi"
                       value={regConfirmPassword}
                       onChange={(e) => setRegConfirmPassword(e.target.value)}
                       required
+                      autoComplete="new-password"
                     />
                   </div>
                 </div>
@@ -691,7 +580,7 @@ export default function AuthModal({
                   onChange={(e) => setShowRegPassword(e.target.checked)}
                   style={{ cursor: 'pointer' }}
                 />
-                <label htmlFor="showPassReg" style={{ fontSize: '11.5px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <label htmlFor="showPassReg" style={{ fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}>
                   Tampilkan Kata Sandi
                 </label>
               </div>
@@ -705,7 +594,7 @@ export default function AuthModal({
                   width: '100%',
                   padding: '10px',
                   borderRadius: '8px',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   marginTop: '6px',
                   display: 'flex',
@@ -715,7 +604,7 @@ export default function AuthModal({
                   cursor: loading ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? <Clock size={15} strokeWidth={1.75} /> : <UserPlus size={15} strokeWidth={1.75} />}
+                {loading ? <Clock size={15} strokeWidth={1.75} aria-hidden="true" /> : <UserPlus size={15} strokeWidth={1.75} aria-hidden="true" />}
                 <span>{loading ? 'Menyimpan Data Akun...' : 'Daftar Akun Baru'}</span>
               </button>
 
@@ -731,7 +620,7 @@ export default function AuthModal({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: 'var(--accent-blue)',
+                    color: 'var(--accent-blue-text)',
                     fontSize: '12px',
                     fontWeight: 700,
                     cursor: 'pointer',

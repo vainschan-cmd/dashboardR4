@@ -10,6 +10,19 @@ import {
 } from '@/lib/rbac';
 import { getMasterUserSpreadsheetPath, DRIVE_ACCOUNT } from '@/lib/userPicSync';
 import { createUserSchema, updateUserSchema, parseWithSchema } from '@/lib/validation';
+import { authorize, type PolicyActor } from '@/lib/policy';
+
+/** Adapt a JWT session to the policy actor shape. */
+function actorOf(session: { sub?: string; role: string; branch_id?: string | null; department_id?: string | null; nipp?: string } | null | undefined): PolicyActor | null {
+  if (!session) return null;
+  return {
+    sub: session.sub,
+    role: session.role,
+    branch_id: session.branch_id ?? null,
+    department_id: session.department_id ?? null,
+    nipp: session.nipp,
+  };
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'users:read' });
@@ -66,11 +79,18 @@ export async function POST(req: NextRequest) {
     const { name, nipp, divisi, departemen, password, role, branch_id, department_id, email } = parsed.data;
     const cleanNipp = String(nipp).trim();
 
-    if (canManageUsers && role === 'super_admin' && session?.role !== 'super_admin') {
-      return NextResponse.json(
-        { success: false, error: 'Hanya Super Admin yang dapat membuat akun dengan role Super Admin.' },
-        { status: 403 }
-      );
+    // Only a Super Admin may create another Super Admin (centralised policy rule).
+    if (canManageUsers) {
+      const decision = authorize(actorOf(session), 'user:create', {
+        targetUser: { role },
+        isPrivilegeSensitive: true,
+      });
+      if (!decision.allowed) {
+        return NextResponse.json(
+          { success: false, error: decision.reason, code: decision.code },
+          { status: 403 }
+        );
+      }
     }
 
     // Check if NIPP already exists
@@ -105,6 +125,10 @@ export async function POST(req: NextRequest) {
       branch_id: assignedScope.branch_id,
       department_id: assignedScope.department_id,
       email: email || `${cleanNipp}@pelindo.co.id`,
+      // An administrator assigns this password, so the account owner must pick
+      // their own on first login. Self-registration keeps the flag off because
+      // the user chose the password themselves.
+      mustChangePassword: canManageUsers,
     });
 
     const safeUser = toSafeUser(newUser);
@@ -139,6 +163,8 @@ export async function POST(req: NextRequest) {
         role: safeUser.role,
         branch_id: safeUser.branch_id,
         department_id: safeUser.department_id,
+        active: safeUser.active,
+        must_change_password: safeUser.must_change_password ?? false,
         created_at: safeUser.created_at,
       },
       driveAccount: DRIVE_ACCOUNT,
@@ -146,7 +172,12 @@ export async function POST(req: NextRequest) {
 
     if (!session && allowPublicRegistration) {
       const systemParams = dbQueries.getSystemParameters();
-      await issueSessionCookies(response, safeUser, systemParams.session_timeout_minutes || 30);
+      await issueSessionCookies(
+        response,
+        safeUser,
+        systemParams.session_timeout_minutes || 30,
+        { ipAddress: clientIp, userAgent: req.headers.get('user-agent') || undefined }
+      );
     }
 
     return response;
@@ -169,12 +200,29 @@ export async function PUT(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { id, name, nipp, divisi, departemen, password, role, branch_id, department_id, email, active } = parsed.data;
+    const { id, name, nipp, divisi, departemen, role, branch_id, department_id, email, active } = parsed.data;
 
-    // Only super_admin can promote or modify a user to super_admin
-    if (role === 'super_admin' && auth.session.role !== 'super_admin') {
+    // Password is deliberately not accepted here; see POST /api/users/password.
+    if ('password' in (body as Record<string, unknown>)) {
       return NextResponse.json(
-        { success: false, error: 'Hanya Super Admin yang dapat menetapkan role Super Admin.' },
+        {
+          success: false,
+          error:
+            'Perubahan kata sandi tidak dapat dilakukan melalui endpoint ini. Gunakan formulir reset kata sandi.',
+        },
+        { status: 400 }
+      );
+    }
+
+    // Promotion to Super Admin and editing a Super Admin account are both governed
+    // by the centralised policy so the rule cannot drift between endpoints.
+    const promoteDecision = authorize(actorOf(auth.session), 'user:update', {
+      targetUser: { role },
+      isPrivilegeSensitive: true,
+    });
+    if (!promoteDecision.allowed) {
+      return NextResponse.json(
+        { success: false, error: promoteDecision.reason, code: promoteDecision.code },
         { status: 403 }
       );
     }
@@ -187,9 +235,12 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    if (existingUser.role === 'super_admin' && auth.session.role !== 'super_admin') {
+    const targetDecision = authorize(actorOf(auth.session), 'user:update', {
+      targetUser: { id: existingUser.id, role: existingUser.role },
+    });
+    if (!targetDecision.allowed) {
       return NextResponse.json(
-        { success: false, error: 'Hanya Super Admin yang dapat mengubah akun Super Admin.' },
+        { success: false, error: targetDecision.reason, code: targetDecision.code },
         { status: 403 }
       );
     }
@@ -225,7 +276,6 @@ export async function PUT(req: NextRequest) {
       department_id: assignedScope.department_id,
       email: email ? String(email).trim() : undefined,
       active: active !== undefined ? Boolean(active) : undefined,
-      password: password && String(password).trim().length > 0 ? String(password).trim() : undefined,
     });
 
     if (!updated) {
@@ -286,9 +336,12 @@ export async function DELETE(req: NextRequest) {
     }
 
     const targetUser = dbQueries.getUserById(id);
-    if (targetUser?.role === 'super_admin' && auth.session.role !== 'super_admin') {
+    const deleteDecision = authorize(actorOf(auth.session), 'user:delete', {
+      targetUser: targetUser ? { id: targetUser.id, role: targetUser.role } : null,
+    });
+    if (!deleteDecision.allowed) {
       return NextResponse.json(
-        { success: false, error: 'Hanya Super Admin yang dapat menghapus akun Super Admin.' },
+        { success: false, error: deleteDecision.reason, code: deleteDecision.code },
         { status: 403 }
       );
     }

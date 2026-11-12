@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  MIN_DISTINCT_CHARACTERS,
+} from './passwordPolicy';
 
 export const MAX_UPLOAD_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const MAX_IMPORT_JSON_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -22,12 +27,49 @@ export const userRoleEnum = z.enum([
   'viewer',
 ]);
 
+/**
+ * Password policy shared by account creation, self-service change, and admin reset.
+ * Length is the dominant factor for strength; complexity rules are intentionally
+ * limited to what users can realistically follow.
+ */
+export const strongPasswordSchema = z
+  .string()
+  .min(MIN_PASSWORD_LENGTH, `Kata sandi minimal ${MIN_PASSWORD_LENGTH} karakter.`)
+  .max(MAX_PASSWORD_LENGTH, `Kata sandi maksimal ${MAX_PASSWORD_LENGTH} karakter.`)
+  .refine((value) => !/^\s|\s$/.test(value), 'Kata sandi tidak boleh diawali/diakhiri spasi.')
+  .refine(
+    (value) => new Set(value).size >= MIN_DISTINCT_CHARACTERS,
+    'Kata sandi terlalu mudah ditebak. Gunakan kombinasi karakter yang lebih beragam.'
+  );
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Kata sandi saat ini wajib diisi.').max(256),
+    newPassword: strongPasswordSchema,
+    confirmPassword: z.string().min(1, 'Konfirmasi kata sandi wajib diisi.').max(256),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Konfirmasi kata sandi tidak cocok.',
+  })
+  .refine((data) => data.newPassword !== data.currentPassword, {
+    path: ['newPassword'],
+    message: 'Kata sandi baru harus berbeda dari kata sandi saat ini.',
+  });
+
+export const adminResetPasswordSchema = z.object({
+  userId: z.string().trim().min(1, 'ID pengguna wajib diisi.').max(128),
+  newPassword: strongPasswordSchema,
+  /** When true the user must pick a new password after the reset. */
+  requireChangeOnNextLogin: z.boolean().optional().default(true),
+});
+
 export const createUserSchema = z.object({
   name: z.string().trim().min(1, 'Nama wajib diisi.').max(128),
   nipp: z.string().trim().min(1, 'NIPP wajib diisi.').max(64),
   divisi: z.string().trim().min(1, 'Divisi wajib diisi.').max(128),
   departemen: z.string().trim().min(1, 'Departemen wajib diisi.').max(128),
-  password: z.string().trim().min(8, 'Kata sandi wajib diisi minimal 8 karakter.').max(256),
+  password: strongPasswordSchema,
   role: userRoleEnum.optional(),
   branch_id: z.string().trim().max(64).nullable().optional(),
   department_id: z.string().trim().max(64).nullable().optional(),
@@ -40,7 +82,9 @@ export const updateUserSchema = z.object({
   nipp: z.string().trim().max(64).optional(),
   divisi: z.string().trim().min(1, 'Divisi wajib diisi.').max(128),
   departemen: z.string().trim().min(1, 'Departemen wajib diisi.').max(128),
-  password: z.string().trim().min(8, 'Kata sandi baru minimal 8 karakter.').max(256).optional().or(z.literal('')),
+  // No `password` field on purpose: password resets go through
+  // POST /api/users/password so they always bump token_version, revoke
+  // sessions, and set the must-change flag consistently.
   role: userRoleEnum.optional(),
   branch_id: z.string().trim().max(64).nullable().optional(),
   department_id: z.string().trim().max(64).nullable().optional(),
@@ -58,6 +102,26 @@ export const verificationSchema = z.object({
   status: z.enum(['verified', 'revision_needed']),
   revisionNotes: z.string().max(1000).optional(),
 });
+
+/**
+ * `DATA-05` — restoring a row to its last verified snapshot.
+ *
+ * The table name comes from the client, so it is an explicit enum rather than a
+ * free string: interpolating an arbitrary table name into SQL is not something to
+ * leave to validation-by-hope.
+ */
+export const restoreSnapshotSchema = z.object({
+  table: z.enum([
+    'module_finansial',
+    'module_opkom',
+    'module_kinerja',
+    'module_utilisasi',
+    'module_peralatan',
+    'module_fasilitas',
+  ]),
+  id: z.string().trim().min(1, 'ID baris wajib diisi.').max(128),
+});
+
 
 export const importCommitRecordSchema = z.object({
   id: z.string().trim().min(1).max(128).optional(),
@@ -126,6 +190,27 @@ export const driveSyncSchema = z.object({
   customPath: z.string().trim().max(255).optional(),
 });
 
+/**
+ * Body for `POST /api/users/sync-drive`.
+ *
+ * `action` used to be read as a loose string and compared against half a dozen
+ * Indonesian/English synonyms inside the handler. Declaring the accepted values
+ * here means an unrecognised action is rejected (or ignored) in one predictable
+ * place instead of falling through to "push" by accident.
+ */
+export const userSyncDriveSchema = z
+  .object({
+    action: z
+      .enum(['push', 'export', 'simpan', 'pull', 'import', 'ambil'])
+      .optional(),
+    direction: z
+      .enum(['push', 'export', 'simpan', 'pull', 'import', 'ambil'])
+      .optional(),
+  })
+  .transform((value) => ({
+    action: (value.action || value.direction || 'push').toLowerCase(),
+  }));
+
 export const templateColumnSchema = z.object({
   column_name: z.string().trim().min(1).max(128),
   field_key: z.string().trim().min(1).max(64),
@@ -152,6 +237,9 @@ export const recordsQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   verified_only: z.enum(['true', 'false']).optional(),
   verification_status: z.string().trim().max(64).optional(),
+  // Pagination is mandatory for large tables: unbounded responses were ~650 KB.
+  limit: z.coerce.number().int().min(1).max(500).optional().default(200),
+  offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
 export const modulesDataQuerySchema = z.object({

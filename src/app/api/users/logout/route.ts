@@ -1,11 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
-import { clearSessionCookies, getSessionFromRequest, getClientIp } from '@/lib/auth';
+import {
+  clearSessionCookies,
+  getSessionFromRequest,
+  getClientIp,
+  readRefreshTokenCookie,
+  resolveSessionToken,
+} from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
     const clientIp = getClientIp(req);
+
+    // Revoke the access token session itself.
+    if (session) {
+      dbQueries.revokeAuthSession(session.jti, 'logout');
+    }
+
+    // Also revoke the refresh token presented with this request, so logout is terminal.
+    const refreshCookie = readRefreshTokenCookie(req);
+    if (refreshCookie) {
+      const refreshPayload = await resolveSessionToken(refreshCookie, 'refresh');
+      if (refreshPayload) {
+        dbQueries.revokeAuthSession(refreshPayload.jti, 'logout');
+      }
+    }
 
     if (session) {
       try {

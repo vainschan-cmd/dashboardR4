@@ -64,7 +64,7 @@ export default function MasterDataView({
       <div className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title" style={{ fontSize: '18px' }}>
+            <h2 className="card-title" style={{ fontSize: '16px' }}>
               <Database size={20} color="var(--accent-blue)" />
               <span>Manajemen Master Data Pelabuhan</span>
             </h2>

@@ -18,7 +18,7 @@ export default function KpiIndicatorsTab({ indicators, departments }: KpiIndicat
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Departemen:</span>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Departemen:</span>
         <select
           className="filter-select"
           value={selectedDeptFilter}
@@ -35,47 +35,47 @@ export default function KpiIndicatorsTab({ indicators, departments }: KpiIndicat
       </div>
 
       <div className="table-responsive">
-        <table className="data-table">
+        <table className="card-table data-table">
           <thead>
             <tr>
-              <th>Kode</th>
-              <th>Nama Indikator</th>
-              <th>Departemen</th>
-              <th>Kategori</th>
-              <th style={{ textAlign: 'center' }}>Satuan</th>
-              <th style={{ textAlign: 'center' }}>Arah Target</th>
-              <th style={{ textAlign: 'right' }}>Target Standar</th>
-              <th style={{ textAlign: 'center' }}>KPI Utama</th>
+              <th scope="col">Kode</th>
+              <th scope="col">Nama Indikator</th>
+              <th scope="col">Departemen</th>
+              <th scope="col">Kategori</th>
+              <th scope="col" style={{ textAlign: 'center' }}>Satuan</th>
+              <th scope="col" style={{ textAlign: 'center' }}>Arah Target</th>
+              <th scope="col" style={{ textAlign: 'right' }}>Target Standar</th>
+              <th scope="col" style={{ textAlign: 'center' }}>KPI Utama</th>
             </tr>
           </thead>
           <tbody>
             {filteredIndicators.map((ind) => (
               <tr key={ind.id}>
-                <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--accent-blue)' }}>
+                <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--accent-blue-text)' }}>
                   {ind.code}
                 </td>
-                <td style={{ fontWeight: 600, color: 'var(--text-title)' }}>
+                <td data-label="Nama Indikator" style={{ fontWeight: 600, color: 'var(--text-title)' }}>
                   <div>{ind.name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                     {ind.formula_desc || 'Target operasional tahunan'}
                   </div>
                 </td>
-                <td>
+                <td data-label="Departemen">
                   <span className="badge badge-neutral">
                     {departments.find((d) => d.id === ind.department_id)?.code || ind.department_id}
                   </span>
                 </td>
-                <td style={{ color: 'var(--text-secondary)' }}>{ind.category}</td>
-                <td style={{ textAlign: 'center' }}>{ind.unit}</td>
-                <td style={{ textAlign: 'center' }}>
+                <td data-label="Kategori" style={{ color: 'var(--text-secondary)' }}>{ind.category}</td>
+                <td data-label="Satuan" style={{ textAlign: 'center' }}>{ind.unit}</td>
+                <td data-label="Arah Target" style={{ textAlign: 'center' }}>
                   <span className={`badge ${ind.direction === 'higher_is_better' ? 'badge-green' : 'badge-yellow'}`}>
                     {ind.direction === 'higher_is_better' ? 'Semakin Besar Lebih Baik' : 'Semakin Kecil Lebih Baik'}
                   </span>
                 </td>
-                <td className="num-cell" style={{ fontWeight: 700, color: 'var(--text-title)' }}>
+                <td data-label="Target Standar" className="num-cell" style={{ fontWeight: 700, color: 'var(--text-title)' }}>
                   {ind.default_target.toLocaleString('id-ID')}
                 </td>
-                <td style={{ textAlign: 'center' }}>
+                <td data-label="KPI Utama" style={{ textAlign: 'center' }}>
                   {ind.is_core_kpi ? (
                     <span className="badge badge-green">KPI Utama</span>
                   ) : (

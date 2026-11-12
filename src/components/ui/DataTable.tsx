@@ -84,23 +84,23 @@ export default function DataTable({
             type="text"
             aria-label="Cari indikator, cabang, atau kode"
             className="form-input"
-            style={{ paddingLeft: '36px', height: '38px', fontSize: '13px' }}
+            style={{ paddingLeft: '36px', height: '38px', fontSize: '12px' }}
             placeholder="Cari indikator, cabang, kode..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        <div style={{ fontSize: '12px', color: '#64748b' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           Menampilkan <strong>{filtered.length}</strong> dari {records.length} indikator
         </div>
       </div>
 
       <div className="table-responsive">
-        <table className="data-table">
+        <table className="card-table data-table">
           <thead>
             <tr>
-              <th aria-sort={getAriaSort('indicator_code')}>
+              <th scope="col" aria-sort={getAriaSort('indicator_code')}>
                 <button
                   type="button"
                   onClick={() => handleSort('indicator_code')}
@@ -111,7 +111,7 @@ export default function DataTable({
                   {renderSortIcon('indicator_code')}
                 </button>
               </th>
-              <th aria-sort={getAriaSort('indicator_name')}>
+              <th scope="col" aria-sort={getAriaSort('indicator_name')}>
                 <button
                   type="button"
                   onClick={() => handleSort('indicator_name')}
@@ -123,7 +123,7 @@ export default function DataTable({
                 </button>
               </th>
               {showBranchColumn && (
-                <th aria-sort={getAriaSort('branch_name')}>
+                <th scope="col" aria-sort={getAriaSort('branch_name')}>
                   <button
                     type="button"
                     onClick={() => handleSort('branch_name')}
@@ -135,7 +135,7 @@ export default function DataTable({
                   </button>
                 </th>
               )}
-              <th style={{ textAlign: 'right' }} aria-sort={getAriaSort('target')}>
+              <th scope="col" style={{ textAlign: 'right' }} aria-sort={getAriaSort('target')}>
                 <button
                   type="button"
                   onClick={() => handleSort('target')}
@@ -146,7 +146,7 @@ export default function DataTable({
                   {renderSortIcon('target')}
                 </button>
               </th>
-              <th style={{ textAlign: 'right' }} aria-sort={getAriaSort('realization')}>
+              <th scope="col" style={{ textAlign: 'right' }} aria-sort={getAriaSort('realization')}>
                 <button
                   type="button"
                   onClick={() => handleSort('realization')}
@@ -157,8 +157,8 @@ export default function DataTable({
                   {renderSortIcon('realization')}
                 </button>
               </th>
-              <th style={{ textAlign: 'center' }}>Satuan</th>
-              <th style={{ textAlign: 'right' }} aria-sort={getAriaSort('achievement_pct')}>
+              <th scope="col" style={{ textAlign: 'center' }}>Satuan</th>
+              <th scope="col" style={{ textAlign: 'right' }} aria-sort={getAriaSort('achievement_pct')}>
                 <button
                   type="button"
                   onClick={() => handleSort('achievement_pct')}
@@ -169,42 +169,64 @@ export default function DataTable({
                   {renderSortIcon('achievement_pct')}
                 </button>
               </th>
-              <th style={{ textAlign: 'center' }}>Status KPI</th>
-              <th style={{ textAlign: 'center' }}>Verifikasi</th>
-              <th style={{ textAlign: 'center' }}>Aksi</th>
+              <th scope="col" style={{ textAlign: 'center' }}>Status KPI</th>
+              <th scope="col" style={{ textAlign: 'center' }}>Verifikasi</th>
+              <th scope="col" style={{ textAlign: 'center' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={showBranchColumn ? 10 : 9} style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
-                  Tidak ada data indikator yang sesuai dengan filter atau kata kunci pencarian.
+                <td colSpan={showBranchColumn ? 10 : 9} style={{ textAlign: 'center', padding: '32px' }}>
+                  {/* `COPY-08`: an empty table has two possible causes and the old
+                      copy named neither. Say why, and give the reader the one
+                      action that changes the outcome. */}
+                  <div style={{ color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px' }}>
+                    {records.length === 0
+                      ? 'Belum ada data kinerja pada periode dan cabang yang dipilih.'
+                      : 'Tidak ada baris yang cocok dengan kata kunci pencarian.'}
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '10px' }}>
+                    {records.length === 0
+                      ? 'Coba pilih periode lain, atau masukkan data melalui Input Manual bila memang belum dilaporkan.'
+                      : `Kata kunci "${searchTerm}" tidak ditemukan pada kode, nama indikator, cabang, atau catatan.`}
+                  </div>
+                  {searchTerm.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ minHeight: '32px' }}
+                      onClick={() => setSearchTerm('')}
+                    >
+                      Hapus kata kunci pencarian
+                    </button>
+                  )}
                 </td>
               </tr>
             ) : (
               filtered.map((r) => (
                 <tr key={r.id}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 600 }}>
+                  <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 600 }}>
                     {r.indicator_code || r.indicator_id}
                   </td>
-                  <td style={{ fontWeight: 600, color: 'var(--navy-900)' }}>
+                  <td data-label="Nama Indikator" style={{ fontWeight: 600, color: 'var(--navy-900)' }}>
                     {r.indicator_name || r.indicator_id}
                   </td>
                   {showBranchColumn && (
-                    <td style={{ fontSize: '12.5px', color: '#475569' }}>
+                    <td data-label="Cabang" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                       {r.branch_name || r.branch_code}
                     </td>
                   )}
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                  <td data-label="Target" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
                     {r.target.toLocaleString('id-ID')}
                   </td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--navy-900)' }}>
+                  <td data-label="Realisasi" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--navy-900)' }}>
                     {r.realization.toLocaleString('id-ID')}
                   </td>
-                  <td style={{ textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
+                  <td data-label="Satuan" style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
                     {r.unit}
                   </td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                  <td data-label="Capaian (%)" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                     <span
                       style={{
                         color:
@@ -218,13 +240,13 @@ export default function DataTable({
                       {r.achievement_pct}%
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Status KPI" style={{ textAlign: 'center' }}>
                     <StatusBadge type="traffic_light" color={r.status_color} />
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Verifikasi" style={{ textAlign: 'center' }}>
                     <StatusBadge type="verification" verificationStatus={r.verification_status} />
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Aksi" style={{ textAlign: 'center' }}>
                     {onSelectRecord && (
                       <button
                         type="button"

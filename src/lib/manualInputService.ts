@@ -2,26 +2,28 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import * as xlsx from 'xlsx';
-import { getBranchByCode, getCanonicalBranchCode, getBranchNameByCode } from './constants';
+import { readWorkbookSafe } from './spreadsheet';
+import { getBranchByCode, getCanonicalBranchCode, getBranchNameByCode, getModuleDepartmentId } from './constants';
 import { getBranchId } from './ingestInputData';
 import { getDb, dbQueries, withTransaction } from './db';
+// `DATA-10`: a write may not create a row with an unknown branch or bad period.
+import { assertModuleScope } from './dataIntegrity';
+// `DATA-05`: every row records where it came from.
+import { buildLineage, describeLineage } from './lineage';
+
+/** Which physical table each module type writes to. */
+const MODULE_TABLE_BY_TYPE: Record<string, string> = {
+  finansial: 'module_finansial',
+  opkom: 'module_opkom',
+  kinerja: 'module_kinerja',
+  utilisasi: 'module_utilisasi',
+  peralatan: 'module_peralatan',
+  fasilitas: 'module_fasilitas',
+};
 
 export type ModuleType = 'finansial' | 'opkom' | 'kinerja' | 'utilisasi' | 'peralatan' | 'fasilitas';
 
-export function getModuleDepartmentId(module: ModuleType): string {
-  switch (module) {
-    case 'finansial':
-      return 'dept_keu';
-    case 'peralatan':
-    case 'fasilitas':
-      return 'dept_tek';
-    case 'opkom':
-    case 'kinerja':
-    case 'utilisasi':
-    default:
-      return 'dept_ops';
-  }
-}
+export { getModuleDepartmentId };
 
 export interface ManualInputPayload {
   module: ModuleType;
@@ -67,8 +69,11 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
   const uploadedBy = user?.nipp || user?.id || 'manual_user';
   const verificationStatus = 'pending_verification' as const;
 
-  // Resolve branch and period
-  const rawCode = String(data.kodeCabang || data.KODE_CBG || data.branchCode || 'R01').trim().toUpperCase();
+  // Resolve branch and period.
+  // No silent default: the old code fell back to `'R01'` when the payload had no
+  // branch, which attributed data to Makassar without telling anyone. A missing or
+  // unknown branch is now a rejected write (`DATA-10`).
+  const rawCode = String(data.kodeCabang || data.KODE_CBG || data.branchCode || '').trim().toUpperCase();
   const rawName = String(data.namaCabang || data.NM_CBG || data.branchName || '').trim();
   const branchCode = getCanonicalBranchCode(rawCode, rawName);
   const branchObj = getBranchByCode(branchCode);
@@ -77,6 +82,10 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
   const year = Number(data.tahun ?? data.TAHUN ?? data.year) || new Date().getFullYear();
   const month = Number(data.bulan ?? data.BULAN ?? data.month) || (new Date().getMonth() + 1);
+
+  // Branch and period must be canonical before anything is written. Throwing here
+  // (rather than sanitising) keeps an orphan row out of the database entirely.
+  assertModuleScope({ branchCode, month, year });
 
   let isUpdate = false;
   let formattedRecord: Record<string, unknown> = {};
@@ -793,6 +802,24 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     };
   }
 
+  // Record where this row came from (`DATA-05`). Written inside the same
+  // transaction as the row itself: a row without its origin is exactly the state
+  // this item exists to prevent, so the two must not be able to diverge.
+  const lineage = buildLineage({
+    sourceFile: (data.sourceFile as string) ?? null,
+    sourceSheet: (data.sourceSheet as string) ?? null,
+    sourceRow: data.sourceRow != null ? Number(data.sourceRow) : null,
+    batchId: (data.batchId as string) ?? null,
+    uploadedBy,
+    uploadedAt: nowIso,
+    sourceType: 'manual_input',
+  });
+  db.prepare(
+    `UPDATE ${MODULE_TABLE_BY_TYPE[module]}
+        SET source_file = ?, source_sheet = ?, source_row = ?, batch_id = ?
+      WHERE id = ?`
+  ).run(lineage.sourceFile, lineage.sourceSheet, lineage.sourceRow, lineage.batchId, recordId);
+
   // Audit log inside the same atomic SQLite transaction
   dbQueries.createAuditLog({
     user_id: user?.id || 'manual_user',
@@ -801,7 +828,9 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     action: isUpdate ? 'UPDATE_MANUAL_DATA' : 'CREATE_MANUAL_DATA',
     entity: `module_${module}`,
     entity_id: monthlyRecordId || recordId,
-    details: `Input manual modul ${module} untuk ${branchName} (${branchCode}), periode ${month}/${year}. Status awal: Menunggu Verifikasi (pending_verification).`,
+    details:
+      `Input manual modul ${module} untuk ${branchName} (${branchCode}), periode ${month}/${year}. ` +
+      `Status awal: Menunggu Verifikasi (pending_verification).${describeLineage(lineage) ? ` Asal: ${describeLineage(lineage)}.` : ''}`,
   });
   });
 
@@ -810,7 +839,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     const excelPath = getInputDataSpreadsheetPath();
     if (fs.existsSync(excelPath)) {
       const fileBuffer = fs.readFileSync(excelPath);
-      const wb = xlsx.read(fileBuffer, { type: 'buffer' });
+      const { workbook: wb } = readWorkbookSafe(fileBuffer);
       const sheetName = module === 'fasilitas' && wb.Sheets['fasilitas (2)'] ? 'fasilitas (2)' : module;
       let ws = wb.Sheets[sheetName];
       if (!ws) {

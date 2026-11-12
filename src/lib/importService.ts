@@ -4,11 +4,20 @@ import { validateBranchWriteAccess, validateDepartmentWriteAccess } from './rbac
 import type { ImportBatch, MonthlyRecord, StatusColor } from './types';
 import type { ValidatedImportCommitRecord } from './validation';
 import { MAX_IMPORT_ROWS } from './validation';
+import { buildRecordKey, hasValueChanged } from './recordKey';
 
 export interface CommitImportResult {
   success: true;
   batchId: string;
   savedCount: number;
+  /** Rows that did not exist before. */
+  createdCount: number;
+  /** Rows that existed and whose values changed (they re-enter verification). */
+  updatedCount: number;
+  /** Rows identical to what was already stored — left untouched, verification kept. */
+  unchangedCount: number;
+  /** Of the updated rows, how many had already been verified. */
+  revertedVerifiedCount: number;
   message: string;
 }
 
@@ -150,7 +159,12 @@ export function commitValidatedImportRecords(params: {
     const recordId =
       r.id && r.id.trim().length > 0
         ? r.id.trim()
-        : `rec_imp_${r.year}_${r.month}_${matchedBranch.code}_${matchedIndicator.code}_${Date.now()}_${idx}`.toLowerCase();
+        : buildRecordKey({
+            year: r.year,
+            month: r.month,
+            branchCode: matchedBranch.code,
+            indicatorCode: matchedIndicator.code,
+          });
 
     sanitizedRecords.push({
       id: recordId,
@@ -177,9 +191,64 @@ export function commitValidatedImportRecords(params: {
     });
   }
 
+  // --- Idempotency diff -----------------------------------------------------
+  // Record ids are the natural key (year, month, branch, indicator), so the rows
+  // that already exist are exactly the ones this import would overwrite. Rows
+  // whose values did not change are dropped from the write set: re-uploading an
+  // approved file must not push it back to "menunggu verifikasi".
+  const existingRows = dbQueries.getMonthlyRecordsByIds(sanitizedRecords.map((r) => r.id));
+  const existingById = new Map(existingRows.map((row) => [row.id, row]));
+
+  const rowsToWrite: typeof sanitizedRecords = [];
+  let createdCount = 0;
+  let updatedCount = 0;
+  let unchangedCount = 0;
+  let revertedVerifiedCount = 0;
+
+  for (const record of sanitizedRecords) {
+    const existing = existingById.get(record.id);
+    if (!existing) {
+      createdCount += 1;
+      rowsToWrite.push(record);
+      continue;
+    }
+
+    const changed = hasValueChanged(
+      { target: record.target, realization: record.realization, unit: record.unit },
+      { target: existing.target, realization: existing.realization, unit: existing.unit }
+    );
+
+    if (!changed) {
+      // Same numbers as last time: keep the stored row (and its approver) intact.
+      unchangedCount += 1;
+      continue;
+    }
+
+    if (existing.verification_status === 'verified') {
+      revertedVerifiedCount += 1;
+    }
+    updatedCount += 1;
+    rowsToWrite.push(record);
+  }
+
   const firstRec = sanitizedRecords[0];
   const month = Number(firstRec.month) || 1;
   const year = Number(firstRec.year) || 2026;
+
+  // Nothing changed and nothing is new: report it honestly instead of writing an
+  // identical batch that would only add noise to the import history.
+  if (rowsToWrite.length === 0) {
+    return {
+      success: true,
+      batchId: resolvedBatchId,
+      savedCount: 0,
+      createdCount: 0,
+      updatedCount: 0,
+      unchangedCount,
+      revertedVerifiedCount: 0,
+      message: `Tidak ada perubahan. Seluruh ${unchangedCount} baris sudah tersimpan dengan nilai yang sama, sehingga data dan status verifikasinya tidak diubah.`,
+    };
+  }
 
   const importBatch: ImportBatch = {
     id: resolvedBatchId,
@@ -189,8 +258,9 @@ export function commitValidatedImportRecords(params: {
     branch_id: firstRec.branch_id || null,
     period_month: month,
     period_year: year,
+    // Row counts describe what actually happened, not what was submitted.
     total_rows: sanitizedRecords.length,
-    valid_rows: sanitizedRecords.length,
+    valid_rows: rowsToWrite.length,
     error_rows: 0,
     status: 'completed',
     uploaded_by: session.nipp,
@@ -198,9 +268,14 @@ export function commitValidatedImportRecords(params: {
     error_log: null,
   };
 
+  const detailParts: string[] = [];
+  if (createdCount > 0) detailParts.push(`${createdCount} baru`);
+  if (updatedCount > 0) detailParts.push(`${updatedCount} diperbarui`);
+  if (unchangedCount > 0) detailParts.push(`${unchangedCount} tidak berubah`);
+
   // Atomic commit: records + batch metadata + audit log in a single transaction
   dbQueries.commitImportTransaction({
-    records: sanitizedRecords,
+    records: rowsToWrite,
     batch: importBatch,
     auditLog: {
       user_id: session.sub,
@@ -209,16 +284,38 @@ export function commitValidatedImportRecords(params: {
       action: 'IMPORT',
       entity: 'MONTHLY_RECORD',
       entity_id: importBatch.id,
-      details: `Mengimpor dan menyimpan ${sanitizedRecords.length} data kinerja bulanan untuk periode ${month}/${year} oleh ${session.name} (NIPP: ${session.nipp}). Status awal: Menunggu Verifikasi.`,
+      details:
+        `Mengimpor data kinerja bulanan periode ${month}/${year} oleh ${session.name} (NIPP: ${session.nipp}): ` +
+        `${detailParts.join(', ')}${revertedVerifiedCount > 0 ? `; ${revertedVerifiedCount} baris yang sudah terverifikasi berubah nilai sehingga kembali ke Menunggu Verifikasi` : ''}.`,
       ip_address: clientIp,
     },
   });
 
+  const trailingNotes: string[] = [];
+  if (createdCount > 0) trailingNotes.push(`${createdCount} baris baru berstatus Menunggu Verifikasi`);
+  if (updatedCount > 0 && revertedVerifiedCount === 0) {
+    trailingNotes.push(`${updatedCount} baris diperbarui dan menunggu verifikasi ulang`);
+  }
+  if (revertedVerifiedCount > 0) {
+    trailingNotes.push(
+      `${revertedVerifiedCount} baris yang sudah terverifikasi berubah nilai dan kembali berstatus Menunggu Verifikasi`
+    );
+  }
+  if (unchangedCount > 0) {
+    trailingNotes.push(`${unchangedCount} baris tidak berubah sehingga status verifikasinya dipertahankan`);
+  }
+
   return {
     success: true,
     batchId: importBatch.id,
-    savedCount: sanitizedRecords.length,
-    message: `Data kinerja sebanyak ${sanitizedRecords.length} baris telah disimpan dengan status Menunggu Verifikasi.`,
+    savedCount: rowsToWrite.length,
+    createdCount,
+    updatedCount,
+    unchangedCount,
+    revertedVerifiedCount,
+    message: `Impor selesai: ${createdCount} baris baru, ${updatedCount} diperbarui${
+      unchangedCount > 0 ? `, ${unchangedCount} tidak berubah` : ''
+    }. ${trailingNotes.join('; ')}.`,
   };
 }
 

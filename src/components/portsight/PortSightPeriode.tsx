@@ -17,8 +17,6 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -125,7 +123,6 @@ interface PortSightPeriodeProps {
 export default function PortSightPeriode({
   selectedTerminal = 'ALL',
   selectedPeriod = 'YTD Sep 2026',
-  onOpenManualInput,
   currentUser,
   userRole,
 }: PortSightPeriodeProps) {
@@ -360,7 +357,7 @@ export default function PortSightPeriode({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 1. FILTER CONTROLLER CARD */}
-      <div className="dark-card" style={{ borderTop: '4px solid #0284c7' }}>
+      <div className="dark-card" style={{ borderTop: '4px solid var(--accent-blue)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -407,7 +404,7 @@ export default function PortSightPeriode({
               fontSize: '12px',
               borderRadius: '20px',
               background: filterMode === 'preset' ? 'var(--accent-blue)' : 'var(--bg-inner)',
-              color: filterMode === 'preset' ? '#ffffff' : 'var(--text-main)',
+              color: filterMode === 'preset' ? 'var(--text-on-accent)' : 'var(--text-main)',
               fontWeight: filterMode === 'preset' ? 700 : 500,
               border: '1px solid var(--border-subtle)',
               cursor: 'pointer',
@@ -425,7 +422,7 @@ export default function PortSightPeriode({
               fontSize: '12px',
               borderRadius: '20px',
               background: filterMode === 'month_range' ? 'var(--accent-blue)' : 'var(--bg-inner)',
-              color: filterMode === 'month_range' ? '#ffffff' : 'var(--text-main)',
+              color: filterMode === 'month_range' ? 'var(--text-on-accent)' : 'var(--text-main)',
               fontWeight: filterMode === 'month_range' ? 700 : 500,
               border: '1px solid var(--border-subtle)',
               cursor: 'pointer',
@@ -443,7 +440,7 @@ export default function PortSightPeriode({
               fontSize: '12px',
               borderRadius: '20px',
               background: filterMode === 'date_range' ? 'var(--accent-blue)' : 'var(--bg-inner)',
-              color: filterMode === 'date_range' ? '#ffffff' : 'var(--text-main)',
+              color: filterMode === 'date_range' ? 'var(--text-on-accent)' : 'var(--text-main)',
               fontWeight: filterMode === 'date_range' ? 700 : 500,
               border: '1px solid var(--border-subtle)',
               cursor: 'pointer',
@@ -461,7 +458,7 @@ export default function PortSightPeriode({
               fontSize: '12px',
               borderRadius: '20px',
               background: filterMode === 'single' ? 'var(--accent-blue)' : 'var(--bg-inner)',
-              color: filterMode === 'single' ? '#ffffff' : 'var(--text-main)',
+              color: filterMode === 'single' ? 'var(--text-on-accent)' : 'var(--text-main)',
               fontWeight: filterMode === 'single' ? 700 : 500,
               border: '1px solid var(--border-subtle)',
               cursor: 'pointer',
@@ -485,7 +482,7 @@ export default function PortSightPeriode({
           {/* Preset Mode Controls */}
           {filterMode === 'preset' && (
             <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                 Preset Periode Pelaporan
               </label>
               <select
@@ -510,7 +507,7 @@ export default function PortSightPeriode({
           {filterMode === 'month_range' && (
             <>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Dari Bulan & Tahun
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -541,7 +538,7 @@ export default function PortSightPeriode({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Sampai Dengan Bulan & Tahun
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -577,7 +574,7 @@ export default function PortSightPeriode({
           {filterMode === 'date_range' && (
             <>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Tanggal Mulai
                 </label>
                 <input
@@ -590,7 +587,7 @@ export default function PortSightPeriode({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Tanggal Selesai
                 </label>
                 <input
@@ -607,7 +604,7 @@ export default function PortSightPeriode({
           {/* Single Month/Year Controls */}
           {filterMode === 'single' && (
             <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                 Bulan & Tahun Spesifik
               </label>
               <div style={{ display: 'flex', gap: '6px' }}>
@@ -640,10 +637,10 @@ export default function PortSightPeriode({
 
           {/* Cabang Filter */}
           <div>
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
               <span>Filter Cabang Pelabuhan</span>
               {isPicCabang && (
-                <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>🔒 Khusus Cabang PIC</span>
+                <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>🔒 Khusus Cabang PIC</span>
               )}
             </label>
             <select
@@ -694,7 +691,7 @@ export default function PortSightPeriode({
           fontSize: '12px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#38bdf8', fontWeight: 700 }}>Periode Terpilih:</span>
+            <span style={{ color: 'var(--accent-blue-text)', fontWeight: 700 }}>Periode Terpilih:</span>
             <span style={{ fontWeight: 800, color: 'var(--text-title)' }}>{activePeriodLabel}</span>
             <span style={{ color: 'var(--text-secondary)' }}>• Cabang:</span>
             <span style={{ fontWeight: 700, color: 'var(--text-title)' }}>
@@ -718,10 +715,10 @@ export default function PortSightPeriode({
             <span className="kpi-header-label">Pendapatan Usaha</span>
             <DollarSign size={18} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalRevRp)}
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {summary.countRev} pos rekening finansial
           </div>
         </div>
@@ -732,10 +729,10 @@ export default function PortSightPeriode({
             <span className="kpi-header-label">Beban Usaha</span>
             <TrendingDown size={18} color="#f43f5e" />
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalBebanRp)}
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {summary.countBeban} pos rekening beban
           </div>
         </div>
@@ -746,10 +743,10 @@ export default function PortSightPeriode({
             <span className="kpi-header-label">Laba Usaha / Bersih</span>
             <TrendingUp size={18} color="#10b981" />
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalLabaRp)}
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {summary.countLaba > 0 ? `${summary.countLaba} pos rekening laba` : 'Laba operasional'}
           </div>
         </div>
@@ -760,10 +757,10 @@ export default function PortSightPeriode({
             <span className="kpi-header-label">Total Volume Opkom</span>
             <Boxes size={18} color="#f59e0b" />
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {(summary.totalVolume ?? 0).toLocaleString('id-ID')}
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {summary.countOpkom} record layanan operasi
           </div>
         </div>
@@ -774,10 +771,10 @@ export default function PortSightPeriode({
             <span className="kpi-header-label">Rata-rata BOR Dermaga</span>
             <Activity size={18} color="#06b6d4" />
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {summary.avgBor}%
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {summary.countUtilisasi} dermaga terdata
           </div>
         </div>
@@ -788,10 +785,10 @@ export default function PortSightPeriode({
             <span className="kpi-header-label">Utilisasi Peralatan</span>
             <Wrench size={18} color="#a855f7" />
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {summary.avgAlat}%
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {summary.countPeralatan} unit alat pelabuhan
           </div>
         </div>
@@ -802,10 +799,10 @@ export default function PortSightPeriode({
             <span className="kpi-header-label">Total Aset Fasilitas</span>
             <Layers size={18} color="#ec4899" />
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalAsetFasilitas)}
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {summary.countFasilitas} fasilitas pelabuhan
           </div>
         </div>
@@ -816,7 +813,7 @@ export default function PortSightPeriode({
         <div className="dark-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <div>
-              <h3 className="dark-card-title" style={{ margin: 0, fontSize: '15px' }}>
+              <h3 className="dark-card-title" style={{ margin: 0, fontSize: '14px' }}>
                 Tren Akumulatif per Bulan dalam Rentang Terpilih
               </h3>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
@@ -829,11 +826,11 @@ export default function PortSightPeriode({
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e3557" />
-                <XAxis dataKey="monthName" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#f59e0b', fontSize: 11 }} />
+                <XAxis dataKey="monthName" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
                 />
                 <Legend />
                 <Bar yAxisId="left" dataKey="pendapatanJt" name="Pendapatan (Juta Rp)" fill="#38bdf8" radius={[4, 4, 0, 0]} />
@@ -869,7 +866,7 @@ export default function PortSightPeriode({
                   fontSize: '12px',
                   borderRadius: '6px',
                   background: activeModule === tab.id ? 'var(--accent-blue)' : 'var(--bg-inner)',
-                  color: activeModule === tab.id ? '#ffffff' : 'var(--text-main)',
+                  color: activeModule === tab.id ? 'var(--text-on-accent)' : 'var(--text-main)',
                   fontWeight: activeModule === tab.id ? 700 : 500,
                   border: '1px solid var(--border-subtle)',
                   cursor: 'pointer',
@@ -880,10 +877,14 @@ export default function PortSightPeriode({
               >
                 <span>{tab.label}</span>
                 <span style={{
-                  fontSize: '10px',
+                  fontSize: '12px',
                   padding: '1px 5px',
                   borderRadius: '10px',
-                  background: activeModule === tab.id ? 'rgba(255,255,255,0.2)' : 'rgba(148,163,184,0.15)',
+                  // A translucent white chip over `--accent-blue` composites to a
+                  // pale surface, and the inherited white label then measured
+                  // 3.61:1. A solid darker chip keeps the count readable in both
+                  // states without depending on what sits behind it.
+                  background: activeModule === tab.id ? 'rgba(0,0,0,0.32)' : 'rgba(148,163,184,0.18)',
                 }}>
                   {tab.count}
                 </span>
@@ -893,7 +894,7 @@ export default function PortSightPeriode({
 
           {/* Quick Search */}
           <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
             <input
               type="text"
               className="filter-select"
@@ -907,7 +908,7 @@ export default function PortSightPeriode({
 
         {/* Dynamic Table Content based on activeModule */}
         {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <RefreshCw className="animate-spin" size={24} style={{ margin: '0 auto 10px' }} />
             <div>Memuat data per periode...</div>
           </div>
@@ -919,28 +920,28 @@ export default function PortSightPeriode({
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <DollarSign size={16} color="#38bdf8" />
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#38bdf8' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--accent-blue-text)' }}>
                       Modul Finansial ({finansial.length} baris)
                     </h4>
                   </div>
                 )}
-                <table className="dark-table">
+                <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode</th>
-                      <th>Cabang Pelabuhan</th>
-                      <th>Pos Rekening</th>
-                      <th style={{ textAlign: 'right' }}>Cabang (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PMT (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PTP (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PSL (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PJM (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>Eliminasi (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
-                      <th style={{ textAlign: 'center' }}>% YoY</th>
-                      <th style={{ textAlign: 'center' }}>% RKA</th>
+                      <th scope="col">Thn</th>
+                      <th scope="col">Bln</th>
+                      <th scope="col">Kode</th>
+                      <th scope="col">Cabang Pelabuhan</th>
+                      <th scope="col">Pos Rekening</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Cabang (Rp)</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>PMT (Rp)</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>PTP (Rp)</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>PSL (Rp)</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>PJM (Rp)</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Eliminasi (Rp)</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>% YoY</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>% RKA</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -949,22 +950,22 @@ export default function PortSightPeriode({
                       .slice(0, activeModule === 'all' ? 10 : 100)
                       .map((f, i) => (
                         <tr key={i}>
-                          <td>{f.year}</td>
-                          <td>{f.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{f.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{f.branchName}</td>
-                          <td style={{ fontWeight: 600, color: (f.rekening || '').includes('Beban') ? '#f87171' : (f.rekening || '').includes('Laba') ? '#34d399' : '#38bdf8' }}>
+                          <td data-label="Thn">{f.year}</td>
+                          <td data-label="Bln">{f.month}</td>
+                          <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{f.branchCode}</td>
+                          <td data-label="Cabang Pelabuhan" style={{ fontWeight: 600 }}>{f.branchName}</td>
+                          <td data-label="Pos Rekening" style={{ fontWeight: 600, color: (f.rekening || '').includes('Beban') ? 'var(--status-danger-text)' : (f.rekening || '').includes('Laba') ? 'var(--status-good-text)' : 'var(--accent-blue-text)' }}>
                             {f.rekening || '-'}
                           </td>
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatRupiahFull(f.cabangRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.pmtRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.ptpRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.pslRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.pjmRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.eliminasiRp)}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>{formatRupiahFull(f.konsolidasiRp)}</td>
-                          <td style={{ textAlign: 'center', color: f.yoy >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{f.yoy}%</td>
-                          <td style={{ textAlign: 'center', color: f.rka >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{f.rka}%</td>
+                          <td data-label="Cabang (Rp)" style={{ textAlign: 'right', fontWeight: 600 }}>{formatRupiahFull(f.cabangRp)}</td>
+                          <td data-label="PMT (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.pmtRp)}</td>
+                          <td data-label="PTP (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.ptpRp)}</td>
+                          <td data-label="PSL (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.pslRp)}</td>
+                          <td data-label="PJM (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.pjmRp)}</td>
+                          <td data-label="Eliminasi (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.eliminasiRp)}</td>
+                          <td data-label="Konsolidasi (Rp)" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-title)' }}>{formatRupiahFull(f.konsolidasiRp)}</td>
+                          <td data-label="% YoY" style={{ textAlign: 'center', color: f.yoy >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>{f.yoy}%</td>
+                          <td data-label="% RKA" style={{ textAlign: 'center', color: f.rka >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>{f.rka}%</td>
                         </tr>
                       ))}
                   </tbody>
@@ -978,23 +979,23 @@ export default function PortSightPeriode({
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <Boxes size={16} color="#f59e0b" />
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#f59e0b' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--status-alert-text)' }}>
                       Modul Opkom (Operasi & Komersial) ({opkom.length} baris)
                     </h4>
                   </div>
                 )}
-                <table className="dark-table">
+                <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode</th>
-                      <th>Cabang Pelabuhan</th>
-                      <th>Layanan Operasional</th>
-                      <th>Satuan</th>
-                      <th style={{ textAlign: 'right' }}>Jumlah Realisasi</th>
-                      <th style={{ textAlign: 'center' }}>% YoY</th>
-                      <th style={{ textAlign: 'center' }}>% RKA</th>
+                      <th scope="col">Thn</th>
+                      <th scope="col">Bln</th>
+                      <th scope="col">Kode</th>
+                      <th scope="col">Cabang Pelabuhan</th>
+                      <th scope="col">Layanan Operasional</th>
+                      <th scope="col">Satuan</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Jumlah Realisasi</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>% YoY</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>% RKA</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1003,17 +1004,17 @@ export default function PortSightPeriode({
                       .slice(0, activeModule === 'all' ? 10 : 100)
                       .map((o, i) => (
                         <tr key={i}>
-                          <td>{o.year}</td>
-                          <td>{o.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f59e0b' }}>{o.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{o.branchName}</td>
-                          <td style={{ fontWeight: 600, color: '#ffffff' }}>{o.layanan}</td>
-                          <td><span className="badge-category">{o.satuan}</span></td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>
+                          <td data-label="Thn">{o.year}</td>
+                          <td data-label="Bln">{o.month}</td>
+                          <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--status-alert-text)' }}>{o.branchCode}</td>
+                          <td data-label="Cabang Pelabuhan" style={{ fontWeight: 600 }}>{o.branchName}</td>
+                          <td data-label="Layanan Operasional" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{o.layanan}</td>
+                          <td data-label="Satuan"><span className="badge-category">{o.satuan}</span></td>
+                          <td data-label="Jumlah Realisasi" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-title)' }}>
                             {(o.jumlah ?? 0).toLocaleString('id-ID')}
                           </td>
-                          <td style={{ textAlign: 'center', color: o.yoy >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{o.yoy}%</td>
-                          <td style={{ textAlign: 'center', color: o.rka >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{o.rka}%</td>
+                          <td data-label="% YoY" style={{ textAlign: 'center', color: o.yoy >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>{o.yoy}%</td>
+                          <td data-label="% RKA" style={{ textAlign: 'center', color: o.rka >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>{o.rka}%</td>
                         </tr>
                       ))}
                   </tbody>
@@ -1027,22 +1028,22 @@ export default function PortSightPeriode({
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <Activity size={16} color="#10b981" />
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#10b981' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--status-good-text)' }}>
                       Modul Kinerja Pelayanan ({kinerja.length} baris)
                     </h4>
                   </div>
                 )}
-                <table className="dark-table">
+                <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode Cabang</th>
-                      <th>Cabang</th>
-                      <th>Kode Kinerja</th>
-                      <th>Nama Indikator Kinerja</th>
-                      <th>Satuan</th>
-                      <th style={{ textAlign: 'right' }}>Nilai Realisasi</th>
+                      <th scope="col">Thn</th>
+                      <th scope="col">Bln</th>
+                      <th scope="col">Kode Cabang</th>
+                      <th scope="col">Cabang</th>
+                      <th scope="col">Kode Kinerja</th>
+                      <th scope="col">Nama Indikator Kinerja</th>
+                      <th scope="col">Satuan</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Nilai Realisasi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1051,14 +1052,14 @@ export default function PortSightPeriode({
                       .slice(0, activeModule === 'all' ? 10 : 100)
                       .map((k, i) => (
                         <tr key={i}>
-                          <td>{k.year}</td>
-                          <td>{k.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#10b981' }}>{k.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{k.branchName}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>{k.kdKine}</td>
-                          <td style={{ fontWeight: 600, color: '#ffffff' }}>{k.nmKine}</td>
-                          <td><span className="badge-category">{k.satuan}</span></td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>{k.nilai}</td>
+                          <td data-label="Thn">{k.year}</td>
+                          <td data-label="Bln">{k.month}</td>
+                          <td data-label="Kode Cabang" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--status-good-text)' }}>{k.branchCode}</td>
+                          <td data-label="Cabang" style={{ fontWeight: 600 }}>{k.branchName}</td>
+                          <td data-label="Kode Kinerja" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue-text)' }}>{k.kdKine}</td>
+                          <td data-label="Nama Indikator Kinerja" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{k.nmKine}</td>
+                          <td data-label="Satuan"><span className="badge-category">{k.satuan}</span></td>
+                          <td data-label="Nilai Realisasi" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{k.nilai}</td>
                         </tr>
                       ))}
                   </tbody>
@@ -1072,23 +1073,23 @@ export default function PortSightPeriode({
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <TrendingUp size={16} color="#06b6d4" />
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#06b6d4' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--series-cyan-text)' }}>
                       Modul Utilisasi Dermaga (BOR/YOR/SOR) ({utilisasi.length} baris)
                     </h4>
                   </div>
                 )}
-                <table className="dark-table">
+                <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode</th>
-                      <th>Cabang Pelabuhan</th>
-                      <th>Kode Dermaga</th>
-                      <th>Nama Dermaga</th>
-                      <th style={{ textAlign: 'center' }}>BOR (%)</th>
-                      <th style={{ textAlign: 'center' }}>YOR (%)</th>
-                      <th style={{ textAlign: 'center' }}>SOR (%)</th>
+                      <th scope="col">Thn</th>
+                      <th scope="col">Bln</th>
+                      <th scope="col">Kode</th>
+                      <th scope="col">Cabang Pelabuhan</th>
+                      <th scope="col">Kode Dermaga</th>
+                      <th scope="col">Nama Dermaga</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>BOR (%)</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>YOR (%)</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>SOR (%)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1097,15 +1098,15 @@ export default function PortSightPeriode({
                       .slice(0, activeModule === 'all' ? 10 : 100)
                       .map((u, i) => (
                         <tr key={i}>
-                          <td>{u.year}</td>
-                          <td>{u.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#06b6d4' }}>{u.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{u.branchName}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', color: '#94a3b8' }}>{u.kdJenderm}</td>
-                          <td style={{ fontWeight: 600, color: '#ffffff' }}>{u.dermaga}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: u.bor > 70 ? '#f59e0b' : '#10b981' }}>{u.bor}%</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: '#38bdf8' }}>{u.yor}%</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: '#a855f7' }}>{u.sor}%</td>
+                          <td data-label="Thn">{u.year}</td>
+                          <td data-label="Bln">{u.month}</td>
+                          <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--series-cyan-text)' }}>{u.branchCode}</td>
+                          <td data-label="Cabang Pelabuhan" style={{ fontWeight: 600 }}>{u.branchName}</td>
+                          <td data-label="Kode Dermaga" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{u.kdJenderm}</td>
+                          <td data-label="Nama Dermaga" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{u.dermaga}</td>
+                          <td data-label="BOR (%)" style={{ textAlign: 'center', fontWeight: 700, color: u.bor > 70 ? 'var(--status-alert-text)' : 'var(--status-good-text)' }}>{u.bor}%</td>
+                          <td data-label="YOR (%)" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{u.yor}%</td>
+                          <td data-label="SOR (%)" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--series-purple-text)' }}>{u.sor}%</td>
                         </tr>
                       ))}
                   </tbody>
@@ -1119,24 +1120,24 @@ export default function PortSightPeriode({
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <Wrench size={16} color="#a855f7" />
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#a855f7' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--series-purple-text)' }}>
                       Modul Peralatan Pelabuhan ({peralatan.length} baris)
                     </h4>
                   </div>
                 )}
-                <table className="dark-table">
+                <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode</th>
-                      <th>Cabang</th>
-                      <th>Kode Alat</th>
-                      <th>Nama Alat</th>
-                      <th>Singkatan</th>
-                      <th>Jenis Alat</th>
-                      <th style={{ textAlign: 'center' }}>Jumlah Unit</th>
-                      <th style={{ textAlign: 'center' }}>Utilisasi (%)</th>
+                      <th scope="col">Thn</th>
+                      <th scope="col">Bln</th>
+                      <th scope="col">Kode</th>
+                      <th scope="col">Cabang</th>
+                      <th scope="col">Kode Alat</th>
+                      <th scope="col">Nama Alat</th>
+                      <th scope="col">Singkatan</th>
+                      <th scope="col">Jenis Alat</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>Jumlah Unit</th>
+                      <th scope="col" style={{ textAlign: 'center' }}>Utilisasi (%)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1145,16 +1146,16 @@ export default function PortSightPeriode({
                       .slice(0, activeModule === 'all' ? 10 : 100)
                       .map((p, i) => (
                         <tr key={i}>
-                          <td>{p.year}</td>
-                          <td>{p.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#a855f7' }}>{p.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{p.branchName}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>{p.kdAlat}</td>
-                          <td style={{ fontWeight: 600, color: '#ffffff' }}>{p.nmAlat}</td>
-                          <td><span className="badge-category">{p.singkatan}</span></td>
-                          <td>{p.jnsAlat}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700 }}>{p.jumlah}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: p.utilisasi >= 60 ? '#10b981' : '#f59e0b' }}>
+                          <td data-label="Thn">{p.year}</td>
+                          <td data-label="Bln">{p.month}</td>
+                          <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--series-purple-text)' }}>{p.branchCode}</td>
+                          <td data-label="Cabang" style={{ fontWeight: 600 }}>{p.branchName}</td>
+                          <td data-label="Kode Alat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue-text)' }}>{p.kdAlat}</td>
+                          <td data-label="Nama Alat" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{p.nmAlat}</td>
+                          <td data-label="Singkatan"><span className="badge-category">{p.singkatan}</span></td>
+                          <td data-label="Jenis Alat">{p.jnsAlat}</td>
+                          <td data-label="Jumlah Unit" style={{ textAlign: 'center', fontWeight: 700 }}>{p.jumlah}</td>
+                          <td data-label="Utilisasi (%)" style={{ textAlign: 'center', fontWeight: 700, color: p.utilisasi >= 60 ? 'var(--status-good-text)' : 'var(--status-alert-text)' }}>
                             {p.utilisasi}%
                           </td>
                         </tr>
@@ -1170,26 +1171,26 @@ export default function PortSightPeriode({
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <Layers size={16} color="#ec4899" />
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#ec4899' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--series-pink-text)' }}>
                       Modul Fasilitas Pelabuhan ({fasilitas.length} baris)
                     </h4>
                   </div>
                 )}
-                <table className="dark-table">
+                <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode</th>
-                      <th>Cabang</th>
-                      <th>Nama Fasilitas</th>
-                      <th>Jenis Fasilitas</th>
-                      <th>Satuan</th>
-                      <th style={{ textAlign: 'right' }}>Panjang</th>
-                      <th style={{ textAlign: 'right' }}>Lebar</th>
-                      <th style={{ textAlign: 'right' }}>Luas (m²)</th>
-                      <th style={{ textAlign: 'right' }}>Nilai Aset (Rp)</th>
-                      <th>Keterangan</th>
+                      <th scope="col">Thn</th>
+                      <th scope="col">Bln</th>
+                      <th scope="col">Kode</th>
+                      <th scope="col">Cabang</th>
+                      <th scope="col">Nama Fasilitas</th>
+                      <th scope="col">Jenis Fasilitas</th>
+                      <th scope="col">Satuan</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Panjang</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Lebar</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Luas (m²)</th>
+                      <th scope="col" style={{ textAlign: 'right' }}>Nilai Aset (Rp)</th>
+                      <th scope="col">Keterangan</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1198,18 +1199,18 @@ export default function PortSightPeriode({
                       .slice(0, activeModule === 'all' ? 10 : 100)
                       .map((f, i) => (
                         <tr key={i}>
-                          <td>{f.year}</td>
-                          <td>{f.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#ec4899' }}>{f.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{f.branchName}</td>
-                          <td style={{ fontWeight: 600, color: '#ffffff' }}>{f.nmPasfel}</td>
-                          <td><span className="badge-category">{f.jnsFaspel}</span></td>
-                          <td>{f.satuan}</td>
-                          <td style={{ textAlign: 'right' }}>{f.panjang}</td>
-                          <td style={{ textAlign: 'right' }}>{f.lebar}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{(f.mLws ?? 0).toLocaleString('id-ID')}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>{formatRupiahFull(f.nilai)}</td>
-                          <td style={{ fontSize: '11px', color: '#94a3b8' }}>{f.ket}</td>
+                          <td data-label="Thn">{f.year}</td>
+                          <td data-label="Bln">{f.month}</td>
+                          <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--series-pink-text)' }}>{f.branchCode}</td>
+                          <td data-label="Cabang" style={{ fontWeight: 600 }}>{f.branchName}</td>
+                          <td data-label="Nama Fasilitas" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{f.nmPasfel}</td>
+                          <td data-label="Jenis Fasilitas"><span className="badge-category">{f.jnsFaspel}</span></td>
+                          <td data-label="Satuan">{f.satuan}</td>
+                          <td data-label="Panjang" style={{ textAlign: 'right' }}>{f.panjang}</td>
+                          <td data-label="Lebar" style={{ textAlign: 'right' }}>{f.lebar}</td>
+                          <td data-label="Luas (m²)" style={{ textAlign: 'right', fontWeight: 600 }}>{(f.mLws ?? 0).toLocaleString('id-ID')}</td>
+                          <td data-label="Nilai Aset (Rp)" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{formatRupiahFull(f.nilai)}</td>
+                          <td data-label="Keterangan" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{f.ket}</td>
                         </tr>
                       ))}
                   </tbody>

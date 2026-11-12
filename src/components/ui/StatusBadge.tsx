@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle, Clock, AlertTriangle, FileText, CheckCircle2 } from 'lucide-react';
+import { Clock, AlertTriangle, FileText, CheckCircle2 } from 'lucide-react';
 import { VerificationStatus, StatusColor } from '@/lib/types';
 
 interface StatusBadgeProps {
@@ -73,7 +73,7 @@ export default function StatusBadge({
     case 'belum_upload':
     default:
       return (
-        <span className="badge" style={{ backgroundColor: '#f1f5f9', color: '#94a3b8', border: '1px solid #e2e8f0' }}>
+        <span className="badge" style={{ backgroundColor: '#f1f5f9', color: 'var(--text-muted)', border: '1px solid #e2e8f0' }}>
           <span>Belum Upload</span>
         </span>
       );

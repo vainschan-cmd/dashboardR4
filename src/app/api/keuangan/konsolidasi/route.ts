@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCanonicalBranchCode } from '@/lib/constants';
 import { getDb } from '@/lib/db';
-import { requireAuth } from '@/lib/rbac';
+import { logError } from '@/lib/logger';
+import {
+  requireAuth,
+  enforceBranchFilterForRead,
+  enforceVerificationFilterForRead,
+} from '@/lib/rbac';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'records:read' });
@@ -8,28 +14,58 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const year = Number(searchParams.get('year') || '2026');
-    const month = Number(searchParams.get('month') || '8');
-    const branchParam = searchParams.get('branch') || searchParams.get('branches') || '';
-
     const db = getDb();
 
-    // Parse branch filter if provided
-    let selectedBranches: string[] = [];
-    if (branchParam && branchParam !== 'ALL') {
-      selectedBranches = branchParam
-        .split(',')
-        .map((b) => b.trim())
-        .filter(Boolean);
+    // Default to the most recent period that actually exists, instead of a
+    // hardcoded month that becomes stale as soon as new data arrives.
+    const latestPeriod = db
+      .prepare('SELECT MAX(year) AS year FROM module_finansial')
+      .get() as { year: number | null } | undefined;
+    const latestYear = Number(latestPeriod?.year) || new Date().getFullYear();
+    const latestMonthRow = db
+      .prepare('SELECT MAX(month) AS month FROM module_finansial WHERE year = ?')
+      .get(latestYear) as { month: number | null } | undefined;
+
+    const year = Number(searchParams.get('year') || latestYear);
+    const month = Number(searchParams.get('month') || latestMonthRow?.month || 12);
+    const branchParam =
+      searchParams.get('branch') ||
+      searchParams.get('branches') ||
+      searchParams.get('branchCode') ||
+      searchParams.get('terminal') ||
+      '';
+
+    // Server-side row-level security: a PIC Cabang can never widen the filter beyond
+    // their assigned branch, and a viewer may only read verified rows.
+    const scopedBranch = enforceBranchFilterForRead(auth.session, branchParam);
+    const verifiedOnly = enforceVerificationFilterForRead(
+      auth.session,
+      searchParams.get('verifiedOnly') ?? searchParams.get('verified_only')
+    );
+
+    // Canonical branch codes only — the data layer stores `branch_code`, not display names.
+    const selectedCodes: string[] = [];
+    if (scopedBranch && scopedBranch !== 'ALL' && scopedBranch !== 'NONE') {
+      for (const raw of scopedBranch.split(',')) {
+        const trimmed = raw.trim();
+        const code = getCanonicalBranchCode(trimmed, trimmed);
+        if (code) selectedCodes.push(code);
+      }
     }
 
-    let branchCondition = '';
-    const params: (string | number)[] = [year, month];
-    if (selectedBranches.length > 0) {
-      const placeholders = selectedBranches.map(() => '?').join(',');
-      branchCondition = ` AND branch_name IN (${placeholders})`;
-      params.push(...selectedBranches);
-    }
+    const branchFilter = (column: string) => {
+      if (selectedCodes.length === 0) return '';
+      const placeholders = selectedCodes.map(() => '?').join(',');
+      return ` AND ${column} IN (${placeholders})`;
+    };
+    const branchValues = selectedCodes.length > 0 ? [...selectedCodes] : [];
+    const verifiedFilter = verifiedOnly ? " AND verification_status = 'verified'" : '';
+
+    // `module_finansial` carries verification_status; `module_finansial_entitas` does not.
+    const branchCondition = branchFilter('branch_code') + verifiedFilter;
+    const entitasCondition = branchFilter('branch_code');
+    const bopoBranchCondition = branchFilter('b.branch_code');
+    const params: (string | number)[] = [year, month, ...branchValues];
 
     // 1. KPI Aggregates: Laba Bersih, Pendapatan, Beban
     const kpiRows = db
@@ -48,28 +84,29 @@ export async function GET(req: NextRequest) {
       avg_rka: number;
     }>;
 
-    const kpiMap: Record<string, { total_rp: number; yoy: number; rka: number }> = {};
+    const kpiMap: Record<string, { total_rp: number; yoy: number | null; rka: number | null }> = {};
     for (const row of kpiRows) {
       kpiMap[row.rekening] = {
         total_rp: Number(row.total_rp || 0),
-        yoy: Number(row.avg_yoy || 100),
-        rka: Number(row.avg_rka || 100),
+        // Missing comparison values stay null instead of being replaced by a fake 100%.
+        yoy: row.avg_yoy === null || row.avg_yoy === undefined ? null : Number(row.avg_yoy),
+        rka: row.avg_rka === null || row.avg_rka === undefined ? null : Number(row.avg_rka),
       };
     }
 
     const labaBersihRp = kpiMap['Laba Bersih']?.total_rp || 0;
-    const labaBersihYoY = kpiMap['Laba Bersih']?.yoy || 99.01;
-    const labaBersihRKA = kpiMap['Laba Bersih']?.rka || 99.01;
+    const labaBersihYoY = kpiMap['Laba Bersih']?.yoy ?? null;
+    const labaBersihRKA = kpiMap['Laba Bersih']?.rka ?? null;
 
     const pendapatanRp = kpiMap['Pendapatan']?.total_rp || 0;
-    const pendapatanYoY = kpiMap['Pendapatan']?.yoy || 99.01;
-    const pendapatanRKA = kpiMap['Pendapatan']?.rka || 99.01;
+    const pendapatanYoY = kpiMap['Pendapatan']?.yoy ?? null;
+    const pendapatanRKA = kpiMap['Pendapatan']?.rka ?? null;
 
     const bebanRp = kpiMap['Beban']?.total_rp || 0;
-    const bebanYoY = kpiMap['Beban']?.yoy || 99.01;
-    const bebanRKA = kpiMap['Beban']?.rka || 99.01;
+    const bebanYoY = kpiMap['Beban']?.yoy ?? null;
+    const bebanRKA = kpiMap['Beban']?.rka ?? null;
 
-    const bopoPct = pendapatanRp > 0 ? (Math.abs(bebanRp) / pendapatanRp) * 100 : 0;
+    const bopoPct = pendapatanRp > 0 ? (Math.abs(bebanRp) / pendapatanRp) * 100 : null;
 
     // 2. 10 Cabang Terbesar Laba Area (Stacked by Entitas: CABANG, PJM, PMT, PSL, PTP)
     const topLabaRows = db
@@ -125,7 +162,7 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN entitas='PTP' THEN realisasi ELSE 0 END) as ptp,
         SUM(realisasi) as grand_total
       FROM module_finansial_entitas
-      WHERE year = ? AND month = ? AND rekening = 'Pendapatan' AND entitas != 'ELIMINASI' ${branchCondition}
+      WHERE year = ? AND month = ? AND rekening = 'Pendapatan' AND entitas != 'ELIMINASI' ${entitasCondition}
       GROUP BY branch_name
       ORDER BY grand_total DESC
       LIMIT 10
@@ -163,8 +200,7 @@ export async function GET(req: NextRequest) {
         CASE WHEN p.konsolidasi_rp > 0 THEN (abs(b.konsolidasi_rp) / p.konsolidasi_rp) * 100 ELSE 0 END as bopo
       FROM module_finansial b
       JOIN module_finansial p ON b.branch_code = p.branch_code AND b.year = p.year AND b.month = p.month
-      WHERE b.year = ? AND b.month = ? AND b.rekening = 'Beban' AND p.rekening = 'Pendapatan'
-      ${selectedBranches.length > 0 ? ` AND b.branch_name IN (${selectedBranches.map(() => '?').join(',')})` : ''}
+      WHERE b.year = ? AND b.month = ? AND b.rekening = 'Beban' AND p.rekening = 'Pendapatan' ${bopoBranchCondition}
       ORDER BY b.branch_name ASC
     `
       )
@@ -190,7 +226,7 @@ export async function GET(req: NextRequest) {
         `
       SELECT entitas, SUM(realisasi) as total_laba
       FROM module_finansial_entitas
-      WHERE year = ? AND month = ? AND rekening = 'Laba Bersih' AND entitas != 'ELIMINASI' ${branchCondition}
+      WHERE year = ? AND month = ? AND rekening = 'Laba Bersih' AND entitas != 'ELIMINASI' ${entitasCondition}
       GROUP BY entitas
       ORDER BY total_laba DESC
     `
@@ -213,7 +249,7 @@ export async function GET(req: NextRequest) {
         `
       SELECT branch_name, branch_code, realisasi
       FROM module_finansial_entitas
-      WHERE year = ? AND month = ? AND rekening = 'Laba Bersih' AND entitas = 'PJM' ${branchCondition}
+      WHERE year = ? AND month = ? AND rekening = 'Laba Bersih' AND entitas = 'PJM' ${entitasCondition}
       ORDER BY realisasi ASC
       LIMIT 10
     `
@@ -242,41 +278,60 @@ export async function GET(req: NextRequest) {
       )
       .all() as Array<{ year: number; month: number }>;
 
-    const availableBranches = db
-      .prepare(
-        `
+    // Filter in SQL, not in JavaScript: reading every distinct branch and
+    // discarding most of them client-side is exactly the pattern this endpoint
+    // must avoid (RBAC-09). The scoped codes are already canonical.
+    const availableBranches = (
+      selectedCodes.length === 0
+        ? (db
+            .prepare(
+              `
       SELECT DISTINCT branch_code, branch_name
       FROM module_finansial_entitas
       ORDER BY branch_name ASC
     `
-      )
-      .all() as Array<{ branch_code: string; branch_name: string }>;
+            )
+            .all() as Array<{ branch_code: string; branch_name: string }>)
+        : (db
+            .prepare(
+              `
+      SELECT DISTINCT branch_code, branch_name
+      FROM module_finansial_entitas
+      WHERE branch_code IN (${selectedCodes.map(() => '?').join(',')})
+      ORDER BY branch_name ASC
+    `
+            )
+            .all(...selectedCodes) as Array<{ branch_code: string; branch_name: string }>)
+    );
+
+    const toNullable2 = (value: number | null) => (value === null ? null : Number(value.toFixed(2)));
 
     return NextResponse.json({
       success: true,
+      verifiedOnly,
       filters: {
         year,
         month,
-        selectedBranches,
+        selectedBranches: selectedCodes,
       },
       kpi: {
         labaArea: {
           realisasi: labaBersihRp,
-          yoy: Number(labaBersihYoY.toFixed(2)),
-          rka: Number(labaBersihRKA.toFixed(2)),
+          yoy: toNullable2(labaBersihYoY),
+          rka: toNullable2(labaBersihRKA),
         },
         pendapatan: {
           realisasi: pendapatanRp,
-          yoy: Number(pendapatanYoY.toFixed(2)),
-          rka: Number(pendapatanRKA.toFixed(2)),
+          yoy: toNullable2(pendapatanYoY),
+          rka: toNullable2(pendapatanRKA),
         },
         beban: {
           realisasi: bebanRp,
-          yoy: Number(bebanYoY.toFixed(2)),
-          rka: Number(bebanRKA.toFixed(2)),
+          yoy: toNullable2(bebanYoY),
+          rka: toNullable2(bebanRKA),
         },
         bopo: {
-          percentage: Number(bopoPct.toFixed(2)),
+          percentage: bopoPct === null ? null : Number(bopoPct.toFixed(2)),
         },
       },
       charts: {
@@ -292,6 +347,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err: unknown) {
+    logError('api/keuangan/konsolidasi', err, { requestId: req.headers.get('x-request-id') });
     const message = err instanceof Error ? err.message : 'Gagal memproses data konsolidasi keuangan.';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }

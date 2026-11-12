@@ -1,5 +1,9 @@
 # Dokumen Tasklist Audit & Implementasi — PELINDO R4 PortDash
 
+> [!WARNING]
+> **Dokumen ini bersifat historis.** Status `[x]` di bawah ini ditulis sebelum audit ulang 2026-11-11 dan sebagian **tidak sesuai kondisi kode** (kredensial default, pencabutan sesi, PostgreSQL, Google Drive, angka fallback fiktif).
+> Gunakan [`TASKLIST-REMEDIASI.md`](TASKLIST-REMEDIASI.md) sebagai satu-satunya sumber kebenaran status pekerjaan. Lihat bagian **§16 Catatan Rekonsiliasi** di dokumen tersebut.
+
 > [!IMPORTANT]
 > **Temuan Audit vs Klaim [`CHECKLIST.md`](file:///Users/rekaskuy/Documents/ChatGPT/Dashboard%20BOD/dashboardR4/CHECKLIST.md):**
 > Beberapa item yang sebelumnya tercentang `[x]` pada [`CHECKLIST.md`](file:///Users/rekaskuy/Documents/ChatGPT/Dashboard%20BOD/dashboardR4/CHECKLIST.md) (seperti penghapusan *bypass password*, *hashing password*, modul [`src/lib/auth.ts`](file:///Users/rekaskuy/Documents/ChatGPT/Dashboard%20BOD/dashboardR4/docs/architecture/MODULES.md#L22), penghentian parsing Excel sinkron di `/api/modules-data`, dan penghapusan *dead code*) **terbukti belum terimplementasi di kode aktual**. Dokumen ini merekonsiliasi kondisi riil kode sumber dan memetakan seluruh pekerjaan ke dalam tahapan eksekusi yang terukur.

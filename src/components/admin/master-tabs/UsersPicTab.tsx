@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
+import { checkPasswordStrength, PASSWORD_HINT } from '@/lib/passwordPolicy';
 import AuthModal from '@/components/auth/AuthModal';
 
 interface UsersPicTabProps {
@@ -41,6 +42,8 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
   const [editBranch, setEditBranch] = useState('R99');
   const [editActive, setEditActive] = useState(true);
   const [editPassword, setEditPassword] = useState('');
+  const [editConfirmPassword, setEditConfirmPassword] = useState('');
+  const [editRequireChange, setEditRequireChange] = useState(true);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -171,6 +174,8 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
     setEditBranch(u.branch_id || 'R99');
     setEditActive(u.active !== undefined ? Boolean(u.active) : true);
     setEditPassword('');
+    setEditConfirmPassword('');
+    setEditRequireChange(true);
     setShowEditPassword(false);
     setEditError(null);
     setIsEditUserOpen(true);
@@ -182,6 +187,19 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
     if (!editName.trim() || !editDivisi.trim() || !editDepartemen.trim()) {
       setEditError('Kolom Nama, Divisi, dan Departemen wajib diisi.');
       return;
+    }
+
+    const wantsPasswordReset = editPassword.trim().length > 0;
+    if (wantsPasswordReset) {
+      const strength = checkPasswordStrength(editPassword);
+      if (!strength.valid) {
+        setEditError(strength.error || 'Kata sandi baru belum memenuhi kebijakan keamanan.');
+        return;
+      }
+      if (editPassword !== editConfirmPassword) {
+        setEditError('Konfirmasi kata sandi tidak cocok.');
+        return;
+      }
     }
 
     setEditSaving(true);
@@ -200,23 +218,48 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
           role: editRole,
           branch_id: editBranch,
           active: editActive,
-          password: editPassword.trim() ? editPassword.trim() : undefined,
         }),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
         setEditError(data.error || 'Gagal menyimpan perubahan.');
-      } else {
-        setIsEditUserOpen(false);
-        setEditingUser(null);
-        setSyncStatus({
-          type: 'success',
-          message: `Data PIC ${editName} (NIPP: ${editNipp}) telah diperbarui dan disinkronkan ke master_user_pic.xlsx.`,
-        });
-        if (onRefreshUsers) onRefreshUsers();
-        setTimeout(() => setSyncStatus(null), 4500);
+        return;
       }
+
+      // Password reset uses the dedicated endpoint so token_version is bumped,
+      // every existing session is revoked, and the audit trail records it.
+      if (wantsPasswordReset) {
+        const resetRes = await fetch('/api/users/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: editingUser.id,
+            newPassword: editPassword,
+            requireChangeOnNextLogin: editRequireChange,
+          }),
+        });
+        const resetData = await resetRes.json();
+        if (!resetRes.ok || !resetData.success) {
+          setEditError(
+            resetData.error ||
+              'Data PIC tersimpan, tetapi reset kata sandi gagal. Silakan ulangi reset kata sandi.'
+          );
+          if (onRefreshUsers) onRefreshUsers();
+          return;
+        }
+      }
+
+      setIsEditUserOpen(false);
+      setEditingUser(null);
+      setSyncStatus({
+        type: 'success',
+        message: wantsPasswordReset
+          ? `Data dan kata sandi PIC ${editName} (NIPP: ${editNipp}) telah diperbarui. Semua sesi akun tersebut diakhiri.`
+          : `Data PIC ${editName} (NIPP: ${editNipp}) telah diperbarui dan disinkronkan ke master_user_pic.xlsx.`,
+      });
+      if (onRefreshUsers) onRefreshUsers();
+      setTimeout(() => setSyncStatus(null), 4500);
     } catch (err: unknown) {
       setEditError(err instanceof Error ? err.message : 'Terjadi kesalahan sistem.');
     } finally {
@@ -279,16 +322,16 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--accent-blue)',
+              color: 'var(--accent-blue-text)',
             }}
           >
             <FileSpreadsheet size={18} strokeWidth={1.75} />
           </div>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
               Berkas Master Pengguna & PIC (master_user_pic.xlsx)
             </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Tersimpan di direktori lokal <strong>data/master_user_pic.xlsx</strong> | Siap diekspor untuk cadangan eksternal
             </div>
           </div>
@@ -318,7 +361,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
               gap: '6px',
               borderColor: 'rgba(2, 132, 199, 0.4)',
               backgroundColor: 'rgba(2, 132, 199, 0.08)',
-              color: 'var(--accent-blue)',
+              color: 'var(--accent-blue-text)',
               fontWeight: 600,
             }}
             title="Muat ulang daftar PIC dari berkas lokal master_user_pic.xlsx"
@@ -372,7 +415,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
             onClick={() => fileInputRef.current?.click()}
             className="btn-dark"
             disabled={pullingDrive || pushingDrive}
-            style={{ padding: '6px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px', opacity: 0.85 }}
+            style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', opacity: 0.85 }}
             title="Unggah berkas .xlsx PIC dari komputer"
           >
             <Upload size={12} />
@@ -401,17 +444,17 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
       )}
 
       <div className="table-responsive">
-        <table className="data-table">
+        <table className="card-table data-table">
           <thead>
             <tr>
-              <th style={{ width: '120px' }}>NIPP</th>
-              <th>Nama Pegawai</th>
-              <th>Divisi</th>
-              <th>Departemen</th>
-              <th>Hak Akses / Peran</th>
-              <th>Penugasan Cabang</th>
-              <th style={{ textAlign: 'center' }}>Status</th>
-              <th style={{ textAlign: 'center', width: '120px' }}>Aksi</th>
+              <th scope="col" style={{ width: '120px' }}>NIPP</th>
+              <th scope="col">Nama Pegawai</th>
+              <th scope="col">Divisi</th>
+              <th scope="col">Departemen</th>
+              <th scope="col">Hak Akses / Peran</th>
+              <th scope="col">Penugasan Cabang</th>
+              <th scope="col" style={{ textAlign: 'center' }}>Status</th>
+              <th scope="col" style={{ textAlign: 'center', width: '120px' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -427,32 +470,41 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
 
               return (
                 <tr key={u.id}>
-                  <td className="tabular-nums" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue)' }}>
+                  <td data-label="NIPP" className="tabular-nums" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>
                     {u.nipp || u.username}
                   </td>
-                  <td style={{ fontWeight: 600, color: 'var(--text-title)' }}>
+                  <td data-label="Nama Pegawai" style={{ fontWeight: 600, color: 'var(--text-title)' }}>
                     {u.name}
                   </td>
-                  <td style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                  <td data-label="Divisi" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                     {u.divisi || '-'}
                   </td>
-                  <td style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                  <td data-label="Departemen" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                     {u.departemen || '-'}
                   </td>
-                  <td>
+                  <td data-label="Hak Akses / Peran">
                     <span className={`badge ${roleInfo.badge}`}>
                       {roleInfo.label}
                     </span>
                   </td>
-                  <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  <td data-label="Penugasan Cabang" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                     {u.branch_id ? u.branch_id : 'Regional 4 (Pusat)'}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Status" style={{ textAlign: 'center' }}>
                     <span className={`badge ${u.active ? 'badge-green' : 'badge-neutral'}`}>
                       {u.active ? 'Aktif' : 'Nonaktif'}
                     </span>
+                    {u.must_change_password && (
+                      <span
+                        className="badge badge-yellow"
+                        style={{ marginLeft: '6px' }}
+                        title="Kata sandi akun ini dibuat oleh administrator dan harus diganti pengguna saat login berikutnya."
+                      >
+                        Wajib ganti sandi
+                      </span>
+                    )}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Aksi" style={{ textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                       <button
                         type="button"
@@ -465,8 +517,8 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                           backgroundColor: 'rgba(2, 132, 199, 0.12)',
                           border: '1px solid rgba(2, 132, 199, 0.35)',
                           borderRadius: '5px',
-                          color: 'var(--accent-blue)',
-                          fontSize: '11px',
+                          color: 'var(--accent-blue-text)',
+                          fontSize: '12px',
                           fontWeight: 600,
                           cursor: 'pointer',
                         }}
@@ -496,7 +548,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                           <Trash2 size={13} />
                         </button>
                       ) : (
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sistem</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sistem</span>
                       )}
                     </div>
                   </td>
@@ -526,7 +578,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', padding: '14px 18px' }}>
-              <h3 className="modal-title" style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
+              <h3 className="modal-title" style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
                 Konfirmasi Penghapusan Akun PIC
               </h3>
               <button
@@ -538,7 +590,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                 <X size={18} />
               </button>
             </div>
-            <div className="modal-body" style={{ padding: '18px', fontSize: '13px', color: 'var(--text-main)', lineHeight: 1.5 }}>
+            <div className="modal-body" style={{ padding: '18px', fontSize: '12px', color: 'var(--text-main)', lineHeight: 1.5 }}>
               Apakah Anda yakin ingin menghapus akun PIC <strong>{pendingDeleteUser.name}</strong> dari sistem dan berkas master?
             </div>
             <div
@@ -572,7 +624,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                   borderRadius: '6px',
                   border: 'none',
                   backgroundColor: '#dc2626',
-                  color: '#ffffff',
+                  color: 'var(--text-title)',
                   cursor: 'pointer',
                 }}
               >
@@ -611,7 +663,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'var(--accent-blue)',
+                    color: 'var(--accent-blue-text)',
                   }}
                 >
                   <Edit2 size={18} />
@@ -620,8 +672,8 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                   <h3 className="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-title)' }}>
                     Ubah Data Pegawai / PIC
                   </h3>
-                  <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                    NIPP: <strong style={{ color: 'var(--accent-blue)' }}>{editingUser.nipp || editingUser.username}</strong> | ID Akun: {editingUser.id}
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                    NIPP: <strong style={{ color: 'var(--accent-blue-text)' }}>{editingUser.nipp || editingUser.username}</strong> | ID Akun: {editingUser.id}
                   </p>
                 </div>
               </div>
@@ -639,7 +691,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit}>
+            <form method="post" onSubmit={handleSaveEdit}>
               <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {editError && (
                   <div
@@ -662,7 +714,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
                       NIPP (Username)
                     </label>
                     <input
@@ -675,7 +727,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                     />
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
                       Status Akun
                     </label>
                     <select
@@ -690,7 +742,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                 </div>
 
                 <div className="form-group">
-                  <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
                     Nama Pegawai & Gelar
                   </label>
                   <input
@@ -705,7 +757,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
                       Divisi
                     </label>
                     <input
@@ -718,7 +770,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                     />
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
                       Departemen
                     </label>
                     <input
@@ -734,7 +786,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
                       Hak Akses / Peran
                     </label>
                     <select
@@ -750,7 +802,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                     </select>
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
                       Penugasan Cabang
                     </label>
                     <select
@@ -768,27 +820,41 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                 </div>
 
                 <div className="form-group" style={{ backgroundColor: 'var(--bg-inner)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '10px' }}>
+                    <label
+                      htmlFor="admin-reset-password"
+                      style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
                       <Lock size={13} color="var(--accent-blue)" />
-                      <span>Ubah Kata Sandi (Opsional)</span>
+                      <span>Reset Kata Sandi (Opsional)</span>
                     </label>
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                      Kosongkan jika tidak ingin mengubah kata sandi
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>
+                      Kosongkan bila kata sandi tidak diubah
                     </span>
                   </div>
+
+                  {editingUser?.must_change_password && (
+                    <p style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--status-alert-text)' }}>
+                      Akun ini masih wajib mengganti kata sandi pada login berikutnya.
+                    </p>
+                  )}
+
                   <div style={{ position: 'relative' }}>
                     <input
+                      id="admin-reset-password"
                       type={showEditPassword ? 'text' : 'password'}
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}
                       className="form-control"
-                      placeholder="Masukkan kata sandi baru jika ingin mengatur ulang"
+                      placeholder="Kata sandi baru untuk pengguna ini"
+                      autoComplete="new-password"
+                      aria-describedby="admin-reset-password-hint"
                       style={{ paddingRight: '36px' }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowEditPassword(!showEditPassword)}
+                      aria-label={showEditPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
                       style={{
                         position: 'absolute',
                         right: '10px',
@@ -804,6 +870,43 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                       {showEditPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
+
+                  {editPassword.trim().length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                      <div>
+                        <label
+                          htmlFor="admin-reset-password-confirm"
+                          style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}
+                        >
+                          Ulangi kata sandi baru
+                        </label>
+                        <input
+                          id="admin-reset-password-confirm"
+                          type={showEditPassword ? 'text' : 'password'}
+                          value={editConfirmPassword}
+                          onChange={(e) => setEditConfirmPassword(e.target.value)}
+                          className="form-control"
+                          autoComplete="new-password"
+                        />
+                      </div>
+                      <label
+                        htmlFor="admin-reset-require-change"
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                      >
+                        <input
+                          id="admin-reset-require-change"
+                          type="checkbox"
+                          checked={editRequireChange}
+                          onChange={(e) => setEditRequireChange(e.target.checked)}
+                          style={{ marginTop: '2px' }}
+                        />
+                        <span>Minta pengguna mengganti kata sandi ini saat login berikutnya</span>
+                      </label>
+                      <p id="admin-reset-password-hint" style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {PASSWORD_HINT}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -823,7 +926,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                   onClick={() => setIsEditUserOpen(false)}
                   className="btn-dark"
                   disabled={editSaving}
-                  style={{ padding: '8px 16px', fontSize: '12.5px' }}
+                  style={{ padding: '8px 16px', fontSize: '12px' }}
                 >
                   Batal
                 </button>
@@ -833,7 +936,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                   disabled={editSaving}
                   style={{
                     padding: '8px 18px',
-                    fontSize: '12.5px',
+                    fontSize: '12px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',

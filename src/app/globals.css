@@ -22,8 +22,33 @@
 
   --accent-orange: #f97316;
   --accent-orange-hover: #ea580c;
-  --accent-blue: #0284c7;
+  /* `#0284c7` carried white button labels at only 4.10:1. Darkened just enough
+     to clear AA (5.17:1) without losing the brand hue (`A11Y-08`). */
+  --accent-blue: #0373ad;
+  /* Foreground for accent-filled buttons: 5.17:1 on #0373ad. */
+  --text-on-accent: #ffffff;
   --accent-cyan: #38bdf8;
+
+  /* Text-safe accents (`A11Y-08`).
+     `--accent-blue` is tuned to work as a BUTTON BACKGROUND, so on the dark card
+     it only reaches 3.84:1 — fine for a filled surface, too low for a heading.
+     Anything rendering an accent as *text* must use these instead: 7.34:1 on the
+     dark card and 5.93:1 on the light card. */
+  --accent-blue-text: #38bdf8;
+  --accent-orange-text: #fb923c;
+  /* Orange as a FILLED surface with a white label. `--accent-orange` (5.61:1 as
+     text on the dark card) only reaches 2.80:1 under white type, so the two roles
+     get separate tokens instead of one token compromising both. */
+  --accent-orange-fill: #c2410c;
+
+  /* Aliases kept for legacy components. Defined once so every variable used in
+     the codebase resolves to a real value (no silently-empty colors). */
+  --bg-surface: var(--bg-card);
+  --blue-primary: var(--accent-blue);
+  --blue-500: var(--accent-cyan);
+  --blue-soft: rgba(2, 132, 199, 0.16);
+  --navy-900: #0b1424;
+  --navy-800: #14233c;
 
   --status-good-bg: #064e3b;
   --status-good-text: #34d399;
@@ -32,15 +57,58 @@
   --status-alert-bg: #451a03;
   --status-alert-text: #fbbf24;
   --status-alert-border: #d97706;
+  /* Text drawn ON an alert-coloured fill (badges). 10.8:1 on #fbbf24. */
+  --text-on-alert: #0f172a;
+
+  /*
+   * Fixed-on-dark text for surfaces that stay dark in BOTH themes — the navy
+   * BOPO card, for instance. `--text-secondary` flips to near-black in the light
+   * theme, which printed #334155 on #0f172a at 1.72:1. These do not flip
+   * (`CODE-06`).
+   */
+  --text-on-dark: #f8fafc;
+  --text-on-dark-muted: #cbd5e1;
+  --status-alert-on-dark: #fbbf24;
 
   --status-danger-bg: #4c0519;
   --status-danger-text: #f87171;
   --status-danger-border: #dc2626;
 
+  /* Categorical series colours used as TEXT (module headings, legend labels).
+     The raw hue (#06b6d4 / #a855f7 / #ec4899) is fine as a 2 px chart stroke but
+     only reaches 2.2–3.9:1 on the light card, so text gets its own darker pair
+     in the light theme instead of one token compromising both roles. */
+  --series-cyan-text: #22d3ee;
+  --series-purple-text: #c084fc;
+  --series-pink-text: #f472b6;
+  /* Purple used as a FILLED button surface. The raw #a855f7 carried white labels
+     at only 3.05:1; this is 5.07:1. */
+  --series-purple-fill: #7e22ce;
+  /* The raw hues (#06b6d4, #ec4899) carried white labels at 2.43:1 and 3.53:1. */
+  --series-cyan-fill: #0e7490;
+  --series-pink-fill: #be185d;
+
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-pill: 9999px;
+
+  /* Type scale (`UX-03`). Five steps only — 12 / 14 / 16 / 20 / 28.
+     Nothing below 12px is legible at projector distance, and the old inline
+     styles used nine sizes between 8px and 12.5px. New code should use these
+     tokens; the existing inline `fontSize` values were snapped onto the same
+     steps. */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+
+  /* Minimum hit area (`UX-04`). 44px is the comfortable pointer target; dense
+     table icon buttons use the 24px WCAG 2.2 minimum instead and are marked with
+     `.icon-button-compact`. */
+  --target-touch: 44px;
+  --target-compact: 24px;
 
   --font-sans: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
@@ -68,25 +136,62 @@
 
   --text-main: #0f172a;
   --text-title: #0f172a;
-  --text-muted: #64748b;
+  /* Was #64748b → 4.34:1 on `--bg-app`, just under the 4.5:1 AA floor for body
+     text. Darkened to 4.95:1 (`A11Y-08`). */
+  --text-muted: #5d6b7e;
   --text-secondary: #334155;
 
-  --accent-orange: #f97316;
-  --accent-orange-hover: #ea580c;
-  --accent-blue: #0284c7;
-  --accent-cyan: #0284c7;
+  /* `#f97316` as text on white measured 2.80:1 — the worst pair in the app.
+     Orange 700 keeps the brand hue at 5.18:1 and also fixes white-on-orange
+     button labels (5.18:1, previously 2.80:1). */
+  --accent-orange: #c2410c;
+  --accent-orange-hover: #9a3412;
+  --accent-blue: #0369a1;
+  /* Foreground for accent-filled buttons: 5.93:1 on #0369a1. */
+  --text-on-accent: #ffffff;
+  --accent-cyan: #0369a1;
+
+  --accent-blue-text: #0369a1;
+  --accent-orange-text: #c2410c;
+  --accent-orange-fill: #c2410c;
+
+  --bg-surface: var(--bg-card);
+  --blue-primary: var(--accent-blue);
+  --blue-500: var(--accent-blue);
+  --blue-soft: rgba(2, 132, 199, 0.1);
+  --navy-900: #0f172a;
+  --navy-800: #1e293b;
 
   --status-good-bg: #ecfdf5;
-  --status-good-text: #059669;
+  /* Status text on its own tint: previously 3.58:1 / 3.07:1 / 4.41:1 — all below
+     AA for normal text. Now 5.21 / 4.84 / 5.91. */
+  --status-good-text: #047857;
   --status-good-border: #a7f3d0;
 
   --status-alert-bg: #fffbeb;
-  --status-alert-text: #d97706;
+  --status-alert-text: #b45309;
   --status-alert-border: #fde68a;
+  /* White rather than near-black: #0f172a on #b45309 is only 4.44:1. */
+  --text-on-alert: #ffffff;
+
+  /* Identical to the dark theme: a permanently dark surface needs permanently
+     light text, whatever the page theme (`CODE-06`). */
+  --text-on-dark: #f8fafc;
+  --text-on-dark-muted: #cbd5e1;
+  /* Alert/yellow text on that dark surface: #b45309 would be 3.56:1 on #0f172a. */
+  --status-alert-on-dark: #fbbf24;
 
   --status-danger-bg: #fef2f2;
-  --status-danger-text: #dc2626;
+  --status-danger-text: #b91c1c;
   --status-danger-border: #fecaca;
+
+  /* Darkened enough to clear AA on white (4.87 / 5.93 / 5.24:1). */
+  --series-cyan-text: #0e7490;
+  --series-purple-text: #7e22ce;
+  --series-pink-text: #be185d;
+  --series-purple-fill: #7e22ce;
+  --series-cyan-fill: #0e7490;
+  --series-pink-fill: #be185d;
 
   --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 14px rgba(0, 0, 0, 0.03);
   --header-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
@@ -96,6 +201,25 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Keyboard-only focus ring. Pointer/touch interaction is unaffected. */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Respect the OS "reduce motion" preference for every animated element. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 html, body {
@@ -367,7 +491,7 @@ html, body {
 }
 
 .sidebar-section-title {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--text-muted);
   letter-spacing: 0.05em;
@@ -386,7 +510,7 @@ html, body {
   background: transparent;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
@@ -420,7 +544,7 @@ html, body {
   margin-left: auto;
   background-color: #fbbf24;
   color: #0e1b2e;
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 800;
   padding: 1px 6px;
   border-radius: 10px;
@@ -441,7 +565,7 @@ html, body {
   border: 1px solid rgba(16, 185, 129, 0.3);
   padding: 4px 8px;
   border-radius: var(--radius-sm);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #10b981;
 }
@@ -545,10 +669,20 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.01em;
   white-space: nowrap;
+}
+
+/* `UX-08` — the logo and wordmark appeared twice on desktop: once in the sidebar
+   brand header and again in the top bar. Above the sidebar breakpoint the sidebar
+   owns the identity, so the header copy is hidden; below it, the sidebar is off
+   canvas and the header becomes the only branding. */
+@media (min-width: 1101px) {
+  .brand-wrapper {
+    display: none;
+  }
 }
 
 .brand-title {
@@ -572,7 +706,7 @@ html, body {
   border: none;
   padding: 6px 14px;
   border-radius: var(--radius-pill);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
@@ -619,7 +753,7 @@ html, body {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -651,7 +785,7 @@ html, body {
 .illustration-pill {
   background: var(--accent-blue);
   color: #ffffff;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   padding: 4px 12px;
   border-radius: var(--radius-pill);
@@ -734,7 +868,7 @@ select option {
   }
   .filter-chip {
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 
@@ -831,7 +965,7 @@ select option {
 }
 
 .kpi-comparison-rows {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--text-muted);
 }
@@ -915,13 +1049,13 @@ select option {
 }
 
 .terminal-subtype {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   margin-top: 2px;
 }
 
 .status-badge-chip {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
@@ -940,14 +1074,14 @@ select option {
 }
 
 .terminal-metric-value {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 800;
   color: var(--text-title);
   margin: 4px 0 8px 0;
 }
 
 .terminal-card-footer {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -983,14 +1117,14 @@ select option {
 }
 
 .attention-item-header {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-title);
   margin-bottom: 3px;
 }
 
 .attention-item-desc {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -1029,7 +1163,7 @@ select option {
 }
 
 .card-subtitle {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
   line-height: 1.4;
@@ -1050,7 +1184,7 @@ select option {
   border: none;
   padding: 8px 16px;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
@@ -1087,7 +1221,7 @@ select option {
 .dark-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -1099,7 +1233,7 @@ select option {
   text-align: left;
   padding: 11px 14px;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 11.5px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -1115,6 +1249,101 @@ select option {
 .data-table tr:hover td,
 .dark-table tr:hover td {
   background-color: var(--bg-card-hover);
+}
+
+/* Recharts paints each legend label in the SERIES colour. A deliberately pale
+   series such as the gold "PSL" bar (#facc15) then lands at 1.53:1 on the light
+   card. The swatch is allowed to be that pale; the caption is not. The swatch
+   colour belongs to the chart, the text colour belongs to the theme (`CODE-06`). */
+.recharts-legend-item-text {
+  color: var(--text-secondary) !important;
+}
+
+/* Axis ticks are text, not decoration. They used to carry a literal
+   `tick={{ fill: '#cbd5e1' }}` — light slate that reads on the dark card and
+   disappears on the white one. An SVG `fill` attribute cannot resolve `var()`,
+   so the colour has to be applied from CSS (`CODE-06`). */
+.recharts-cartesian-axis-tick-value {
+  fill: var(--text-muted);
+}
+
+/* Pie labels inherit the SLICE colour, so the percentage printed on the blue
+   sector measured 3.04:1 on white. The slice keeps its hue; the label is text. */
+.recharts-pie-label-text {
+  fill: var(--text-main);
+}
+
+/* Numeric columns must not shimmy between renders (`UX-03`). Proportional digits
+   make 1 111 align differently from 9 999, which is exactly where a reader
+   compares two figures. */
+.data-table td,
+.kpi-huge-number,
+.kpi-card-value,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ---------- Utilities ---------- */
+
+/* Visually hidden but still announced by screen readers (`A11Y-02`/`A11Y-09`). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Icon-only buttons (`UX-04`). */
+.icon-button-touch {
+  min-width: var(--target-touch);
+  min-height: var(--target-touch);
+  align-items: center;
+  justify-content: center;
+}
+
+/* Escape hatch for icon buttons that live inside a dense table row, where a 44px
+   target would double the row height. 24px is the WCAG 2.2 AA minimum. */
+.icon-button-compact {
+  min-width: var(--target-compact);
+  min-height: var(--target-compact);
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- Touch targets (`UX-04`) ----------
+   Two tiers, because one number cannot be right for both cases:
+
+   - 44 × 44 px for standalone actions the user aims at (form controls, modal
+     buttons, primary actions) — WCAG 2.5.5 (AAA).
+   - 24 × 24 px floor for everything else — WCAG 2.2 AA (2.5.8). This matters for
+     the 52px chrome bar and for icon buttons inside dense table rows, where a
+     44px target would double the row height and make the table harder to scan.
+
+   The floor below guarantees no interactive control is smaller than 24px, which
+   was previously not the case (measured: 33 controls between 14px and 23px). */
+button,
+[role='button'],
+input:not([type='hidden']),
+select,
+textarea,
+summary {
+  min-height: var(--target-compact);
+}
+
+/* Standalone actions get the comfortable target. */
+.form-submit,
+.btn-primary,
+.btn-success,
+.btn-danger,
+.modal-content .btn,
+.modal-footer button {
+  min-height: var(--target-touch);
 }
 
 /* Forms & Inputs */
@@ -1140,7 +1369,9 @@ select option {
   border-radius: var(--radius-sm);
   color: var(--text-main);
   padding: 8px 12px;
-  font-size: 13px;
+  /* `UX-04`: form controls are primary pointer targets, not decorations. */
+  min-height: var(--target-touch);
+  font-size: var(--text-sm);
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -1171,7 +1402,7 @@ select option {
   gap: 5px;
   padding: 3px 9px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -1214,7 +1445,7 @@ select option {
   gap: 12px;
   padding: 12px 16px;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -1246,10 +1477,12 @@ select option {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   padding: 7px 16px;
+  min-height: var(--target-touch);
   border-radius: var(--radius-sm);
   cursor: pointer;
   border: 1px solid transparent;
@@ -1265,11 +1498,11 @@ select option {
 .btn-primary {
   background-color: var(--accent-blue);
   color: #ffffff;
-  border-color: #0284c7;
+  border-color: var(--accent-blue);
 }
 
 .btn-primary:hover {
-  background-color: #0369a1;
+  background-color: color-mix(in srgb, var(--accent-blue) 85%, #000000);
 }
 
 .btn-secondary {
@@ -1283,24 +1516,28 @@ select option {
   color: var(--text-main);
 }
 
+/* White labels need 4.5:1. `#059669` only reached 3.6:1, so the success button
+   uses emerald-700 (`A11Y-08`). */
 .btn-success {
-  background-color: #059669;
+  background-color: #047857;
   color: #ffffff;
-  border-color: #047857;
+  border-color: #065f46;
 }
 
 .btn-success:hover {
-  background-color: #047857;
+  background-color: #065f46;
 }
 
 .btn-warning {
-  background-color: #d97706;
-  color: #ffffff;
-  border-color: #b45309;
+  /* `#d97706` under white type measured 3.19:1. `--accent-orange-fill` is the
+     darker brand orange: 5.18:1 with white, in both themes (`A11Y` / `CODE-06`). */
+  background-color: var(--accent-orange-fill);
+  color: var(--text-on-accent);
+  border-color: var(--accent-orange-fill);
 }
 
 .btn-warning:hover {
-  background-color: #b45309;
+  background-color: var(--accent-orange-hover);
 }
 
 .btn-danger {
@@ -1353,6 +1590,86 @@ select option {
   margin-bottom: 12px;
 }
 
+/*
+ * Card mode for data tables (`UX-05`).
+ *
+ * On a 390 px phone an eight-column table is unreadable: the reader has to
+ * scroll horizontally, and the row loses its header after the first swipe, so a
+ * number can no longer be attributed to a column. Below 720 px each row becomes
+ * a stacked card instead, with the column name repeated from `data-label` in
+ * front of every value.
+ *
+ * `.card-table` is opt-in and requires each `<td>` to carry `data-label` —
+ * without it a cell has no caption and the row would be a wall of numbers, so
+ * the attribute is enforced by `tests/unit/responsiveTables.test.ts` rather than
+ * left to review.
+ */
+@media (max-width: 720px) {
+  .card-table thead {
+    /* The labels move into the cells, so the header row is redundant. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .card-table,
+  .card-table tbody,
+  .card-table tr,
+  .card-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .card-table tr {
+    margin-bottom: 10px;
+    padding: 4px 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-card);
+  }
+
+  .card-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 7px 0;
+    border: none;
+    border-bottom: 1px solid var(--border-subtle);
+    text-align: right !important;
+  }
+
+  .card-table tr td:last-child {
+    border-bottom: none;
+  }
+
+  .card-table td::before {
+    content: attr(data-label);
+    flex: 0 0 44%;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: normal;
+  }
+
+  /* A cell with no caption spans the card and is centred (empty state, actions). */
+  .card-table td:not([data-label]) {
+    justify-content: center;
+    text-align: center !important;
+  }
+
+  .card-table td:not([data-label])::before {
+    content: none;
+  }
+}
+
 .responsive-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1384,7 +1701,7 @@ select option {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   padding: 6px 14px;
   border-radius: var(--radius-pill);
@@ -1502,33 +1819,36 @@ select option {
 
 /* Light mode badges */
 [data-theme="light"] .badge-green {
-  background-color: #ecfdf5;
-  color: #059669;
-  border-color: #a7f3d0;
+  background-color: var(--status-good-bg);
+  /* Was #059669 on #ecfdf5 = 3.58:1, under the 4.5:1 AA floor for 12 px text. */
+  color: var(--status-good-text);
+  border-color: var(--status-good-border);
 }
 
 [data-theme="light"] .badge-yellow {
-  background-color: #fffbeb;
-  color: #d97706;
-  border-color: #fde68a;
+  background-color: var(--status-alert-bg);
+  /* #d97706 on #fffbeb was 3.29:1; the token pair is 5.91:1. */
+  color: var(--status-alert-text);
+  border-color: var(--status-alert-border);
 }
 
 [data-theme="light"] .badge-red {
-  background-color: #fef2f2;
-  color: #dc2626;
-  border-color: #fecaca;
+  background-color: var(--status-danger-bg);
+  color: var(--status-danger-text);
+  border-color: var(--status-danger-border);
 }
 
 [data-theme="light"] .badge-blue {
-  background-color: #eff6ff;
-  color: #0284c7;
-  border-color: #bae6fd;
+  background-color: var(--bg-inner);
+  color: var(--accent-blue-text);
+  border-color: var(--border-subtle);
 }
 
 [data-theme="light"] .badge-neutral {
-  background-color: #f1f5f9;
-  color: #475569;
-  border-color: #cbd5e1;
+  background-color: var(--bg-inner);
+  /* #475569 on #f1f5f9 was 6.9:1 — fine, kept on the token for consistency. */
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
 }
 
 /* Disiplin Tipografi Numerik (tabular-nums) & Shimmer Loader */
@@ -1664,7 +1984,7 @@ select option {
   gap: 4px;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   background-color: rgba(16, 185, 129, 0.15);
   color: #10b981;
@@ -1684,3 +2004,88 @@ div[data-nextjs-dialog-overlay] {
   pointer-events: none !important;
 }
 
+
+/* ============================================================================
+   Print stylesheet (`UX-10`)
+
+   `window.print()` used to emit the sidebar, the header, and — worst of all —
+   the dark theme, which burns toner and produces grey boxes where a page should
+   have text. Printed output is a document: white paper, black ink, no chrome.
+   ============================================================================ */
+@media print {
+  :root,
+  [data-theme='light'],
+  [data-theme='dark'] {
+    --bg-app: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-hover: #ffffff;
+    --bg-header: #ffffff;
+    --bg-inner: #ffffff;
+    --bg-chip: #ffffff;
+    --bg-table-header: #ffffff;
+    --bg-table-row: #ffffff;
+    --bg-input: #ffffff;
+    --border-subtle: #cbd5e1;
+    --text-main: #111827;
+    --text-title: #000000;
+    --text-muted: #4b5563;
+    --text-secondary: #1f2937;
+    --card-shadow: none;
+    --header-shadow: none;
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 12px;
+  }
+
+  /* Navigation and interactive chrome carry no meaning on paper. */
+  .portsight-sidebar,
+  .sidebar-backdrop,
+  .portsight-header,
+  .navbar-toggle-container,
+  .governance-subnav,
+  .no-print,
+  [data-no-print='true'],
+  button:not([data-print-keep]) {
+    display: none !important;
+  }
+
+  /* Reclaim the space the sidebar occupied. */
+  .portsight-layout-container,
+  .portsight-content-area,
+  .portsight-main,
+  main {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Long tables must repeat their header on every page. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  .kpi-card,
+  .data-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  a[href^='http']::after {
+    content: " (" attr(href) ")";
+    font-size: 12px;
+    color: #4b5563;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+}

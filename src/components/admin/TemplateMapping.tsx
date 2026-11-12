@@ -108,7 +108,7 @@ export default function TemplateMapping({
       <div className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title" style={{ fontSize: '18px' }}>
+            <h2 className="card-title" style={{ fontSize: '16px' }}>
               <Sliders size={20} color="#38bdf8" />
               <span>Studio Template Mapping & Konfigurasi Kolom Dinamis</span>
             </h2>
@@ -146,7 +146,7 @@ export default function TemplateMapping({
               onChange={(e) => handleDeptChange(e.target.value)}
             >
               {departments.map((d) => (
-                <option key={d.id} value={d.id} style={{ background: '#122137' }}>
+                <option key={d.id} value={d.id}>
                   {d.code} - {d.name}
                 </option>
               ))}
@@ -176,7 +176,7 @@ export default function TemplateMapping({
 
         {/* Columns Editor Table */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
             Daftar Pemetaan Kolom Spreadsheet ({currentCols.length} Kolom):
           </h3>
           <button onClick={handleAddColumn} className="btn btn-secondary btn-sm">
@@ -186,42 +186,42 @@ export default function TemplateMapping({
         </div>
 
         <div className="table-responsive">
-          <table className="data-table">
+          <table className="card-table data-table">
             <thead>
               <tr>
-                <th>Nama Kolom di Excel/Sheet</th>
-                <th>Target Field Database</th>
-                <th>Tipe Data</th>
-                <th style={{ textAlign: 'center' }}>Wajib?</th>
-                <th>Nilai Contoh (Sample)</th>
-                <th style={{ textAlign: 'center' }}>Aksi</th>
+                <th scope="col">Nama Kolom di Excel/Sheet</th>
+                <th scope="col">Target Field Database</th>
+                <th scope="col">Tipe Data</th>
+                <th scope="col" style={{ textAlign: 'center' }}>Wajib?</th>
+                <th scope="col">Nilai Contoh (Sample)</th>
+                <th scope="col" style={{ textAlign: 'center' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {currentCols.map((col, idx) => (
                 <tr key={idx}>
-                  <td>
+                  <td data-label="Nama Kolom di Excel/Sheet">
                     <input
                       type="text"
                       className="form-input"
-                      style={{ height: '34px', fontSize: '13px' }}
+                      style={{ height: '34px', fontSize: '12px' }}
                       value={col.column_name}
                       onChange={(e) => handleUpdateColumn(idx, 'column_name', e.target.value)}
                     />
                   </td>
-                  <td>
+                  <td data-label="Target Field Database">
                     <input
                       type="text"
                       className="form-input"
-                      style={{ height: '34px', fontSize: '13px', fontFamily: 'var(--font-mono)' }}
+                      style={{ height: '34px', fontSize: '12px', fontFamily: 'var(--font-mono)' }}
                       value={col.field_key}
                       onChange={(e) => handleUpdateColumn(idx, 'field_key', e.target.value)}
                     />
                   </td>
-                  <td>
+                  <td data-label="Tipe Data">
                     <select
                       className="form-input"
-                      style={{ height: '34px', fontSize: '13px' }}
+                      style={{ height: '34px', fontSize: '12px' }}
                       value={col.data_type}
                       onChange={(e) => handleUpdateColumn(idx, 'data_type', e.target.value)}
                     >
@@ -230,27 +230,27 @@ export default function TemplateMapping({
                       <option value="date">Tanggal (Date)</option>
                     </select>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Wajib?" style={{ textAlign: 'center' }}>
                     <input
                       type="checkbox"
                       checked={col.required}
                       onChange={(e) => handleUpdateColumn(idx, 'required', e.target.checked)}
                     />
                   </td>
-                  <td>
+                  <td data-label="Nilai Contoh (Sample)">
                     <input
                       type="text"
                       className="form-input"
-                      style={{ height: '34px', fontSize: '13px' }}
+                      style={{ height: '34px', fontSize: '12px' }}
                       value={String(col.sample_value || '')}
                       onChange={(e) => handleUpdateColumn(idx, 'sample_value', e.target.value)}
                     />
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Aksi" style={{ textAlign: 'center' }}>
                     <button
                       onClick={() => handleDeleteColumn(idx)}
                       className="btn btn-secondary btn-sm"
-                      style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+                      style={{ color: 'var(--status-danger-text)', borderColor: 'var(--status-danger-border)' }}
                       title="Hapus Kolom"
                     >
                       <Trash2 size={13} />

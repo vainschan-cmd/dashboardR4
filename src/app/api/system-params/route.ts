@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { DatabaseSync } from 'node:sqlite';
 import {
   dbQueries,
   getDbPath,
@@ -9,6 +10,7 @@ import {
   toSafeIntegrationCredentials,
 } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
+import { authorize } from '@/lib/policy';
 import { requireAuth } from '@/lib/rbac';
 import { systemParamsPayloadSchema, parseWithSchema } from '@/lib/validation';
 
@@ -59,6 +61,42 @@ export async function GET(req: NextRequest) {
   }
 }
 
+/**
+ * A switched database must already exist, be initialized, and contain at least one
+ * account. This prevents silently bootstrapping a fresh database (and its seed
+ * accounts) by pointing the app at a brand-new file.
+ */
+function validateDatabaseTarget(resolvedAbsolutePath: string): string | null {
+  if (!fs.existsSync(resolvedAbsolutePath)) {
+    return 'File database tujuan tidak ditemukan. Siapkan dan migrasikan database terlebih dahulu.';
+  }
+
+  let probe: DatabaseSync | null = null;
+  try {
+    probe = new DatabaseSync(resolvedAbsolutePath, { readOnly: true });
+    const table = probe
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'")
+      .get();
+    if (!table) {
+      return 'Database tujuan belum terinisialisasi (tabel users tidak ditemukan).';
+    }
+    const countRow = probe.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number } | undefined;
+    if (!countRow || Number(countRow.c) === 0) {
+      return 'Database tujuan tidak memiliki akun pengguna. Perpindahan dibatalkan.';
+    }
+  } catch {
+    return 'Database tujuan tidak dapat dibaca atau bukan file SQLite yang valid.';
+  } finally {
+    try {
+      probe?.close();
+    } catch {
+      // ignore close errors
+    }
+  }
+
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'system_params:manage' });
   if (!auth.authorized) return auth.response;
@@ -73,6 +111,30 @@ export async function POST(req: NextRequest) {
       );
     }
     const body = parsed.data;
+
+    // Database path changes are a system-level operation: Super Admin only.
+    // `system_params:manage` is also held by admin_regional, so it is not sufficient here.
+    const touchesDatabasePath = body.action === 'validate_db_path' || Boolean(body.dbConfig);
+    if (touchesDatabasePath) {
+      // `system_params:manage` is also held by admin_regional, so the policy adds
+      // the Super Admin requirement for this specific action.
+      const decision = authorize(
+        {
+          sub: auth.session.sub,
+          role: auth.session.role,
+          branch_id: auth.session.branch_id,
+          department_id: auth.session.department_id,
+          nipp: auth.session.nipp,
+        },
+        'config:update_database'
+      );
+      if (!decision.allowed) {
+        return NextResponse.json(
+          { success: false, error: decision.reason, message: decision.reason, code: decision.code },
+          { status: 403 }
+        );
+      }
+    }
 
     // 1. Action: Validasi Path Database (Strictly confined to ./data directory)
     if (body.action === 'validate_db_path') {
@@ -138,11 +200,22 @@ export async function POST(req: NextRequest) {
     // 2. Simpan Database Configuration (Lokasi & Engine)
     if (body.dbConfig) {
       const dbCfg = body.dbConfig;
-      const { safeRelativePath } = sanitizeSafeDataFilePath(
+      const { safeRelativePath, resolvedAbsolutePath } = sanitizeSafeDataFilePath(
         typeof dbCfg.sqlite_path === 'string' ? dbCfg.sqlite_path : undefined,
         'ed_dashboard.db',
         ['.db', '.sqlite', '.sqlite3']
       );
+
+      if (resolvedAbsolutePath !== getDbPath()) {
+        const targetError = validateDatabaseTarget(resolvedAbsolutePath);
+        if (targetError) {
+          return NextResponse.json(
+            { success: false, error: targetError, message: targetError },
+            { status: 400 }
+          );
+        }
+      }
+
       updatedDbConfig = dbQueries.saveDbConfig(
         {
           engine: dbCfg.engine === 'postgres' ? 'postgres' : 'sqlite',

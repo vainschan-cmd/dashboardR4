@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { User, UserRole } from './types';
-import {
-  getSessionFromRequest,
-  verifyJwtToken,
-  REFRESH_TOKEN_COOKIE,
-  type JwtSessionPayload,
-} from './auth';
+import { getSessionFromRequest, type JwtSessionPayload } from './auth';
 import {
   getCanonicalBranchCode,
   getBranchByCode,
@@ -179,18 +174,15 @@ export function resolveBranchIdentity(rawBranch?: string | null): { code: string
 /**
  * Extract active JWT session from request (checking both access token and refresh token fallback).
  */
+/**
+ * Extract the active ACCESS session from a request.
+ *
+ * Refresh tokens are deliberately NOT accepted here: a refresh token may only be
+ * exchanged at `/api/users/me`. Accepting it for general API access would defeat
+ * the short access-token lifetime and make revocation ambiguous.
+ */
 export async function resolveRequestSession(req: NextRequest): Promise<JwtSessionPayload | null> {
-  const session = await getSessionFromRequest(req);
-  if (session) return session;
-
-  const refreshCookie = req.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
-  if (refreshCookie) {
-    const refreshPayload = await verifyJwtToken(refreshCookie);
-    if (refreshPayload && refreshPayload.type === 'refresh') {
-      return refreshPayload;
-    }
-  }
-  return null;
+  return getSessionFromRequest(req);
 }
 
 /**
@@ -316,6 +308,24 @@ export function enforceVerificationStatusFilterForRead(
 
 const VALID_DEPARTMENT_IDS = new Set(['dept_ops', 'dept_keu', 'dept_sdm', 'dept_tek', 'dept_kom']);
 
+/**
+ * Match a whole word inside free text.
+ *
+ * Substring matching on short tokens is actively wrong in Indonesian: `"ti"`
+ * appears inside "peTIkemas", "informasi aktivitas", "kualiTas", etc., so a
+ * substring check routed terminal-operations users to the engineering
+ * department. Word boundaries keep `"Divisi TI"` working without swallowing
+ * unrelated words.
+ */
+function hasWord(text: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
+}
+
+function hasAnyWord(text: string, words: readonly string[]): boolean {
+  return words.some((word) => hasWord(text, word));
+}
+
 export function resolveDepartmentFromText(
   rawDeptId?: string | null,
   divisi?: string | null,
@@ -325,20 +335,26 @@ export function resolveDepartmentFromText(
     return rawDeptId.trim();
   }
   const combined = `${divisi || ''} ${departemen || ''}`.toLowerCase();
-  if (combined.includes('keuangan') || combined.includes('akuntansi') || combined.includes('finansial')) {
+
+  if (hasAnyWord(combined, ['keuangan', 'akuntansi', 'finansial', 'finance'])) {
     return 'dept_keu';
   }
-  if (combined.includes('sdm') || combined.includes('sumber daya') || combined.includes('umum')) {
+  if (hasAnyWord(combined, ['sdm', 'umum', 'hr', 'personalia']) || combined.includes('sumber daya')) {
     return 'dept_sdm';
   }
-  if (combined.includes('teknik') || combined.includes('peralatan') || combined.includes('fasilitas') || combined.includes('ti') || combined.includes('teknologi')) {
+  // Operations is checked before engineering: "Terminal Petikemas" belongs to
+  // operations even though it reads like equipment work.
+  if (hasAnyWord(combined, ['operasi', 'terminal', 'kapal', 'pelayanan'])) {
+    return 'dept_ops';
+  }
+  if (
+    hasAnyWord(combined, ['teknik', 'teknologi', 'peralatan', 'fasilitas', 'ti', 'it', 'engineering']) ||
+    combined.includes('teknologi informasi')
+  ) {
     return 'dept_tek';
   }
-  if (combined.includes('komersial') || combined.includes('pemasaran') || combined.includes('pengembangan')) {
+  if (hasAnyWord(combined, ['komersial', 'pemasaran', 'pengembangan', 'commercial'])) {
     return 'dept_kom';
-  }
-  if (combined.includes('operasi') || combined.includes('terminal') || combined.includes('kapal')) {
-    return 'dept_ops';
   }
   return rawDeptId && VALID_DEPARTMENT_IDS.has(rawDeptId) ? rawDeptId : 'dept_ops';
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import { dbQueries, toSafeUser } from '@/lib/db';
 import { requireAuth } from '@/lib/rbac';
-import { MAX_UPLOAD_FILE_BYTES } from '@/lib/validation';
+import { MAX_UPLOAD_FILE_BYTES, userSyncDriveSchema, parseWithSchema } from '@/lib/validation';
 import {
   exportUsersToSpreadsheet,
   importUsersFromSpreadsheet,
@@ -37,17 +37,22 @@ export async function POST(req: NextRequest) {
       }
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const result = importUsersFromSpreadsheet(buffer);
+      const result = importUsersFromSpreadsheet(buffer, {
+        actorRole: auth.session.role,
+        actorNipp: auth.session.nipp,
+      });
 
       return NextResponse.json({
         success: true,
         direction: 'pull',
-        message: `Berhasil mengimpor spreadsheet "${file.name}": ${result.createdCount} PIC baru ditambahkan, ${result.updatedCount} PIC diperbarui. Total ${result.users.length} akun aktif tersinkron ke My Drive.`,
+        message: `Berhasil mengimpor spreadsheet "${file.name}": ${result.createdCount} PIC baru ditambahkan, ${result.updatedCount} PIC diperbarui${result.rejectedCount > 0 ? `, ${result.rejectedCount} baris ditolak` : ''}. Total ${result.users.length} akun aktif tersinkron ke My Drive.`,
         account: DRIVE_ACCOUNT,
         fileName: file.name,
         totalUsers: result.users.length,
         createdCount: result.createdCount,
         updatedCount: result.updatedCount,
+        rejectedCount: result.rejectedCount,
+        rejected: result.rejected,
         syncedAt: new Date().toISOString(),
       });
     }
@@ -55,22 +60,26 @@ export async function POST(req: NextRequest) {
     // JSON payload or plain request
     let action = 'push';
     try {
-      const body = (await req.json()) as { action?: string; direction?: string };
-      const rawAction = body?.action || body?.direction;
-      if (typeof rawAction === 'string') {
-        action = rawAction.toLowerCase();
+      const rawBody = await req.json();
+      const parsed = parseWithSchema(userSyncDriveSchema, rawBody ?? {});
+      if (!parsed.success) {
+        return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
       }
+      action = parsed.data.action;
     } catch {
-      // default to push
+      // No JSON body at all: behave like a push (the documented default).
     }
 
     if (action === 'pull' || action === 'import' || action === 'ambil') {
-      const result = importUsersFromSpreadsheet();
+      const result = importUsersFromSpreadsheet(undefined, {
+        actorRole: auth.session.role,
+        actorNipp: auth.session.nipp,
+      });
 
       return NextResponse.json({
         success: true,
         direction: 'pull',
-        message: `Berhasil mengambil data dari Spreadsheet My Drive (${result.sourceType === 'downloads' ? 'folder Downloads' : 'data internal'}): ${result.createdCount} PIC baru ditambahkan, ${result.updatedCount} PIC diperbarui. Total ${result.users.length} PIC siap digunakan.`,
+        message: `Berhasil mengambil data dari Spreadsheet My Drive (${result.sourceType === 'downloads' ? 'folder Downloads' : 'data internal'}): ${result.createdCount} PIC baru ditambahkan, ${result.updatedCount} PIC diperbarui${result.rejectedCount > 0 ? `, ${result.rejectedCount} baris ditolak` : ''}. Total ${result.users.length} PIC siap digunakan.`,
         account: DRIVE_ACCOUNT,
         fileName: MASTER_USER_FILE,
         source: result.sourcePath,
@@ -78,6 +87,8 @@ export async function POST(req: NextRequest) {
         totalUsers: result.users.length,
         createdCount: result.createdCount,
         updatedCount: result.updatedCount,
+        rejectedCount: result.rejectedCount,
+        rejected: result.rejected,
         syncedAt: new Date().toISOString(),
       });
     } else {

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import {
   LayoutDashboard,
   CalendarRange,
@@ -16,7 +17,6 @@ import {
   FileSpreadsheet,
   Sliders,
   History,
-  PlusCircle,
   LogOut,
   Shield,
   X,
@@ -51,9 +51,7 @@ export default function Sidebar({
   canManageUsers = false,
   isOpenMobile = false,
   onCloseMobile,
-  theme = 'light',
   onLogout,
-  onOpenManualInput,
 }: SidebarProps) {
   // 1. Collapsible Local State (Default: false / Expanded)
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
@@ -199,9 +197,11 @@ export default function Sidebar({
                 transition: 'all 0.2s ease',
               }}
             >
-              <img
+              <Image
                 src="/pelindo-logo.png"
                 alt="Logo Pelindo"
+                width={32}
+                height={32}
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               />
             </div>
@@ -211,10 +211,10 @@ export default function Sidebar({
               <div className="sidebar-brand-text" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <span className="brand-title" style={{ fontSize: '14px', fontWeight: 800 }}>PELINDO R4</span>
-                  <span className="brand-accent" style={{ fontSize: '13px', fontWeight: 800 }}>PortDash</span>
+                  <span className="brand-accent" style={{ fontSize: '12px', fontWeight: 800 }}>PortDash</span>
                 </div>
-                <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  Regional 4 Executive Suite
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Regional 4
                 </span>
               </div>
             )}
@@ -253,16 +253,16 @@ export default function Sidebar({
               <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {currentUser?.name?.split(',')[0] || 'Pengguna'}
               </span>
-              <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)', fontWeight: 600 }}>
+              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)', fontWeight: 600 }}>
                 [{currentUser?.nipp || '-'}]
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
               <span
                 style={{
-                  fontSize: '10px',
+                  fontSize: '12px',
                   fontWeight: 700,
-                  color: isBod ? '#38bdf8' : 'var(--accent-cyan)',
+                  color: isBod ? 'var(--accent-blue-text)' : 'var(--accent-cyan)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
@@ -275,7 +275,7 @@ export default function Sidebar({
                 <Shield size={10} />
                 {getRoleLabel()}
               </span>
-              <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: 600 }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
                 {currentUser?.branch_id || 'R99'}
               </span>
             </div>
@@ -322,7 +322,7 @@ export default function Sidebar({
                 <div className="sidebar-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span>PENGELOLAAN & TATA KELOLA</span>
                   {pendingCount > 0 && (
-                    <span style={{ backgroundColor: '#fbbf24', color: '#0e1b2e', fontSize: '9.5px', fontWeight: 800, padding: '1px 5px', borderRadius: '8px' }}>
+                    <span style={{ backgroundColor: 'var(--status-alert-text)', color: 'var(--text-on-alert)', fontSize: '12px', fontWeight: 800, padding: '1px 5px', borderRadius: '8px' }}>
                       {pendingCount}
                     </span>
                   )}
@@ -366,7 +366,7 @@ export default function Sidebar({
                 <div className="sidebar-simulation-dot" />
                 <span>DATA SQLITE TERINTEGRASI</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
                 <span>Pelindo Regional 4</span>
                 {onLogout && (
                   <button
@@ -375,12 +375,12 @@ export default function Sidebar({
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#f87171',
+                      color: 'var(--status-danger-text)',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       fontWeight: 600,
                       padding: '2px 4px',
                     }}
@@ -402,7 +402,7 @@ export default function Sidebar({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#f87171',
+                  color: 'var(--status-danger-text)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -438,11 +438,11 @@ export default function Sidebar({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
               <LogOut size={18} strokeWidth={1.75} color="#ef4444" />
-              <h4 id="sidebar-logout-title" style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-title)' }}>
+              <h4 id="sidebar-logout-title" style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
                 Konfirmasi Keluar Sesi
               </h4>
             </div>
-            <p style={{ margin: '0 0 18px 0', fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 18px 0', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               Apakah Anda yakin ingin mengakhiri sesi aktif dan keluar dari akun ini?
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -467,7 +467,7 @@ export default function Sidebar({
                   fontWeight: 700,
                   borderRadius: '6px',
                   backgroundColor: '#ef4444',
-                  color: '#ffffff',
+                  color: 'var(--text-title)',
                   border: 'none',
                   cursor: 'pointer',
                 }}
@@ -525,9 +525,9 @@ export default function Sidebar({
               style={{
                 position: 'relative',
                 zIndex: 1,
-                backgroundColor: '#fbbf24',
-                color: '#0e1b2e',
-                fontSize: '10px',
+                backgroundColor: 'var(--status-alert-text)',
+                color: 'var(--text-on-alert)',
+                fontSize: '12px',
                 fontWeight: 800,
                 padding: '1px 6px',
                 borderRadius: '10px',

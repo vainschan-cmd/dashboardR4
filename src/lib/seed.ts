@@ -1,5 +1,6 @@
 import { getDb } from './db';
 import { hashPassword } from './auth';
+import { resolveBootstrapPassword } from './bootstrap';
 import { Branch, Department, User, KPIIndicator, StatusColor } from './types';
 
 export function runSeed(_force = false) {
@@ -219,14 +220,14 @@ export function runSeed(_force = false) {
     stmtDept.run(d.id, d.code, d.name, d.pic_name, d.pic_email, d.active ? 1 : 0, d.description || '');
   }
 
-  // 3. Users (RBAC & PIC Master)
+  // 3. Users (RBAC & PIC Master) — credentials resolved via bootstrap module, never hardcoded
   const users: User[] = [
-    { id: 'usr_viewer', username: '10000', nipp: '10000', name: 'Akhirman (BOD)', email: 'bod.r4@pelindo.co.id', divisi: 'Direksi Pelindo Regional 4', departemen: 'Kantor Regional 4', password: 'password123', role: 'viewer', branch_id: 'R99', active: true },
-    { id: 'usr_super', username: '10001', nipp: '10001', name: 'M Mansyur', email: 'superadmin@pelindo.co.id', divisi: 'Divisi Teknologi Informasi & Digitalisasi', departemen: 'Departemen Tata Kelola & Solusi TI', password: 'password123', role: 'super_admin', branch_id: 'R99', active: true },
-    { id: 'usr_adminreg', username: '10002', nipp: '10002', name: 'Asqar', email: 'admin.r4@pelindo.co.id', divisi: 'Divisi Strategi & Manajemen Kinerja Regional', departemen: 'Departemen Monitoring & Evaluasi Regional 4', password: 'password123', role: 'admin_regional', branch_id: 'R99', active: true },
-    { id: 'usr_pic_ops', username: '10003', nipp: '10003', name: 'Heiruddin', email: 'rudi.ops@pelindo.co.id', divisi: 'Divisi Operasi & Pelayanan Kapal', departemen: 'Departemen Pelayanan Kapal & Barang', password: 'password123', role: 'pic_dept_regional', department_id: 'dept_ops', branch_id: 'R99', active: true },
-    { id: 'usr_pic_mks', username: '10004', nipp: '10004', name: 'Nuka', email: 'ahmad.mks@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Makassar', password: 'password123', role: 'pic_cabang', branch_id: 'R01', active: true },
-    { id: 'usr_pic_bpn', username: '10008', nipp: '10008', name: 'Fachruddin', email: 'faisal.bpn@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Balikpapan', password: 'password123', role: 'pic_cabang', branch_id: 'R04', active: true },
+    { id: 'usr_viewer', username: '10000', nipp: '10000', name: 'Akhirman (BOD)', email: 'bod.r4@pelindo.co.id', divisi: 'Direksi Pelindo Regional 4', departemen: 'Kantor Regional 4', role: 'viewer', branch_id: 'R99', active: true },
+    { id: 'usr_super', username: '10001', nipp: '10001', name: 'M Mansyur', email: 'superadmin@pelindo.co.id', divisi: 'Divisi Teknologi Informasi & Digitalisasi', departemen: 'Departemen Tata Kelola & Solusi TI', role: 'super_admin', branch_id: 'R99', active: true },
+    { id: 'usr_adminreg', username: '10002', nipp: '10002', name: 'Asqar', email: 'admin.r4@pelindo.co.id', divisi: 'Divisi Strategi & Manajemen Kinerja Regional', departemen: 'Departemen Monitoring & Evaluasi Regional 4', role: 'admin_regional', branch_id: 'R99', active: true },
+    { id: 'usr_pic_ops', username: '10003', nipp: '10003', name: 'Heiruddin', email: 'rudi.ops@pelindo.co.id', divisi: 'Divisi Operasi & Pelayanan Kapal', departemen: 'Departemen Pelayanan Kapal & Barang', role: 'pic_dept_regional', department_id: 'dept_ops', branch_id: 'R99', active: true },
+    { id: 'usr_pic_mks', username: '10004', nipp: '10004', name: 'Nuka', email: 'ahmad.mks@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Makassar', role: 'pic_cabang', branch_id: 'R01', active: true },
+    { id: 'usr_pic_bpn', username: '10008', nipp: '10008', name: 'Fachruddin', email: 'faisal.bpn@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Balikpapan', role: 'pic_cabang', branch_id: 'R04', active: true },
   ];
 
   const stmtUser = db.prepare(`
@@ -242,7 +243,7 @@ export function runSeed(_force = false) {
       u.email || `${u.nipp}@pelindo.co.id`,
       u.divisi,
       u.departemen,
-      hashPassword(u.password || 'password123'),
+      hashPassword(resolveBootstrapPassword(u.nipp)),
       u.role,
       u.branch_id || null,
       u.department_id || null,

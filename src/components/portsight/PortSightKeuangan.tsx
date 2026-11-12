@@ -3,21 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
   BarChart,
   Bar
 } from 'recharts';
-import { DollarSign, TrendingUp, Search, Building2, Layers, PlusCircle } from 'lucide-react';
-import { formatRupiahFull } from '@/lib/formatters';
+import { DollarSign, TrendingUp, Search, Layers, PlusCircle } from 'lucide-react';
+import { formatRupiahFull, formatPercentDelta } from '@/lib/formatters';
 import { isBranchMatch } from '@/lib/constants';
+import LoadingState from '@/components/ui/LoadingState';
 
 interface FinItem {
   year: number;
@@ -44,8 +40,8 @@ interface PortSightKeuanganProps {
 }
 
 export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightKeuanganProps) {
-  const [data, setData] = useState<FinItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<FinItem[]>([]);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -94,21 +90,15 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
   const totalCostRp = rawCostRp === 0 ? 0 : (rawCostRp < 0 ? rawCostRp : -rawCostRp);
   const totalOpRp = opRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
   const totalNetRp = netRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-  const totalRevM = revRows.reduce((a, b) => a + b.konsolidasiM, 0);
 
+  // Comparison metrics stay null when the dataset has no RKA/YoY value.
   const avgRevRka = revRows.length > 0
     ? Number((revRows.reduce((a, b) => a + b.rka, 0) / revRows.length).toFixed(1))
-    : 101.8;
+    : null;
 
   const avgRevYoy = revRows.length > 0
     ? Number((revRows.reduce((a, b) => a + b.yoy, 0) / revRows.length).toFixed(1))
-    : 107.6;
-
-  // Donut data
-  const donutData = [
-    { name: 'Tercapai', value: Math.min(Math.round(avgRevRka), 100), color: '#38bdf8' },
-    { name: 'Sisa Target', value: Math.max(100 - Math.min(Math.round(avgRevRka), 100), 0), color: '#1e3557' },
-  ];
+    : null;
 
   // Top 10 Branches by Pendapatan
   const topBranches = revRows
@@ -124,17 +114,9 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
     .sort((a, b) => b.revenueRp - a.revenueRp)
     .slice(0, 10);
 
-  const monthlyTrend = [
-    { month: 'Jan', y2025: 200, rkap: 213, y2026: 215 },
-    { month: 'Feb', y2025: 195, rkap: 211, y2026: 210 },
-    { month: 'Mar', y2025: 210, rkap: 221, y2026: 224 },
-    { month: 'Apr', y2025: 208, rkap: 219, y2026: 220 },
-    { month: 'Mei', y2025: 214, rkap: 226, y2026: 231 },
-    { month: 'Jun', y2025: 212, rkap: 225, y2026: 229 },
-    { month: 'Jul', y2025: 218, rkap: 228, y2026: 234 },
-    { month: 'Agu', y2025: 222, rkap: 230, y2026: 238 },
-    { month: 'Sep', y2025: 223, rkap: 232, y2026: totalRevM > 0 ? Number((totalRevM / 9).toFixed(1)) : 241.5 },
-  ];
+  if (loading) {
+    return <LoadingState label="Memuat data Keuangan…" />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -145,11 +127,15 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
             <span className="kpi-header-label">Pendapatan Usaha Konsolidasi</span>
             <DollarSign size={20} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
             {formatRupiahFull(totalRevRp)}
           </div>
-          <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
-            {avgRevRka}% dari RKA YTD ({avgRevYoy > 100 ? `+${(avgRevYoy - 100).toFixed(1)}% YoY` : `${avgRevYoy}% YoY`})
+          <div style={{ fontSize: '12px', color: 'var(--status-good-text)', fontWeight: 600 }}>
+            {avgRevRka === null
+              ? 'RKA belum tersedia'
+              : `${avgRevRka}% dari RKA YTD`}
+            {avgRevYoy !== null &&
+              ` (${formatPercentDelta(avgRevYoy, 1)} YoY)`}
           </div>
         </div>
 
@@ -158,10 +144,10 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
             <span className="kpi-header-label">Beban Usaha Konsolidasi</span>
             <TrendingUp size={20} color="#ef4444" />
           </div>
-          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
             {formatRupiahFull(totalCostRp)}
           </div>
-          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Beban operasional & non-operasional cabang
           </div>
         </div>
@@ -171,10 +157,10 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
             <span className="kpi-header-label">Laba Usaha (Operating Profit)</span>
             <TrendingUp size={20} color="#10b981" />
           </div>
-          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
             {formatRupiahFull(totalOpRp)}
           </div>
-          <div style={{ fontSize: '12px', color: '#34d399', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: 'var(--status-good-text)', fontWeight: 600 }}>
             Margin Operasi Prima
           </div>
         </div>
@@ -184,48 +170,47 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
             <span className="kpi-header-label">Laba Bersih Konsolidasi</span>
             <Layers size={20} color="#a855f7" />
           </div>
-          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: '#ffffff', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
+          <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
             {formatRupiahFull(totalNetRp)}
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Setelah pajak & pos konsolidasi
           </div>
         </div>
       </div>
 
-      {/* Top Split: Pendapatan Bulanan Chart vs Top Cabang Bar Chart */}
+      {/* Top Split: Pendapatan Bulanan vs Top Cabang Bar Chart */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '18px' }}>
         <div className="dark-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <div>
               <div className="dark-card-title" style={{ margin: 0 }}>Tren Pendapatan Bulanan (Miliar Rp)</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>Perbandingan Realisasi 2026 vs RKAP vs Realisasi 2025</div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 12, height: 2, backgroundColor: '#64748b' }} /> 2025
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 12, height: 2, backgroundColor: '#f97316' }} /> RKAP 2026
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 12, height: 2, backgroundColor: '#38bdf8' }} /> 2026
-              </span>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Perbandingan Realisasi 2026 vs RKAP vs Realisasi 2025
+              </div>
             </div>
           </div>
 
-          <div style={{ height: '220px', width: '100%' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyTrend} margin={{ top: 10, right: 15, left: -15, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <YAxis domain={['auto', 'auto']} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <Tooltip contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }} />
-                <Line type="monotone" dataKey="y2025" stroke="#64748b" strokeDasharray="3 3" dot={false} strokeWidth={2} />
-                <Line type="monotone" dataKey="rkap" stroke="#f97316" dot={false} strokeWidth={2} />
-                <Line type="monotone" dataKey="y2026" stroke="#38bdf8" strokeWidth={3} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
+          {/* No monthly time-series is exposed by /api/modules-data yet.
+              Avoid rendering a synthetic chart that looks like real data. */}
+          <div
+            style={{
+              height: '220px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              border: '1px dashed var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-muted)',
+              fontSize: '12px',
+              textAlign: 'center',
+              padding: '16px',
+            }}
+          >
+            <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Tren bulanan belum tersedia</span>
+            <span>Data historis per bulan belum dimuat oleh API. Grafik akan tampil setelah seri waktu tersedia.</span>
           </div>
         </div>
 
@@ -233,17 +218,17 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
         <div className="dark-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <div className="dark-card-title" style={{ margin: 0 }}>Top Cabang - Pendapatan Konsolidasi</div>
-            <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700 }}>Sheet finansial</span>
+            <span style={{ fontSize: '12px', color: 'var(--accent-blue-text)', fontWeight: 700 }}>Sheet finansial</span>
           </div>
 
           <div style={{ height: '220px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={topBranches.slice(0, 6)} margin={{ top: 5, right: 10, left: -10, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-                <XAxis dataKey="name" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
                   formatter={(_val: unknown, _name: unknown, item: { payload?: { revenueRp?: number } }) => [formatRupiahFull(item.payload?.revenueRp || 0), 'Pendapatan']}
                 />
                 <Bar dataKey="revenueM" fill="#38bdf8" radius={[4, 4, 0, 0]} />
@@ -260,7 +245,7 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
             <div className="dark-card-title" style={{ margin: 0 }}>
               Tabel Rekapitulasi Finansial Cabang Pelabuhan
             </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Menampilkan {filteredData.length} baris finansial (Pendapatan, Beban, Laba) dari sheet finansial (regdashr@gmail.com)
             </div>
           </div>
@@ -275,9 +260,9 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  backgroundColor: '#0284c7',
-                  borderColor: '#0284c7',
-                  color: '#ffffff',
+                  backgroundColor: 'var(--accent-blue)',
+                  borderColor: 'var(--accent-blue)',
+                  color: 'var(--text-on-accent)',
                   padding: '6px 12px',
                   fontSize: '12px',
                   borderRadius: '6px',
@@ -293,7 +278,7 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
             )}
 
             <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 className="filter-select"
@@ -307,44 +292,44 @@ export default function PortSightKeuangan({ selectedTerminal = 'ALL', onOpenManu
         </div>
 
         <div className="table-responsive">
-          <table className="dark-table">
+          <table className="card-table dark-table">
             <thead>
               <tr>
-                <th>Kode</th>
-                <th>Cabang Pelabuhan</th>
-                <th>Pos Rekening</th>
-                <th style={{ textAlign: 'right' }}>Nilai Cabang (Rp)</th>
-                <th style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
-                <th style={{ textAlign: 'right' }}>PMT / PTP (Rp)</th>
-                <th style={{ textAlign: 'center' }}>% RKA</th>
-                <th style={{ textAlign: 'center' }}>% YoY</th>
+                <th scope="col">Kode</th>
+                <th scope="col">Cabang Pelabuhan</th>
+                <th scope="col">Pos Rekening</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Nilai Cabang (Rp)</th>
+                <th scope="col" style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
+                <th scope="col" style={{ textAlign: 'right' }}>PMT / PTP (Rp)</th>
+                <th scope="col" style={{ textAlign: 'center' }}>% RKA</th>
+                <th scope="col" style={{ textAlign: 'center' }}>% YoY</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.slice(0, 100).map((r, i) => (
                 <tr key={i}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{r.branchCode}</td>
-                  <td style={{ fontWeight: 600, color: '#ffffff' }}>{r.branchName}</td>
-                  <td style={{ fontWeight: 600, color: r.rekening.includes('Beban') ? '#ef4444' : r.rekening.includes('Laba') ? '#10b981' : '#38bdf8' }}>
+                  <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{r.branchCode}</td>
+                  <td data-label="Cabang Pelabuhan" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.branchName}</td>
+                  <td data-label="Pos Rekening" style={{ fontWeight: 600, color: r.rekening.includes('Beban') ? 'var(--status-danger-text)' : r.rekening.includes('Laba') ? 'var(--status-good-text)' : 'var(--accent-blue-text)' }}>
                     {r.rekening}
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 600, color: '#cbd5e1' }}>
+                  <td data-label="Nilai Cabang (Rp)" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
                     {formatRupiahFull(r.cabangRp)}
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 800, color: '#ffffff' }}>
+                  <td data-label="Konsolidasi (Rp)" style={{ textAlign: 'right', fontWeight: 800, color: 'var(--text-title)' }}>
                     {formatRupiahFull(r.konsolidasiRp)}
                   </td>
-                  <td style={{ textAlign: 'right', color: '#94a3b8', fontSize: '12px' }}>
+                  <td data-label="PMT / PTP (Rp)" style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '12px' }}>
                     {formatRupiahFull(r.pmtRp + r.ptpRp)}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="% RKA" style={{ textAlign: 'center' }}>
                     <span className={`badge ${r.rka >= 100 ? 'badge-green' : r.rka >= 90 ? 'badge-yellow' : 'badge-red'}`}>
                       {r.rka}%
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="% YoY" style={{ textAlign: 'center' }}>
                     <span className={`badge ${r.yoy >= 100 ? 'badge-green' : 'badge-yellow'}`}>
-                      {r.yoy > 100 ? `+${(r.yoy - 100).toFixed(1)}%` : `${(r.yoy - 100).toFixed(1)}%`}
+                      {formatPercentDelta(r.yoy, 1)}
                     </span>
                   </td>
                 </tr>
