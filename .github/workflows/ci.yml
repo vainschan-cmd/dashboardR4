@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so a credential committed and later removed is still caught.
           fetch-depth: 0
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -77,7 +77,7 @@ jobs:
       ALLOW_PUBLIC_REGISTRATION: 'false'
       DATABASE_PATH: data/ci_dashboard.db
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Use Node.js
         uses: actions/setup-node@v4
