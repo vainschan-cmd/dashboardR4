@@ -32,8 +32,23 @@ function walk(dir: string): string[] {
   return out;
 }
 
-/** `color: '#rrggbb'` — a literal text colour in a JSX style or a CSS rule. */
-const LITERAL_TEXT_COLOR = /(?<![-\w])color:\s*'(#[0-9a-fA-F]{3,8})'/g;
+/** `color: '#rrggbb'` / `color: "#rrggbb"` / `color="#rrggbb"` — a literal text colour. */
+const LITERAL_TEXT_COLOR = /(?<![-"\w])color(?:\s*:\s*|=\s*)(["'`])(#[0-9a-fA-F]{3,8})\1/g;
+
+/**
+ * A `color:` declaration can be a multi-line ternary:
+ *
+ *     color: isCost ? '#ef4444' : r.REKENING.includes('Laba') ? '#10b981' : '#0284c7',
+ *
+ * and that shape is exactly what slipped through the first migration — 17 text
+ * nodes across Keuangan and Peralatan stayed frozen on a light-theme literal,
+ * failing AA at 2.49:1 and 2.95:1. Any quoted hex on a line that mentions a
+ * colour keyword is treated as a foreground unless it is a surface (fill,
+ * stroke, background, border, shadow, chart gradient).
+ */
+const HEX_LITERAL = /['"`](#[0-9a-fA-F]{3,8})['"`]/g;
+const SURFACE_CONTEXT = /fill|stroke|background|border|shadow|gradient|accentColor|outline|caret/i;
+const COLOUR_CONTEXT = /(?<![-"\w])color(?![\w])/i;
 
 /** Standalone error pages render without the stylesheet, so they keep literals. */
 const STANDALONE_PAGES = ['src/app/global-error.tsx', 'src/app/error.tsx', 'src/app/not-found.tsx'];
@@ -44,10 +59,20 @@ describe('warna teks bertoken (CODE-06)', () => {
     for (const file of walk(SRC)) {
       const relative = file.replace(SRC, 'src');
       if (STANDALONE_PAGES.includes(relative)) continue;
-      const source = readFileSync(file, 'utf8');
-      for (const match of source.matchAll(LITERAL_TEXT_COLOR)) {
-        offenders.push(`${relative}: color: '${match[1]}'`);
-      }
+      if (!/\.tsx?$/.test(relative)) continue;
+      const lines = readFileSync(file, 'utf8').split('\n');
+      lines.forEach((line, index) => {
+        for (const match of line.matchAll(LITERAL_TEXT_COLOR)) {
+          offenders.push(`${relative}:${index + 1} color: '${match[2]}'`);
+        }
+        if (!COLOUR_CONTEXT.test(line)) return;
+        if (SURFACE_CONTEXT.test(line)) return;
+        for (const match of line.matchAll(HEX_LITERAL)) {
+          // `color: resolve(foo, '#10b981')` is already covered above; this pass
+          // only exists for ternaries and variable colours on their own line.
+          offenders.push(`${relative}:${index + 1} color literal ${match[1]}`);
+        }
+      });
     }
     expect(offenders).toEqual([]);
   });

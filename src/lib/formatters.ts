@@ -105,6 +105,42 @@ export function formatNominalFull(val: number | null | undefined): string {
   return isNegative ? `-${formatted}` : formatted;
 }
 
+/**
+ * Format khusus metrik Beban: **selalu** satuan Triliun (T) dengan pembulatan
+ * besaran ke atas (ROUNDUP 2 desimal menjauhi nol), meskipun nominalnya di bawah
+ * 1 Triliun — mis. `-293.827.270.311` → `- Rp 0,30 T`.
+ *
+ * Alasannya bukan kosmetik: nilai Beban dan Pendapatan dibandingkan berdampingan,
+ * dan kalau Beban turun ke "Jt" sementara Pendapatan tetap "T", pembaca harus
+ * mengonversi satuan di kepalanya sendiri untuk melihat selisihnya.
+ */
+export function formatBebanTriliun(
+  nominal: number | null | undefined,
+  options?: { includeCurrency?: boolean }
+): string {
+  const includeCurrency = options?.includeCurrency ?? true;
+  if (!isUsable(nominal) || Math.abs(nominal) < 0.5) {
+    return includeCurrency ? 'Rp 0,00 T' : '0,00 T';
+  }
+
+  // Membulatkan ke atas pada kelipatan 0,01 T (10 Miliar), dengan toleransi
+  // 1e-11 supaya noise IEEE 754 tidak menaikkan angka yang sudah pas.
+  const scaled = Math.abs(nominal) / 10_000_000_000;
+  const floored = Math.floor(scaled);
+  const absUnits = scaled - floored <= 1e-11 ? floored : Math.ceil(scaled);
+  const absRounded = absUnits / 100;
+  const isNegative = nominal < 0 && absRounded > 0;
+  const formattedNumber = absRounded.toLocaleString(LOCALE, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  if (includeCurrency) {
+    return isNegative ? `- Rp ${formattedNumber} T` : `Rp ${formattedNumber} T`;
+  }
+  return isNegative ? `-${formattedNumber} T` : `${formattedNumber} T`;
+}
+
 /** `{ year: 2026, month: 9 }` → `September 2026` */
 export function formatMonthYear(year: number, month: number): string {
   if (!isUsable(year) || !isUsable(month) || month < 1 || month > 12) return '—';

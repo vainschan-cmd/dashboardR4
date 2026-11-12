@@ -96,7 +96,7 @@ export default function DataRecordsView({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
         <div className="card" style={{ padding: '14px 18px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Database size={15} color="#38bdf8" />
+            <Database size={15} color="var(--accent-blue-text)" />
             <span>Total Record Tersimpan</span>
           </div>
           <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', marginTop: '6px' }}>
@@ -109,7 +109,7 @@ export default function DataRecordsView({
 
         <div className="card" style={{ padding: '14px 18px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <CheckCircle2 size={15} color="#34d399" />
+            <CheckCircle2 size={15} color="var(--status-good-text)" />
             <span>Terverifikasi Resmi</span>
           </div>
           <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-good-text)', marginTop: '6px' }}>
@@ -122,7 +122,7 @@ export default function DataRecordsView({
 
         <div className="card" style={{ padding: '14px 18px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Clock size={15} color="#fbbf24" />
+            <Clock size={15} color="var(--status-alert-text)" />
             <span>Menunggu Verifikasi</span>
           </div>
           <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-alert-text)', marginTop: '6px' }}>
@@ -135,7 +135,7 @@ export default function DataRecordsView({
 
         <div className="card" style={{ padding: '14px 18px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <AlertTriangle size={15} color="#f87171" />
+            <AlertTriangle size={15} color="var(--status-danger-text)" />
             <span>Perlu Revisi</span>
           </div>
           <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-danger-text)', marginTop: '6px' }}>
@@ -152,7 +152,7 @@ export default function DataRecordsView({
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '16px' }}>
-              <Database size={20} color="#38bdf8" />
+              <Database size={20} color="var(--accent-blue-text)" />
               <span>Daftar Data Record Kinerja Pelabuhan (Raw Data)</span>
             </h2>
             <p className="card-subtitle">
@@ -176,7 +176,7 @@ export default function DataRecordsView({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
           {/* Search Bar */}
           <div style={{ position: 'relative', flex: '1 1 240px', minWidth: '200px' }}>
-            <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '11px' }} />
+            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '11px' }} />
             <input
               type="text"
               className="form-input"
@@ -286,7 +286,7 @@ export default function DataRecordsView({
           </div>
         ) : filteredRecords.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', backgroundColor: 'var(--bg-inner)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
-            <Database size={36} color="#94a3b8" style={{ margin: '0 auto 10px' }} />
+            <Database size={36} color="var(--text-muted)" style={{ margin: '0 auto 10px' }} />
             <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>Tidak Ada Data Ditemukan</h4>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
               Tidak ada record kinerja yang cocok dengan kombinasi filter yang dipilih.

@@ -25,24 +25,22 @@ import {
 } from 'recharts';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
-import { User, UserRole } from '@/lib/types';
+import {
+  aggregateFinansialByRekening,
+  canonicalRekening,
+  formatPercentOrDash,
+  parseMetricPercent,
+  parseRealisasi,
+} from '@/lib/finansialHelpers';
+import {
+  aggregatePeralatanKpis,
+  displayNullableText,
+  formatTanggalID,
+  normalizeKondisi,
+} from '@/lib/peralatanHelpers';
+import { FinansialRecord, PeralatanRecord, User, UserRole } from '@/lib/types';
 
-interface FinRecord {
-  year: number;
-  month: number;
-  branchCode: string;
-  branchName: string;
-  rekening: string;
-  cabangRp: number;
-  pmtRp: number;
-  ptpRp: number;
-  pslRp: number;
-  pjmRp: number;
-  eliminasiRp: number;
-  konsolidasiRp: number;
-  yoy: number;
-  rka: number;
-}
+type FinRecord = FinansialRecord;
 
 interface OpkomRecord {
   year: number;
@@ -79,19 +77,6 @@ interface UtilisasiRecord {
   sor: number;
 }
 
-interface PeralatanRecord {
-  year: number;
-  month: number;
-  branchCode: string;
-  branchName: string;
-  kdAlat: string;
-  nmAlat: string;
-  singkatan: string;
-  jnsAlat: string;
-  jumlah: number;
-  utilisasi: number;
-}
-
 interface FasilitasRecord {
   year: number;
   month: number;
@@ -115,7 +100,6 @@ const MONTH_NAMES = [
 interface PortSightPeriodeProps {
   selectedTerminal?: string;
   selectedPeriod?: string;
-  onOpenManualInput?: (module?: string) => void;
   currentUser?: User | null;
   userRole?: UserRole;
 }
@@ -165,7 +149,9 @@ export default function PortSightPeriode({
   const [peralatan, setPeralatan] = useState<PeralatanRecord[]>([]);
   const [fasilitas, setFasilitas] = useState<FasilitasRecord[]>([]);
 
-  // Synchronize branch filter if parent changes (unless PIC Cabang)
+  // Synchronize branch filter if parent changes (unless PIC Cabang).
+  // Deferred one tick so the effect body does not synchronously cascade a second
+  // render on every parent filter change.
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (isPicCabang && currentUser?.branch_id) {
@@ -178,6 +164,7 @@ export default function PortSightPeriode({
   }, [selectedTerminal, isPicCabang, currentUser?.branch_id]);
 
   // Build query string based on active filterMode
+  // Wrapped so `fetchData` can depend on it without re-creating on every render.
   const buildQueryString = useCallback(() => {
     const params = new URLSearchParams();
     if (branchFilter && branchFilter !== 'ALL') {
@@ -200,7 +187,7 @@ export default function PortSightPeriode({
     }
 
     return params.toString();
-  }, [branchFilter, filterMode, presetPeriod, singleMonth, singleYear, startMonth, startYear, endMonth, endYear, startDate, endDate]);
+  }, [filterMode, presetPeriod, singleMonth, singleYear, startMonth, startYear, endMonth, endYear, startDate, endDate, branchFilter]);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -229,6 +216,9 @@ export default function PortSightPeriode({
 
   useEffect(() => {
     const abortController = new AbortController();
+    // Deferred one tick: `fetchData` sets `loading` synchronously, so calling it
+    // directly in the effect body would queue a second render before the request
+    // was issued.
     const timer = window.setTimeout(() => {
       void fetchData(abortController.signal);
     }, 0);
@@ -243,32 +233,20 @@ export default function PortSightPeriode({
     // Total records across loaded modules
     const totalRecords = finansial.length + opkom.length + kinerja.length + utilisasi.length + peralatan.length + fasilitas.length;
     
-    // Revenue, Cost, Laba from Finansial
-    const revRows = finansial.filter(f => {
-      const r = (f.rekening || '').toLowerCase();
-      return r.includes('pendapatan') || r.includes('revenue');
-    });
-    const costRows = finansial.filter(f => {
-      const r = (f.rekening || '').toLowerCase();
-      return r.includes('beban') || r.includes('biaya') || r.includes('expense');
-    });
-    const labaUsahaRows = finansial.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
-    const labaBersihRows = finansial.filter(f => (f.rekening || '').toLowerCase().includes('bersih'));
-    const allLabaRows = finansial.filter(f => (f.rekening || '').toLowerCase().includes('laba'));
+    // Revenue, Cost, Laba from Finansial (agregasi seluruh entitas termasuk ELIMINASI)
+    const finAgg = aggregateFinansialByRekening(finansial);
+    const revRows = finansial.filter(f => canonicalRekening(f.REKENING) === 'Pendapatan');
+    const costRows = finansial.filter(f => canonicalRekening(f.REKENING) === 'Beban');
+    const allLabaRows = finansial.filter(
+      f => canonicalRekening(f.REKENING) === 'Laba Usaha' || canonicalRekening(f.REKENING) === 'Laba Bersih'
+    );
 
-    const totalRevRp = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    const rawCost = costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    // Nilai beban usaha adalah minus / pengeluaran (format: Rp -xxx)
-    const totalBebanRp = rawCost === 0 ? 0 : (rawCost < 0 ? rawCost : -rawCost);
-
-    let totalLabaRp = 0;
-    if (labaUsahaRows.length > 0) {
-      totalLabaRp = labaUsahaRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    } else if (labaBersihRows.length > 0) {
-      totalLabaRp = labaBersihRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    } else if (allLabaRows.length > 0) {
-      totalLabaRp = allLabaRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    } else if (totalRevRp !== 0 || totalBebanRp !== 0) {
+    const totalRevRp = finAgg.Pendapatan.realisasi;
+    const totalBebanRp = finAgg.Beban.realisasi;
+    let totalLabaRp = finAgg['Laba Usaha'].realisasi;
+    if (finAgg['Laba Usaha'].rowCount === 0 && finAgg['Laba Bersih'].rowCount > 0) {
+      totalLabaRp = finAgg['Laba Bersih'].realisasi;
+    } else if (finAgg['Laba Usaha'].rowCount === 0 && (totalRevRp !== 0 || totalBebanRp !== 0)) {
       totalLabaRp = totalRevRp + totalBebanRp;
     }
 
@@ -280,10 +258,13 @@ export default function PortSightPeriode({
       ? Number((utilisasi.reduce((a, b) => a + (b.bor || 0), 0) / utilisasi.length).toFixed(1))
       : 0;
 
-    // Avg Alat Utilisasi
-    const avgAlat = peralatan.length > 0
-      ? Number((peralatan.reduce((a, b) => a + (b.utilisasi || 0), 0) / peralatan.length).toFixed(1))
-      : 0;
+    // Kesiapan Alat (RFU) snapshot terbaru dari 9 kolom standar Peralatan
+    const alatLatestDate =
+      peralatan.length > 0 ? peralatan.map(p => p.tanggal).sort().reverse()[0] : '';
+    const alatSnapshot = alatLatestDate
+      ? peralatan.filter(p => p.tanggal === alatLatestDate)
+      : [];
+    const avgAlat = aggregatePeralatanKpis(alatSnapshot).rfuPct;
 
     // Total Fasilitas Aset
     const totalAsetFasilitas = fasilitas.reduce((a, b) => a + (b.nilai || 0), 0);
@@ -322,11 +303,11 @@ export default function PortSightPeriode({
     }
 
     finansial.forEach(f => {
-      if (f.month >= 1 && f.month <= 12) {
-        if (f.rekening && (f.rekening.includes('Pendapatan') || f.rekening.includes('REVENUE'))) {
-          monthMap[f.month].pendapatanJt += Math.round((f.konsolidasiRp || 0) / 1000000);
+      if (f.BULAN >= 1 && f.BULAN <= 12) {
+        if (canonicalRekening(f.REKENING) === 'Pendapatan') {
+          monthMap[f.BULAN].pendapatanJt += Math.round(parseRealisasi(f.REALISASI) / 1000000);
         }
-        monthMap[f.month].dataPoints += 1;
+        monthMap[f.BULAN].dataPoints += 1;
       }
     });
 
@@ -357,11 +338,11 @@ export default function PortSightPeriode({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 1. FILTER CONTROLLER CARD */}
-      <div className="dark-card" style={{ borderTop: '4px solid var(--accent-blue)' }}>
+      <div className="dark-card" style={{ borderTop: '4px solid #0284c7' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Calendar size={18} color="#38bdf8" />
+              <Calendar size={18} color="var(--accent-blue-text)" />
               <h2 className="dark-card-title" style={{ margin: 0, fontSize: '16px' }}>
                 Filter Data per Periode & Analisis Rentang Waktu
               </h2>
@@ -482,7 +463,7 @@ export default function PortSightPeriode({
           {/* Preset Mode Controls */}
           {filterMode === 'preset' && (
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                 Preset Periode Pelaporan
               </label>
               <select
@@ -507,7 +488,7 @@ export default function PortSightPeriode({
           {filterMode === 'month_range' && (
             <>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Dari Bulan & Tahun
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -538,7 +519,7 @@ export default function PortSightPeriode({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Sampai Dengan Bulan & Tahun
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -574,7 +555,7 @@ export default function PortSightPeriode({
           {filterMode === 'date_range' && (
             <>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Tanggal Mulai
                 </label>
                 <input
@@ -587,7 +568,7 @@ export default function PortSightPeriode({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                   Tanggal Selesai
                 </label>
                 <input
@@ -604,7 +585,7 @@ export default function PortSightPeriode({
           {/* Single Month/Year Controls */}
           {filterMode === 'single' && (
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
                 Bulan & Tahun Spesifik
               </label>
               <div style={{ display: 'flex', gap: '6px' }}>
@@ -637,10 +618,10 @@ export default function PortSightPeriode({
 
           {/* Cabang Filter */}
           <div>
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>
               <span>Filter Cabang Pelabuhan</span>
               {isPicCabang && (
-                <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>🔒 Khusus Cabang PIC</span>
+                <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>🔒 Khusus Cabang PIC</span>
               )}
             </label>
             <select
@@ -710,15 +691,15 @@ export default function PortSightPeriode({
       {/* 2. SUMMARY KPI CARDS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
         {/* 1. Pendapatan */}
-        <div className="dark-card" style={{ borderLeft: '4px solid #38bdf8', padding: '14px 16px' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--accent-cyan)', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Pendapatan Usaha</span>
-            <DollarSign size={18} color="#38bdf8" />
+            <DollarSign size={18} color="var(--accent-blue-text)" />
           </div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalRevRp)}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {summary.countRev} pos rekening finansial
           </div>
         </div>
@@ -727,40 +708,40 @@ export default function PortSightPeriode({
         <div className="dark-card" style={{ borderLeft: '4px solid #f43f5e', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Beban Usaha</span>
-            <TrendingDown size={18} color="#f43f5e" />
+            <TrendingDown size={18} color="var(--status-danger-text)" />
           </div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalBebanRp)}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {summary.countBeban} pos rekening beban
           </div>
         </div>
 
         {/* 3. Laba */}
-        <div className="dark-card" style={{ borderLeft: '4px solid #10b981', padding: '14px 16px' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-good-text)', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Laba Usaha / Bersih</span>
-            <TrendingUp size={18} color="#10b981" />
+            <TrendingUp size={18} color="var(--status-good-text)" />
           </div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalLabaRp)}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {summary.countLaba > 0 ? `${summary.countLaba} pos rekening laba` : 'Laba operasional'}
           </div>
         </div>
 
         {/* 4. Total Volume Opkom */}
-        <div className="dark-card" style={{ borderLeft: '4px solid #f59e0b', padding: '14px 16px' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-alert-text)', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Volume Opkom</span>
-            <Boxes size={18} color="#f59e0b" />
+            <Boxes size={18} color="var(--status-alert-text)" />
           </div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {(summary.totalVolume ?? 0).toLocaleString('id-ID')}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {summary.countOpkom} record layanan operasi
           </div>
         </div>
@@ -769,12 +750,12 @@ export default function PortSightPeriode({
         <div className="dark-card" style={{ borderLeft: '4px solid #06b6d4', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Rata-rata BOR Dermaga</span>
-            <Activity size={18} color="#06b6d4" />
+            <Activity size={18} color="var(--series-cyan-text)" />
           </div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {summary.avgBor}%
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {summary.countUtilisasi} dermaga terdata
           </div>
         </div>
@@ -783,12 +764,12 @@ export default function PortSightPeriode({
         <div className="dark-card" style={{ borderLeft: '4px solid #a855f7', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Utilisasi Peralatan</span>
-            <Wrench size={18} color="#a855f7" />
+            <Wrench size={18} color="var(--series-purple-text)" />
           </div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {summary.avgAlat}%
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {summary.countPeralatan} unit alat pelabuhan
           </div>
         </div>
@@ -797,12 +778,12 @@ export default function PortSightPeriode({
         <div className="dark-card" style={{ borderLeft: '4px solid #ec4899', padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Aset Fasilitas</span>
-            <Layers size={18} color="#ec4899" />
+            <Layers size={18} color="var(--series-pink-text)" />
           </div>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-title)', margin: '6px 0 2px' }}>
             {formatRupiahFull(summary.totalAsetFasilitas)}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {summary.countFasilitas} fasilitas pelabuhan
           </div>
         </div>
@@ -813,7 +794,7 @@ export default function PortSightPeriode({
         <div className="dark-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <div>
-              <h3 className="dark-card-title" style={{ margin: 0, fontSize: '14px' }}>
+              <h3 className="dark-card-title" style={{ margin: 0, fontSize: '15px' }}>
                 Tren Akumulatif per Bulan dalam Rentang Terpilih
               </h3>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
@@ -826,15 +807,15 @@ export default function PortSightPeriode({
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e3557" />
-                <XAxis dataKey="monthName" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                <XAxis dataKey="monthName" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <YAxis yAxisId="left" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--status-alert-text)', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
+                  contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: 'var(--text-title)' }}
                 />
                 <Legend />
-                <Bar yAxisId="left" dataKey="pendapatanJt" name="Pendapatan (Juta Rp)" fill="#38bdf8" radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="volume" name="Volume Opkom" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" dataKey="pendapatanJt" name="Pendapatan (Juta Rp)" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="right" dataKey="volume" name="Volume Opkom" fill="var(--status-alert-text)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -877,14 +858,10 @@ export default function PortSightPeriode({
               >
                 <span>{tab.label}</span>
                 <span style={{
-                  fontSize: '12px',
+                  fontSize: '10px',
                   padding: '1px 5px',
                   borderRadius: '10px',
-                  // A translucent white chip over `--accent-blue` composites to a
-                  // pale surface, and the inherited white label then measured
-                  // 3.61:1. A solid darker chip keeps the count readable in both
-                  // states without depending on what sits behind it.
-                  background: activeModule === tab.id ? 'rgba(0,0,0,0.32)' : 'rgba(148,163,184,0.18)',
+                  background: activeModule === tab.id ? 'rgba(0,0,0,0.22)' : 'rgba(148,163,184,0.15)',
                 }}>
                   {tab.count}
                 </span>
@@ -919,7 +896,7 @@ export default function PortSightPeriode({
               <div style={{ marginBottom: activeModule === 'all' ? '28px' : '0' }}>
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <DollarSign size={16} color="#38bdf8" />
+                    <DollarSign size={16} color="var(--accent-blue-text)" />
                     <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--accent-blue-text)' }}>
                       Modul Finansial ({finansial.length} baris)
                     </h4>
@@ -928,46 +905,51 @@ export default function PortSightPeriode({
                 <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th scope="col">Thn</th>
-                      <th scope="col">Bln</th>
-                      <th scope="col">Kode</th>
-                      <th scope="col">Cabang Pelabuhan</th>
-                      <th scope="col">Pos Rekening</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Cabang (Rp)</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>PMT (Rp)</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>PTP (Rp)</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>PSL (Rp)</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>PJM (Rp)</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Eliminasi (Rp)</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>% YoY</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>% RKA</th>
+                      <th>TAHUN</th>
+                      <th>BULAN</th>
+                      <th>KODE_CBG</th>
+                      <th>NM_CBG</th>
+                      <th>REKENING</th>
+                      <th>ENTITAS</th>
+                      <th style={{ textAlign: 'right' }}>REALISASI (Rp)</th>
+                      <th style={{ textAlign: 'center' }}>RKA</th>
+                      <th style={{ textAlign: 'center' }}>YOY</th>
                     </tr>
                   </thead>
                   <tbody>
                     {finansial
-                      .filter(f => !searchQuery || `${f.branchCode} ${f.branchName} ${f.rekening}`.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .slice(0, activeModule === 'all' ? 10 : 100)
-                      .map((f, i) => (
-                        <tr key={i}>
-                          <td data-label="Thn">{f.year}</td>
-                          <td data-label="Bln">{f.month}</td>
-                          <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{f.branchCode}</td>
-                          <td data-label="Cabang Pelabuhan" style={{ fontWeight: 600 }}>{f.branchName}</td>
-                          <td data-label="Pos Rekening" style={{ fontWeight: 600, color: (f.rekening || '').includes('Beban') ? 'var(--status-danger-text)' : (f.rekening || '').includes('Laba') ? 'var(--status-good-text)' : 'var(--accent-blue-text)' }}>
-                            {f.rekening || '-'}
-                          </td>
-                          <td data-label="Cabang (Rp)" style={{ textAlign: 'right', fontWeight: 600 }}>{formatRupiahFull(f.cabangRp)}</td>
-                          <td data-label="PMT (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.pmtRp)}</td>
-                          <td data-label="PTP (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.ptpRp)}</td>
-                          <td data-label="PSL (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.pslRp)}</td>
-                          <td data-label="PJM (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.pjmRp)}</td>
-                          <td data-label="Eliminasi (Rp)" style={{ textAlign: 'right' }}>{formatRupiahFull(f.eliminasiRp)}</td>
-                          <td data-label="Konsolidasi (Rp)" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-title)' }}>{formatRupiahFull(f.konsolidasiRp)}</td>
-                          <td data-label="% YoY" style={{ textAlign: 'center', color: f.yoy >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>{f.yoy}%</td>
-                          <td data-label="% RKA" style={{ textAlign: 'center', color: f.rka >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>{f.rka}%</td>
-                        </tr>
-                      ))}
+                      .filter(f => !searchQuery || `${f.KODE_CBG} ${f.NM_CBG} ${f.REKENING} ${f.ENTITAS}`.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .slice(0, activeModule === 'all' ? 20 : 120)
+                      .map((f, i) => {
+                        const rkaNum = parseMetricPercent(f.RKA);
+                        const yoyNum = parseMetricPercent(f.YOY);
+                        const realVal = parseRealisasi(f.REALISASI);
+                        return (
+                          <tr key={f.id || i}>
+                            <td data-label="TAHUN">{f.TAHUN}</td>
+                            <td data-label="BULAN">{f.BULAN}</td>
+                            <td data-label="KODE_CBG" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{f.KODE_CBG}</td>
+                            <td data-label="NM_CBG" style={{ fontWeight: 600 }}>{f.NM_CBG}</td>
+                            <td data-label="REKENING" style={{ fontWeight: 600, color: (f.REKENING || '').includes('Beban') ? 'var(--status-danger-text)' : (f.REKENING || '').includes('Laba') ? 'var(--status-good-text)' : 'var(--accent-blue-text)' }}>
+                              {f.REKENING || '-'}
+                            </td>
+                            <td data-label="ENTITAS">
+                              <span className={`badge ${f.ENTITAS === 'ELIMINASI' ? 'badge-red' : 'badge-blue'}`}>
+                                {f.ENTITAS}
+                              </span>
+                            </td>
+                            <td data-label="REALISASI (Rp)" style={{ textAlign: 'right', fontWeight: 700, color: realVal < 0 ? 'var(--status-danger-text)' : 'var(--text-main)' }}>
+                              {formatRupiahFull(realVal)}
+                            </td>
+                            <td data-label="RKA" style={{ textAlign: 'center', color: rkaNum === null ? 'var(--text-muted)' : rkaNum >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>
+                              {formatPercentOrDash(f.RKA)}
+                            </td>
+                            <td data-label="YOY" style={{ textAlign: 'center', color: yoyNum === null ? 'var(--text-muted)' : yoyNum >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)', fontWeight: 600 }}>
+                              {formatPercentOrDash(f.YOY)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -978,7 +960,7 @@ export default function PortSightPeriode({
               <div style={{ marginBottom: activeModule === 'all' ? '28px' : '0' }}>
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <Boxes size={16} color="#f59e0b" />
+                    <Boxes size={16} color="var(--status-alert-text)" />
                     <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--status-alert-text)' }}>
                       Modul Opkom (Operasi & Komersial) ({opkom.length} baris)
                     </h4>
@@ -987,15 +969,15 @@ export default function PortSightPeriode({
                 <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th scope="col">Thn</th>
-                      <th scope="col">Bln</th>
-                      <th scope="col">Kode</th>
-                      <th scope="col">Cabang Pelabuhan</th>
-                      <th scope="col">Layanan Operasional</th>
-                      <th scope="col">Satuan</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Jumlah Realisasi</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>% YoY</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>% RKA</th>
+                      <th>Thn</th>
+                      <th>Bln</th>
+                      <th>Kode</th>
+                      <th>Cabang Pelabuhan</th>
+                      <th>Layanan Operasional</th>
+                      <th>Satuan</th>
+                      <th style={{ textAlign: 'right' }}>Jumlah Realisasi</th>
+                      <th style={{ textAlign: 'center' }}>% YoY</th>
+                      <th style={{ textAlign: 'center' }}>% RKA</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1027,7 +1009,7 @@ export default function PortSightPeriode({
               <div style={{ marginBottom: activeModule === 'all' ? '28px' : '0' }}>
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <Activity size={16} color="#10b981" />
+                    <Activity size={16} color="var(--status-good-text)" />
                     <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--status-good-text)' }}>
                       Modul Kinerja Pelayanan ({kinerja.length} baris)
                     </h4>
@@ -1036,14 +1018,14 @@ export default function PortSightPeriode({
                 <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th scope="col">Thn</th>
-                      <th scope="col">Bln</th>
-                      <th scope="col">Kode Cabang</th>
-                      <th scope="col">Cabang</th>
-                      <th scope="col">Kode Kinerja</th>
-                      <th scope="col">Nama Indikator Kinerja</th>
-                      <th scope="col">Satuan</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Nilai Realisasi</th>
+                      <th>Thn</th>
+                      <th>Bln</th>
+                      <th>Kode Cabang</th>
+                      <th>Cabang</th>
+                      <th>Kode Kinerja</th>
+                      <th>Nama Indikator Kinerja</th>
+                      <th>Satuan</th>
+                      <th style={{ textAlign: 'right' }}>Nilai Realisasi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1072,7 +1054,7 @@ export default function PortSightPeriode({
               <div style={{ marginBottom: activeModule === 'all' ? '28px' : '0' }}>
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <TrendingUp size={16} color="#06b6d4" />
+                    <TrendingUp size={16} color="var(--series-cyan-text)" />
                     <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--series-cyan-text)' }}>
                       Modul Utilisasi Dermaga (BOR/YOR/SOR) ({utilisasi.length} baris)
                     </h4>
@@ -1081,15 +1063,15 @@ export default function PortSightPeriode({
                 <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th scope="col">Thn</th>
-                      <th scope="col">Bln</th>
-                      <th scope="col">Kode</th>
-                      <th scope="col">Cabang Pelabuhan</th>
-                      <th scope="col">Kode Dermaga</th>
-                      <th scope="col">Nama Dermaga</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>BOR (%)</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>YOR (%)</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>SOR (%)</th>
+                      <th>Thn</th>
+                      <th>Bln</th>
+                      <th>Kode</th>
+                      <th>Cabang Pelabuhan</th>
+                      <th>Kode Dermaga</th>
+                      <th>Nama Dermaga</th>
+                      <th style={{ textAlign: 'center' }}>BOR (%)</th>
+                      <th style={{ textAlign: 'center' }}>YOR (%)</th>
+                      <th style={{ textAlign: 'center' }}>SOR (%)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1119,7 +1101,7 @@ export default function PortSightPeriode({
               <div style={{ marginBottom: activeModule === 'all' ? '28px' : '0' }}>
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <Wrench size={16} color="#a855f7" />
+                    <Wrench size={16} color="var(--series-purple-text)" />
                     <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--series-purple-text)' }}>
                       Modul Peralatan Pelabuhan ({peralatan.length} baris)
                     </h4>
@@ -1128,38 +1110,58 @@ export default function PortSightPeriode({
                 <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th scope="col">Thn</th>
-                      <th scope="col">Bln</th>
-                      <th scope="col">Kode</th>
-                      <th scope="col">Cabang</th>
-                      <th scope="col">Kode Alat</th>
-                      <th scope="col">Nama Alat</th>
-                      <th scope="col">Singkatan</th>
-                      <th scope="col">Jenis Alat</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>Jumlah Unit</th>
-                      <th scope="col" style={{ textAlign: 'center' }}>Utilisasi (%)</th>
+                      <th>Tanggal</th>
+                      <th>Grup / Entitas</th>
+                      <th>Nama Cabang</th>
+                      <th>Nama Alat</th>
+                      <th>Jenis Alat</th>
+                      <th>Kategori Alat</th>
+                      <th style={{ textAlign: 'center' }}>Kondisi</th>
+                      <th>Kerusakan</th>
+                      <th>Tindak Lanjut</th>
                     </tr>
                   </thead>
                   <tbody>
                     {peralatan
-                      .filter(p => !searchQuery || `${p.branchCode} ${p.branchName} ${p.nmAlat} ${p.jnsAlat}`.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(p =>
+                        !searchQuery ||
+                        `${p.tanggal} ${p.grup_entitas} ${p.nama_cabang} ${p.nama_alat} ${p.jenis_alat} ${p.kategori_alat} ${p.kondisi} ${p.kerusakan || ''} ${p.tindak_lanjut || ''}`
+                          .toLowerCase()
+                          .includes(searchQuery.toLowerCase())
+                      )
                       .slice(0, activeModule === 'all' ? 10 : 100)
-                      .map((p, i) => (
-                        <tr key={i}>
-                          <td data-label="Thn">{p.year}</td>
-                          <td data-label="Bln">{p.month}</td>
-                          <td data-label="Kode" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--series-purple-text)' }}>{p.branchCode}</td>
-                          <td data-label="Cabang" style={{ fontWeight: 600 }}>{p.branchName}</td>
-                          <td data-label="Kode Alat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue-text)' }}>{p.kdAlat}</td>
-                          <td data-label="Nama Alat" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{p.nmAlat}</td>
-                          <td data-label="Singkatan"><span className="badge-category">{p.singkatan}</span></td>
-                          <td data-label="Jenis Alat">{p.jnsAlat}</td>
-                          <td data-label="Jumlah Unit" style={{ textAlign: 'center', fontWeight: 700 }}>{p.jumlah}</td>
-                          <td data-label="Utilisasi (%)" style={{ textAlign: 'center', fontWeight: 700, color: p.utilisasi >= 60 ? 'var(--status-good-text)' : 'var(--status-alert-text)' }}>
-                            {p.utilisasi}%
-                          </td>
-                        </tr>
-                      ))}
+                      .map((p, i) => {
+                        const kon = normalizeKondisi(p.kondisi);
+                        const badgeClass =
+                          kon === 'READY'
+                            ? 'badge-green'
+                            : kon === 'READY DENGAN CATATAN'
+                              ? 'badge-yellow'
+                              : kon === 'BREAKDOWN'
+                                ? 'badge-red'
+                                : 'badge-purple';
+                        return (
+                          <tr key={p.id || i}>
+                            <td data-label="Tanggal" style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                              {formatTanggalID(p.tanggal)}
+                            </td>
+                            <td data-label="Grup / Entitas" style={{ fontWeight: 700 }}>{p.grup_entitas}</td>
+                            <td data-label="Nama Cabang" style={{ fontWeight: 600 }}>{p.nama_cabang}</td>
+                            <td data-label="Nama Alat" style={{ fontWeight: 600, color: 'var(--text-title)' }}>{p.nama_alat}</td>
+                            <td data-label="Jenis Alat">{p.jenis_alat}</td>
+                            <td data-label="Kategori Alat">{p.kategori_alat}</td>
+                            <td data-label="Kondisi" style={{ textAlign: 'center' }}>
+                              <span className={`badge ${badgeClass}`}>{kon}</span>
+                            </td>
+                            <td data-label="Kerusakan" style={{ maxWidth: '220px', whiteSpace: 'pre-line' }}>
+                              {displayNullableText(p.kerusakan)}
+                            </td>
+                            <td data-label="Tindak Lanjut" style={{ maxWidth: '220px', whiteSpace: 'pre-line' }}>
+                              {displayNullableText(p.tindak_lanjut)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -1170,7 +1172,7 @@ export default function PortSightPeriode({
               <div>
                 {activeModule === 'all' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <Layers size={16} color="#ec4899" />
+                    <Layers size={16} color="var(--series-pink-text)" />
                     <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--series-pink-text)' }}>
                       Modul Fasilitas Pelabuhan ({fasilitas.length} baris)
                     </h4>
@@ -1179,18 +1181,18 @@ export default function PortSightPeriode({
                 <table className="card-table dark-table">
                   <thead>
                     <tr>
-                      <th scope="col">Thn</th>
-                      <th scope="col">Bln</th>
-                      <th scope="col">Kode</th>
-                      <th scope="col">Cabang</th>
-                      <th scope="col">Nama Fasilitas</th>
-                      <th scope="col">Jenis Fasilitas</th>
-                      <th scope="col">Satuan</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Panjang</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Lebar</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Luas (m²)</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Nilai Aset (Rp)</th>
-                      <th scope="col">Keterangan</th>
+                      <th>Thn</th>
+                      <th>Bln</th>
+                      <th>Kode</th>
+                      <th>Cabang</th>
+                      <th>Nama Fasilitas</th>
+                      <th>Jenis Fasilitas</th>
+                      <th>Satuan</th>
+                      <th style={{ textAlign: 'right' }}>Panjang</th>
+                      <th style={{ textAlign: 'right' }}>Lebar</th>
+                      <th style={{ textAlign: 'right' }}>Luas (m²)</th>
+                      <th style={{ textAlign: 'right' }}>Nilai Aset (Rp)</th>
+                      <th>Keterangan</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1210,7 +1212,7 @@ export default function PortSightPeriode({
                           <td data-label="Lebar" style={{ textAlign: 'right' }}>{f.lebar}</td>
                           <td data-label="Luas (m²)" style={{ textAlign: 'right', fontWeight: 600 }}>{(f.mLws ?? 0).toLocaleString('id-ID')}</td>
                           <td data-label="Nilai Aset (Rp)" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-blue-text)' }}>{formatRupiahFull(f.nilai)}</td>
-                          <td data-label="Keterangan" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{f.ket}</td>
+                          <td data-label="Keterangan" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{f.ket}</td>
                         </tr>
                       ))}
                   </tbody>

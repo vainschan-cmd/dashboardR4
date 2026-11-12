@@ -264,7 +264,7 @@ export default function ImportCenter({
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '16px' }}>
-              <FileSpreadsheet size={20} color="#38bdf8" />
+              <FileSpreadsheet size={20} color="var(--accent-blue-text)" />
               <span>Pusat Impor Data Kinerja & Integrasi Google Sheets</span>
             </h2>
             <p className="card-subtitle">
@@ -367,7 +367,7 @@ export default function ImportCenter({
                 style={{ display: 'none' }}
                 onChange={handleFileChange}
               />
-              <UploadCloud size={40} color="#38bdf8" style={{ margin: '0 auto 12px' }} />
+              <UploadCloud size={40} color="var(--accent-blue-text)" style={{ margin: '0 auto 12px' }} />
               <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-title)' }}>
                 {file ? file.name : 'Klik untuk memilih file hasil ekspor spreadsheet'}
               </div>
@@ -666,9 +666,9 @@ export default function ImportCenter({
             <div>
               <h3 className="card-title">
                 {validationResult.isValid ? (
-                  <CheckCircle2 size={18} color="#059669" />
+                  <CheckCircle2 size={18} color="var(--status-good-text)" />
                 ) : (
-                  <AlertTriangle size={18} color="#dc2626" />
+                  <AlertTriangle size={18} color="var(--status-danger-text)" />
                 )}
                 <span>Laporan Validasi Spreadsheet</span>
               </h3>

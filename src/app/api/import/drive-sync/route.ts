@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const stats = ingestInputData(targetFile);
+    const stats = await ingestInputData(targetFile);
 
     try {
       dbQueries.createAuditLog({

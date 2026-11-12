@@ -386,7 +386,7 @@ export default function Sidebar({
                     }}
                     title="Keluar dari Akun"
                   >
-                    <LogOut size={12} strokeWidth={1.75} color="#f87171" />
+                    <LogOut size={12} strokeWidth={1.75} color="var(--status-danger-text)" />
                     <span>Keluar</span>
                   </button>
                 )}
@@ -414,7 +414,7 @@ export default function Sidebar({
                 title="Keluar dari Akun"
                 aria-label="Keluar dari Akun"
               >
-                <LogOut size={16} strokeWidth={1.75} color="#f87171" />
+                <LogOut size={16} strokeWidth={1.75} color="var(--status-danger-text)" />
               </button>
             )
           )}
@@ -437,7 +437,7 @@ export default function Sidebar({
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <LogOut size={18} strokeWidth={1.75} color="#ef4444" />
+              <LogOut size={18} strokeWidth={1.75} color="var(--status-danger-text)" />
               <h4 id="sidebar-logout-title" style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
                 Konfirmasi Keluar Sesi
               </h4>

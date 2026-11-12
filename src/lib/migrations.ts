@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { buildEntitasViewSql, hasFinansialTable } from './db/entitasView';
 
 /**
  * Numbered schema migrations (`CODE-12`).
@@ -178,6 +179,33 @@ export const MIGRATIONS: Migration[] = [
         addColumn(db, table, 'source_row', 'INTEGER');
         addColumn(db, table, 'batch_id', 'TEXT');
       }
+    },
+  },
+  {
+    id: 8,
+    name: 'entitas_bridge_view',
+    /**
+     * Bridge between this project's wide financial table and the tall shape the
+     * ported aggregation services expect.
+     *
+     * `module_finansial` keeps the entity split in columns (`cabang_rp`, `pjm_rp`,
+     * …); the aggregation SQL that came with the UI overhaul was authored against
+     * a PostgreSQL schema with one row per entity and a single `realisasi`
+     * column. Reshaping the table would break ingest, lineage, four-eyes, and the
+     * verification workflow, so the tall shape is exposed as a view instead.
+     *
+     * It is a projection of the same rows, so the two representations cannot
+     * disagree. `down` is safe: dropping a view destroys no data.
+     */
+    up: (db) => {
+      // A partially built schema may not have the source table yet; creating a
+      // view that references a missing table would make every later schema
+      // operation on this database fail while SQLite tries to reparse it.
+      if (!hasFinansialTable(db)) return;
+      db.exec(buildEntitasViewSql());
+    },
+    down: (db) => {
+      db.exec('DROP VIEW IF EXISTS v_module_finansial_entitas');
     },
   },
 ];

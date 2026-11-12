@@ -7,6 +7,10 @@
   --bg-header: #0a1424;
   --bg-inner: #0f1c30;
   --bg-chip: #122137;
+  /* Tint for nested panels inside a card. Translucent so it layers over whatever
+     surface it sits on; the components that use it also pass this value as a
+     `var()` fallback, so nothing changes if it is ever removed. */
+  --bg-subtle: rgba(148, 163, 184, 0.08);
   --bg-table-header: #0c1626;
   --bg-table-row: #101c2e;
   --bg-input: #0e1c30;
@@ -126,6 +130,7 @@
   --bg-header: #ffffff;
   --bg-inner: #f8fafc;
   --bg-chip: #ffffff;
+  --bg-subtle: rgba(71, 85, 105, 0.06);
   --bg-table-header: #f8fafc;
   --bg-table-row: #ffffff;
   --bg-input: #ffffff;
@@ -345,8 +350,8 @@ html, body {
 }
 
 [data-theme="light"] .navbar-toggle-btn:hover {
-  color: #0284c7;
-  border-color: #0284c7;
+  color: var(--accent-blue-text);
+  border-color: var(--accent-blue-text);
 }
 
 /* PortSight Main Layout (CSS Flexbox: Sidebar Left, Content Right) */
@@ -524,10 +529,10 @@ html, body {
 }
 
 .sidebar-nav-btn.active {
-  background-color: var(--accent-orange) !important;
-  color: #ffffff !important;
+  background-color: var(--accent-orange-fill) !important;
+  color: var(--text-on-accent) !important;
   font-weight: 700;
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.35);
+  box-shadow: 0 2px 8px rgba(194, 65, 12, 0.35);
 }
 
 .sidebar-icon {
@@ -567,7 +572,7 @@ html, body {
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 700;
-  color: #10b981;
+  color: var(--status-good-text);
 }
 
 .sidebar-simulation-dot {
@@ -773,7 +778,7 @@ html, body {
 
 [data-theme="light"] .theme-toggle-btn.active {
   background-color: #ffffff;
-  color: #0284c7;
+  color: var(--accent-blue-text);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
@@ -951,7 +956,7 @@ select option {
 .kpi-header-label {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .kpi-huge-number {
@@ -2087,5 +2092,267 @@ div[data-nextjs-dialog-overlay] {
   * {
     box-shadow: none !important;
     text-shadow: none !important;
+  }
+}
+
+/* ===== Added by origin/main UI overhaul (bandingkan: merge origin/main) ===== */
+.badge-purple {
+  background-color: rgba(88, 28, 135, 0.55);
+  color: #d8b4fe;
+  border: 1px solid #9333ea;
+}
+
+[data-theme="light"] .badge-purple {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+  border-color: #d8b4fe;
+}
+
+/* Modul Peralatan — Sidebar Filter + Konten Dashboard */
+.peralatan-workspace-layout {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.peralatan-filter-sidebar {
+  width: 270px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 76px;
+}
+
+.peralatan-main-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.peralatan-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1280px) {
+  .peralatan-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .peralatan-workspace-layout {
+    flex-direction: column;
+  }
+
+  .peralatan-filter-sidebar {
+    width: 100%;
+    position: static;
+  }
+
+  .peralatan-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .peralatan-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Beranda Summary Keuangan Workspace Layout */
+.beranda-summary-workspace {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.beranda-slicer-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 76px;
+}
+
+.beranda-slicer-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.beranda-slicer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--bg-inner);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-title);
+  letter-spacing: 0.02em;
+}
+
+.beranda-slicer-list {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.beranda-slicer-scroll {
+  max-height: 410px;
+  overflow-y: auto;
+}
+
+.beranda-slicer-btn {
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-inner);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.beranda-slicer-btn:hover:not(:disabled) {
+  background-color: var(--bg-card-hover);
+  border-color: var(--accent-cyan);
+  color: var(--text-title);
+}
+
+.beranda-slicer-btn.is-active {
+  background-color: rgba(59, 130, 246, 0.18);
+  border-color: #3b82f6;
+  color: var(--text-title);
+  font-weight: 700;
+}
+
+.beranda-main-area {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.beranda-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.beranda-kpi-card {
+  background-color: var(--bg-card);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 104px;
+}
+
+.beranda-kpi-card.is-bopo {
+  background: linear-gradient(135deg, #09204e 0%, #0f3070 100%);
+  border-color: #1e40af;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  gap: 4px;
+}
+
+.beranda-charts-bento {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr 1.05fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.beranda-chart-stack-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.beranda-chart-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.beranda-bopo-banner {
+  background: linear-gradient(90deg, #2b59b5 0%, #3b6fd8 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.03em;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 1280px) {
+  .beranda-charts-bento {
+    grid-template-columns: 1fr 1fr;
+  }
+  .beranda-bopo-col {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 1024px) {
+  .beranda-summary-workspace {
+    grid-template-columns: 1fr;
+  }
+  .beranda-slicer-column {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .beranda-slicer-scroll {
+    max-height: 220px;
+  }
+  .beranda-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .beranda-charts-bento {
+    grid-template-columns: 1fr;
+  }
+  .beranda-bopo-col {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .beranda-slicer-column {
+    grid-template-columns: 1fr;
+  }
+  .beranda-kpi-grid {
+    grid-template-columns: 1fr;
   }
 }

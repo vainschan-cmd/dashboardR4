@@ -132,10 +132,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 4 Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-        <div className="dark-card" style={{ borderLeft: '4px solid #38bdf8' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--accent-cyan)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Panjang Dermaga</span>
-            <Building2 size={20} color="#38bdf8" />
+            <Building2 size={20} color="var(--accent-blue-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {totalDermagaM.toLocaleString('id-ID')} Meter
@@ -145,10 +145,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
           </div>
         </div>
 
-        <div className="dark-card" style={{ borderLeft: '4px solid #10b981' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-good-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Luas Lapangan</span>
-            <Layers size={20} color="#10b981" />
+            <Layers size={20} color="var(--status-good-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {(totalLapanganSqm / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} ribu m&sup2;
@@ -158,10 +158,10 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
           </div>
         </div>
 
-        <div className="dark-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-alert-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Luas Gudang</span>
-            <Warehouse size={20} color="#f59e0b" />
+            <Warehouse size={20} color="var(--status-alert-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {totalGudangSqm.toLocaleString('id-ID')} m&sup2;
@@ -174,7 +174,7 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
         <div className="dark-card" style={{ borderLeft: '4px solid #06b6d4' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Kedalaman Kolam Maksimum</span>
-            <Waves size={20} color="#06b6d4" />
+            <Waves size={20} color="var(--series-cyan-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {maxDepthMlws} mLWS

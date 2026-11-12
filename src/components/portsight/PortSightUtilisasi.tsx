@@ -110,10 +110,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* 4 Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-        <div className="dark-card" style={{ borderLeft: '4px solid #38bdf8' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--accent-cyan)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Rata-rata BOR (Dermaga)</span>
-            <Ship size={20} color="#38bdf8" />
+            <Ship size={20} color="var(--accent-blue-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgBor}%
@@ -123,10 +123,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
           </div>
         </div>
 
-        <div className="dark-card" style={{ borderLeft: '4px solid #10b981' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-good-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Rata-rata YOR (Lapangan)</span>
-            <Layers size={20} color="#10b981" />
+            <Layers size={20} color="var(--status-good-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgYor}%
@@ -136,10 +136,10 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
           </div>
         </div>
 
-        <div className="dark-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-alert-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Rata-rata SOR (Gudang)</span>
-            <Warehouse size={20} color="#f59e0b" />
+            <Warehouse size={20} color="var(--status-alert-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgSor}%
@@ -152,7 +152,7 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
         <div className="dark-card" style={{ borderLeft: '4px solid #a855f7' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Jumlah Titik Fasilitas</span>
-            <Gauge size={20} color="#a855f7" />
+            <Gauge size={20} color="var(--series-purple-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {filteredData.length} Lokasi
@@ -188,9 +188,9 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
                 formatter={(val: unknown) => [`${String(val ?? '')}%`, '']}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Bar dataKey="BOR" fill="#38bdf8" radius={[3, 3, 0, 0]} name="BOR (Dermaga)" />
-              <Bar dataKey="YOR" fill="#10b981" radius={[3, 3, 0, 0]} name="YOR (Lapangan)" />
-              <Bar dataKey="SOR" fill="#f59e0b" radius={[3, 3, 0, 0]} name="SOR (Gudang)" />
+              <Bar dataKey="BOR" fill="var(--accent-cyan)" radius={[3, 3, 0, 0]} name="BOR (Dermaga)" />
+              <Bar dataKey="YOR" fill="var(--status-good-text)" radius={[3, 3, 0, 0]} name="YOR (Lapangan)" />
+              <Bar dataKey="SOR" fill="var(--status-alert-text)" radius={[3, 3, 0, 0]} name="SOR (Gudang)" />
             </BarChart>
           </ResponsiveContainer>
         </div>

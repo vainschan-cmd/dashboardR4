@@ -13,7 +13,8 @@ import { ModuleScopeError } from '@/lib/dataIntegrity';
 
 const MODULE_OPTIONS = {
   finansial: {
-    rekening: ['Pendapatan', 'Beban', 'Laba Usaha', 'Laba Bersih', 'EBITDA'],
+    rekening: ['Pendapatan', 'Beban', 'Laba Usaha', 'Laba Bersih'],
+    entitas: ['CABANG', 'PMT', 'PTP', 'PSL', 'PJM', 'ELIMINASI'],
   },
   opkom: {
     layanan: ['KAPAL', 'PETIKEMAS', 'BARANG', 'PENUMPANG', 'RUPA-RUPA'],
@@ -34,21 +35,21 @@ const MODULE_OPTIONS = {
     dermaga: ['MULTIPURPOSE', 'PETIKEMAS', 'MULTIPURPOSE PRE', 'MULTIPURPOSE GRK', 'CURAH KERING', 'CURAH CAIR', 'KONVENSIONAL'],
   },
   peralatan: {
-    jenisAlat: ['OPERASI KAPAL', 'OPERASI LAPANGAN', 'ALAT APUNG', 'ALAT BANTU'],
-    katalogAlat: [
-      { kd: 'AL01', nm: 'Quay Container Crane', singkt: 'QCC', jns: 'OPERASI KAPAL' },
-      { kd: 'AL02', nm: 'Harbour Mobile Crane', singkt: 'HMC', jns: 'OPERASI KAPAL' },
-      { kd: 'AL03', nm: 'Fixed Crane', singkt: 'FC', jns: 'OPERASI KAPAL' },
-      { kd: 'AL04', nm: 'Rubber Tyred Gantry Crane', singkt: 'RTG', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL05', nm: 'Reach Stacker', singkt: 'RS', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL06', nm: 'Side Loader', singkt: 'SL', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL07', nm: 'Top Loader', singkt: 'TL', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL08', nm: 'Head Truck', singkt: 'HT', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL09', nm: 'Terminal Tractor', singkt: 'TT', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL10', nm: 'Chassis', singkt: 'CH', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL11', nm: 'Forklift', singkt: 'FL', jns: 'OPERASI LAPANGAN' },
-      { kd: 'AL12', nm: 'Kapal Tunda (Tugboat)', singkt: 'TB', jns: 'ALAT APUNG' },
-      { kd: 'AL13', nm: 'Kapal Pandu (Pilot Boat)', singkt: 'PB', jns: 'ALAT APUNG' },
+    grupEntitas: ['PTP', 'PMT', 'MTI', 'R4'],
+    kategoriAlat: ['Alat CY', 'Alat Dermaga', 'Alat Bantu'],
+    kondisi: ['READY', 'READY DENGAN CATATAN', 'BREAKDOWN', 'USUL/PROSES PENGHAPUSAN'],
+    jenisAlat: [
+      'Chassis',
+      'Forklift',
+      'Head Truck',
+      'Mobile Crane',
+      'Quay Container Crane',
+      'Reach Stacker',
+      'Rubber Tyred Gantry Crane',
+      'Side Loader',
+      'Terminal Tractor',
+      'Tronton',
+      'EXCAVATOR',
     ],
   },
   fasilitas: {
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
       kodeCabang: branchCheck.canonicalCode,
     };
 
-    const result = saveManualInputRecord({
+    const result = await saveManualInputRecord({
       module: module as ModuleType,
       data: scopedData,
       user: {

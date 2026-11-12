@@ -71,7 +71,7 @@ export default function KPICard({
 
       <div className="kpi-footer">
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <Target size={13} color="#64748b" />
+          <Target size={13} color="var(--text-muted)" />
           <span className="kpi-target-label">Target: <strong>{formatNumber(target)} {unit}</strong></span>
         </div>
 

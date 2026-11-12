@@ -118,27 +118,27 @@ export default function DetailDrilldownModal({
           {/* Metadata Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', fontSize: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Building size={16} color="#64748b" />
+              <Building size={16} color="var(--text-muted)" />
               <span>Cabang: <strong>{record.branch_name || record.branch_code}</strong></span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Layers size={16} color="#64748b" />
+              <Layers size={16} color="var(--text-muted)" />
               <span>Departemen: <strong>{record.department_name}</strong></span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Calendar size={16} color="#64748b" />
+              <Calendar size={16} color="var(--text-muted)" />
               <span>Periode: <strong>Bulan {record.month} / {record.year}</strong></span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <User size={16} color="#64748b" />
+              <User size={16} color="var(--text-muted)" />
               <span>Pengunggah: <strong>{record.uploaded_by}</strong></span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Clock size={16} color="#64748b" />
+              <Clock size={16} color="var(--text-muted)" />
               <span>Waktu Unggah: <strong>{new Date(record.uploaded_at).toLocaleDateString('id-ID')}</strong></span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CheckCircle2 size={16} color="#64748b" />
+              <CheckCircle2 size={16} color="var(--text-muted)" />
               <span>Verifikator: <strong>{record.verified_by || 'Belum Disahkan'}</strong></span>
             </div>
           </div>

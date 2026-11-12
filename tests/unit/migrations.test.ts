@@ -179,11 +179,13 @@ describe('migrationStatus', () => {
 describe('rollbackLastMigration', () => {
   it('membatalkan migrasi terakhir yang punya down', () => {
     db.exec('ALTER TABLE branches ADD COLUMN order_seq INTEGER DEFAULT 99;');
-    // Mark everything except migration 1 as applied so migration 1 is the last one.
     runMigrations(db);
-    // Re-apply: roll back 5, 4, 3, 2 do not have `down`, so the last *reversible*
-    // step must be reached explicitly. Migrations 5..2 have no `down`, so we first
-    // verify the guard, then roll back 1 by clearing the newer records.
+    // The guard must fire for a migration that has NO rollback path, whichever
+    // one happens to be last. Migration 2 renames a branch and is deliberately
+    // irreversible, so target it explicitly instead of relying on the list order
+    // (`CODE-12` added #8, which IS reversible, and the old form of this test
+    // silently stopped exercising the guard).
+    db.exec('DELETE FROM schema_migrations WHERE id > 2;');
     expect(() => rollbackLastMigration(db)).toThrow(/tidak menyediakan rollback/);
 
     db.exec('DELETE FROM schema_migrations WHERE id > 1;');
@@ -191,6 +193,45 @@ describe('rollbackLastMigration', () => {
     expect(result.reverted.id).toBe(1);
     expect(columnsOf('branches')).not.toContain('order_seq');
     expect(appliedMigrations(db)).toEqual([]);
+  });
+
+  it('migrasi view entitas dapat dibatalkan', () => {
+    // The bridge view is a projection, so dropping it destroys no data — that is
+    // exactly why it is allowed to have a `down`.
+    //
+    // The shared fixture deliberately omits `module_finansial` (migration 8 must
+    // no-op on a partial schema), so create it here for this one case.
+    db.exec(`CREATE TABLE module_finansial (
+      id TEXT PRIMARY KEY, monthly_record_id TEXT, year INTEGER, month INTEGER,
+      branch_code TEXT, branch_name TEXT, rekening TEXT,
+      cabang_rp REAL, pmt_rp REAL, ptp_rp REAL, psl_rp REAL, pjm_rp REAL,
+      eliminasi_rp REAL, konsolidasi_rp REAL, yoy REAL, rka REAL, source_type TEXT,
+      verification_status TEXT, uploaded_by TEXT, uploaded_at TEXT, verified_by TEXT,
+      verified_at TEXT, revision_notes TEXT, verified_snapshot_json TEXT
+    );`);
+    runMigrations(db);
+    const viewExists = () =>
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'view' AND name = 'v_module_finansial_entitas'")
+        .get();
+    expect(viewExists()).toBeTruthy();
+
+    const result = rollbackLastMigration(db);
+    expect(result.reverted.id).toBe(8);
+    expect(viewExists()).toBeFalsy();
+  });
+
+  it('migrasi view entitas tidak dibuat bila tabel sumber belum ada', () => {
+    // Guard against creating a view that references a missing table: SQLite would
+    // then fail to reparse the schema on the next ALTER TABLE, taking the whole
+    // database with it.
+    runMigrations(db);
+    const view = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'view' AND name = 'v_module_finansial_entitas'")
+      .get();
+    expect(view).toBeFalsy();
+    // And the schema stays usable afterwards.
+    expect(() => db.exec('ALTER TABLE branches ADD COLUMN probe INTEGER;')).not.toThrow();
   });
 
   it('menolak rollback saat tidak ada migrasi tercatat', () => {

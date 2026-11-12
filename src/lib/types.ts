@@ -189,7 +189,19 @@ export interface AuditLog {
   user_id: string;
   user_name: string;
   user_role: string;
-  action: 'LOGIN' | 'UPLOAD' | 'VALIDATE' | 'IMPORT' | 'APPROVE' | 'REVISE' | 'CONFIG_UPDATE' | 'EXPORT' | 'UPDATE_MANUAL_DATA' | 'CREATE_MANUAL_DATA' | 'RESTORE_SNAPSHOT';
+  action:
+    | 'LOGIN'
+    | 'UPLOAD'
+    | 'VALIDATE'
+    | 'IMPORT'
+    | 'APPROVE'
+    | 'REVISE'
+    | 'CONFIG_UPDATE'
+    | 'EXPORT'
+    | 'UPDATE_MANUAL_DATA'
+    | 'CREATE_MANUAL_DATA'
+    /** `POST /api/verification/restore` — a verified snapshot was put back. */
+    | 'RESTORE_SNAPSHOT';
   entity: string;
   entity_id?: string | null;
   details: string;
@@ -259,42 +271,59 @@ export interface IntegrationCredentials {
   updated_by?: string;
 }
 
-export interface ValidationErrorItem {
-  row: number;
-  column?: string;
-  field?: string;
-  value?: unknown;
-  message: string;
-}
+export type FinansialRekening = 'Pendapatan' | 'Beban' | 'Laba Usaha' | 'Laba Bersih';
 
-export interface ValidationSummary {
-  isValid: boolean;
-  totalRows: number;
-  validRowsCount: number;
-  errorRowsCount: number;
-  errors: ValidationErrorItem[];
-  parsedRecords: MonthlyRecord[];
-}
+export type FinansialEntitas = 'CABANG' | 'PMT' | 'PTP' | 'PSL' | 'PJM' | 'ELIMINASI';
 
+/**
+ * Standar 9 field Modul Finansial (Laba Rugi Normalisasi).
+ */
 export interface FinansialRecord {
   id?: string;
-  year?: number;
-  month?: number;
-  branchCode?: string;
-  branchName?: string;
-  rekening?: string;
-  cabangRp?: number;
-  pmtRp?: number;
-  ptpRp?: number;
-  pslRp?: number;
-  pjmRp?: number;
-  eliminasiRp?: number;
-  konsolidasiRp?: number;
-  rka?: number;
-  yoy?: number;
-  verificationStatus?: VerificationStatus;
+  monthlyRecordId?: string;
+  TAHUN: number;
+  BULAN: number;
+  KODE_CBG: string;
+  NM_CBG: string;
+  REKENING: string;
+  ENTITAS: string;
+  REALISASI: number;
+  RKA: number | string;
+  YOY: number | string;
+  verificationStatus?: string;
   hasPendingUpdate?: boolean;
-  [key: string]: unknown;
+  uploadedBy?: string | null;
+  uploadedAt?: string | null;
+}
+
+export type PeralatanGrupEntitas = 'MTI' | 'PMT' | 'PTP' | 'R4';
+
+export type PeralatanKondisi =
+  | 'READY'
+  | 'READY DENGAN CATATAN'
+  | 'BREAKDOWN'
+  | 'USUL/PROSES PENGHAPUSAN';
+
+/**
+ * Standar 9 field Modul Peralatan (Data Alat Monitoring Kondisi Harian).
+ */
+export interface PeralatanRecord {
+  id?: string;
+  monthlyRecordId?: string | null;
+  branchCode?: string;
+  tanggal: string; // YYYY-MM-DD
+  grup_entitas: string;
+  nama_cabang: string;
+  nama_alat: string;
+  jenis_alat: string;
+  kategori_alat: string;
+  kondisi: PeralatanKondisi | string;
+  kerusakan: string | null;
+  tindak_lanjut: string | null;
+  verificationStatus?: string;
+  hasPendingUpdate?: boolean;
+  uploadedBy?: string | null;
+  uploadedAt?: string | null;
 }
 
 export interface OpkomRecord {
@@ -308,23 +337,6 @@ export interface OpkomRecord {
   jumlahRp?: number;
   rka?: number;
   yoy?: number;
-  verificationStatus?: VerificationStatus;
-  hasPendingUpdate?: boolean;
-  [key: string]: unknown;
-}
-
-export interface PeralatanRecord {
-  id?: string;
-  branchCode?: string;
-  branchName?: string;
-  kdAlat?: string;
-  nmAlat?: string;
-  singkatanAlat?: string;
-  jnsAlat?: string;
-  jumlah?: number;
-  utilisasi?: number;
-  availability?: number;
-  statusKesiapan?: string;
   verificationStatus?: VerificationStatus;
   hasPendingUpdate?: boolean;
   [key: string]: unknown;
@@ -365,4 +377,21 @@ export interface FasilitasRecord {
   nilai?: number;
   ket?: string;
   [key: string]: unknown;
+}
+
+export interface ValidationErrorItem {
+  row: number;
+  column?: string;
+  field?: string;
+  value?: unknown;
+  message: string;
+}
+
+export interface ValidationSummary {
+  isValid: boolean;
+  totalRows: number;
+  validRowsCount: number;
+  errorRowsCount: number;
+  errors: ValidationErrorItem[];
+  parsedRecords: MonthlyRecord[];
 }

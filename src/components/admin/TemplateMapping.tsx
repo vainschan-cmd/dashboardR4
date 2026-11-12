@@ -109,7 +109,7 @@ export default function TemplateMapping({
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '16px' }}>
-              <Sliders size={20} color="#38bdf8" />
+              <Sliders size={20} color="var(--accent-blue-text)" />
               <span>Studio Template Mapping & Konfigurasi Kolom Dinamis</span>
             </h2>
             <p className="card-subtitle">

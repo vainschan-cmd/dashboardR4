@@ -104,7 +104,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
   const pieData = Object.entries(layananTotals).map(([name, value]) => ({
     name,
     value,
-    color: COMMODITY_COLORS[name] || '#64748b'
+    color: COMMODITY_COLORS[name] || 'var(--text-muted)'
   }));
 
   // Top 10 Cabang by Revenue
@@ -133,10 +133,10 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* KPI Headline Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-        <div className="dark-card" style={{ borderLeft: '4px solid #38bdf8' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--accent-cyan)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Total Pendapatan Opkom</span>
-            <Anchor size={20} color="#38bdf8" />
+            <Anchor size={20} color="var(--accent-blue-text)" />
           </div>
           <div style={{ fontSize: 'clamp(18px, 1.8vw, 24px)', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px', wordBreak: 'break-word', letterSpacing: '-0.3px' }}>
             {formatRupiahFull(totalRevenueRp)}
@@ -146,10 +146,10 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
           </div>
         </div>
 
-        <div className="dark-card" style={{ borderLeft: '4px solid #10b981' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-good-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Rata-rata Capaian RKA</span>
-            <TrendingUp size={20} color="#10b981" />
+            <TrendingUp size={20} color="var(--status-good-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {avgRka}%
@@ -159,10 +159,10 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
           </div>
         </div>
 
-        <div className="dark-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-alert-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Pertumbuhan YoY</span>
-            <TrendingUp size={20} color="#f59e0b" />
+            <TrendingUp size={20} color="var(--status-alert-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {formatPercentDelta(avgYoy, 1)}
@@ -175,7 +175,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
         <div className="dark-card" style={{ borderLeft: '4px solid #a855f7' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Komoditas Layanan</span>
-            <Layers size={20} color="#a855f7" />
+            <Layers size={20} color="var(--series-purple-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             5 Sektor
@@ -206,7 +206,7 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
                   contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
                   formatter={(_val: unknown, _name: unknown, item: { payload?: { totalRp?: number } }) => [formatRupiahFull(item.payload?.totalRp || 0), 'Pendapatan']}
                 />
-                <Bar dataKey="revenueM" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenueM" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

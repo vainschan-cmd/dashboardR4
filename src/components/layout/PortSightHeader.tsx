@@ -326,7 +326,7 @@ export default function PortSightHeader({
                 }}
                 title="Keluar dari Akun (Logout)"
               >
-                <LogOut size={12} strokeWidth={1.75} color="#f87171" />
+                <LogOut size={12} strokeWidth={1.75} color="var(--status-danger-text)" />
                 <span className="hidden-on-mobile">Keluar</span>
               </button>
             </>
@@ -349,7 +349,7 @@ export default function PortSightHeader({
                   fontWeight: 700,
                   backgroundColor: 'var(--accent-orange-fill, #c2410c)',
                   borderColor: 'var(--accent-orange-fill, #c2410c)',
-                  color: 'var(--text-title)',
+                  color: 'var(--text-on-accent)',
                   boxShadow: '0 2px 6px rgba(249, 115, 22, 0.35)',
                   cursor: 'pointer',
                 }}
@@ -507,7 +507,7 @@ export default function PortSightHeader({
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <LogOut size={18} strokeWidth={1.75} color="#ef4444" aria-hidden="true" />
+              <LogOut size={18} strokeWidth={1.75} color="var(--status-danger-text)" aria-hidden="true" />
               <h4 id="header-logout-title" style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
                 Konfirmasi Keluar Sesi
               </h4>

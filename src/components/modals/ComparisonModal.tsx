@@ -1,14 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-  X,
-  BarChart3,
-  Printer,
-  Search,
-  ArrowUpRight,
-  ArrowDownRight,
-} from 'lucide-react';
+import { X, BarChart3, Printer, Search, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -18,9 +11,15 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { formatRupiahFull, formatPercentDelta } from '@/lib/formatters';
+import { formatRupiahFull } from '@/lib/formatters';
+import {
+  averageValidMetric,
+  canonicalRekening,
+  parseMetricPercent,
+  parseRealisasi,
+} from '@/lib/finansialHelpers';
 import { isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
-import { FinansialRecord, OpkomRecord } from '@/lib/types';
+import type { FinansialRecord } from '@/lib/types';
 
 interface ComparisonModalProps {
   isOpen: boolean;
@@ -87,25 +86,30 @@ export default function ComparisonModal({
         if (json.success) {
           const items: MetricComparisonItem[] = [];
 
-          // 1. Process Finansial
+          // 1. Process Finansial (9 field standar; mode konsolidasi menjumlahkan seluruh entitas termasuk ELIMINASI)
           const finRows: FinansialRecord[] = json.finansial || [];
-          const targetFinRows = finRows.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
+          const targetFinRows = finRows.filter(f => isBranchMatch(selectedTerminal, f.KODE_CBG, f.NM_CBG));
 
-          // If multi-branch, keep branches separate; if ALL, aggregate
+          // If multi-branch, keep branches separate; if ALL or single, aggregate across ENTITAS
           const finMap: Record<string, { real: number; rkaArr: number[]; yoyArr: number[]; rekName: string; branchName: string }> = {};
           targetFinRows.forEach(f => {
-            const rek = f.rekening || 'Lainnya';
-            const bName = f.branchName || f.branchCode || 'Cabang';
+            const rek = canonicalRekening(f.REKENING);
+            const bName = f.NM_CBG || f.KODE_CBG || 'Cabang';
             const key = isMultiBranch ? `[${bName}] ${rek}` : rek;
             if (!finMap[key]) finMap[key] = { real: 0, rkaArr: [], yoyArr: [], rekName: rek, branchName: bName };
-            finMap[key].real += (f.konsolidasiRp || 0);
-            if (f.rka) finMap[key].rkaArr.push(f.rka);
-            if (f.yoy) finMap[key].yoyArr.push(f.yoy);
+            const realVal = parseRealisasi(f.REALISASI);
+            finMap[key].real += realVal;
+            const rkaParsed = parseMetricPercent(f.RKA);
+            const yoyParsed = parseMetricPercent(f.YOY);
+            if (realVal !== 0 && rkaParsed !== null) finMap[key].rkaArr.push(rkaParsed);
+            if (realVal !== 0 && yoyParsed !== null) finMap[key].yoyArr.push(yoyParsed);
           });
 
           Object.entries(finMap).forEach(([key, val], idx) => {
-            const avgRka = val.rkaArr.length > 0 ? (val.rkaArr.reduce((a, b) => a + b, 0) / val.rkaArr.length) : 100;
-            const avgYoy = val.yoyArr.length > 0 ? (val.yoyArr.reduce((a, b) => a + b, 0) / val.yoyArr.length) : 100;
+            const avgRkaRaw = averageValidMetric(val.rkaArr);
+            const avgYoyRaw = averageValidMetric(val.yoyArr);
+            const avgRka = typeof avgRkaRaw === 'number' ? avgRkaRaw : 0;
+            const avgYoy = typeof avgYoyRaw === 'number' ? avgYoyRaw : 0;
             const targetRkap = avgRka > 0 ? Math.round(val.real / (avgRka / 100)) : val.real;
             const real2025 = avgYoy > 0 ? Math.round(val.real / (avgYoy / 100)) : val.real;
             const isCost = val.rekName.toLowerCase().includes('beban') || val.real < 0;
@@ -118,16 +122,27 @@ export default function ComparisonModal({
               real2025,
               targetRkap,
               real2026: val.real,
-              rkaPct: Number(avgRka.toFixed(1)),
-              yoyPct: Number(avgYoy.toFixed(1)),
+              rkaPct: Number(avgRka.toFixed(2)),
+              yoyPct: Number(avgYoy.toFixed(2)),
               gapRkap: val.real - targetRkap,
               gapYoY: val.real - real2025,
-              isGood: isCost ? (avgRka <= 100) : (avgRka >= 100),
+              isGood: isCost ? (avgRka === 0 || avgRka <= 100) : (avgRka >= 100),
             });
           });
 
           // 2. Process Opkom
-          const opRows: OpkomRecord[] = json.opkom || [];
+          // Shape of the Opkom rows as serialised by `/api/modules-data`
+          // (camelCase, not the snake_case database columns).
+          interface OpkomPayloadRow {
+            branchCode?: string;
+            branchName?: string;
+            layanan?: string;
+            satuan?: string;
+            jumlahRp?: number;
+            rka?: number;
+            yoy?: number;
+          }
+          const opRows: OpkomPayloadRow[] = json.opkom || [];
           const targetOpRows = opRows.filter(o => isBranchMatch(selectedTerminal, o.branchCode, o.branchName));
 
           const opMap: Record<string, { real: number; satuan: string; rkaArr: number[]; yoyArr: number[]; layName: string; branchName: string }> = {};
@@ -206,24 +221,12 @@ export default function ComparisonModal({
     window.print();
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onClose]);
-
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
       <div
         className="modal-content"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Matriks Komparasi Realisasi 2026 vs RKAP vs Realisasi 2025"
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: '1060px',
@@ -262,7 +265,7 @@ export default function ComparisonModal({
                   color: 'var(--accent-blue-text)',
                   padding: '3px 9px',
                   borderRadius: '20px',
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 700,
                   letterSpacing: '0.02em',
                 }}
@@ -276,7 +279,7 @@ export default function ComparisonModal({
                   color: 'var(--text-muted)',
                   padding: '3px 9px',
                   borderRadius: '20px',
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 600,
                 }}
               >
@@ -288,7 +291,7 @@ export default function ComparisonModal({
                   color: 'var(--status-good-text)',
                   padding: '3px 9px',
                   borderRadius: '20px',
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 700,
                 }}
               >
@@ -371,22 +374,23 @@ export default function ComparisonModal({
                 }}
               >
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  {([
-                    { id: 'all', label: 'Semua Indikator' },
-                    { id: 'opkom', label: 'Pendapatan Layanan Opkom' },
-                    { id: 'finansial', label: 'Keuangan (Finance)' },
-                    { id: 'operasional', label: 'Volume Trafik Operasional' },
-                  ] as const).map(tab => (
+                  {(
+                    [
+                      { id: 'all', label: 'Semua Indikator' },
+                      { id: 'opkom', label: 'Pendapatan Layanan Opkom' },
+                      { id: 'finansial', label: 'Keuangan (Finance)' },
+                      { id: 'operasional', label: 'Volume Trafik Operasional' },
+                    ] as const
+                  ).map(tab => (
                     <button
                       key={tab.id}
-                      type="button"
                       onClick={() => setCategoryFilter(tab.id)}
                       style={{
                         padding: '6px 12px',
-                        fontSize: '12px',
+                        fontSize: '11.5px',
                         fontWeight: 600,
                         borderRadius: '6px',
-                        border: categoryFilter === tab.id ? '1px solid #38bdf8' : '1px solid #1e3557',
+                        border: categoryFilter === tab.id ? '1px solid var(--accent-cyan)' : '1px solid #1e3557',
                         backgroundColor: categoryFilter === tab.id ? 'rgba(56, 189, 248, 0.18)' : '#0d1f38',
                         color: categoryFilter === tab.id ? 'var(--text-on-accent)' : 'var(--text-muted)',
                         cursor: 'pointer',
@@ -413,7 +417,7 @@ export default function ComparisonModal({
                       border: '1px solid #1e3557',
                       borderRadius: '6px',
                       color: 'var(--text-title)',
-                      fontSize: '12px',
+                      fontSize: '11.5px',
                       outline: 'none',
                     }}
                   />
@@ -431,10 +435,10 @@ export default function ComparisonModal({
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
                       Visualisasi Perbandingan 3 Dimensi (Miliar Rp)
                     </div>
-                    <div style={{ display: 'flex', gap: '14px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'flex', gap: '14px', fontSize: '11px', color: 'var(--text-muted)' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ width: 10, height: 10, backgroundColor: '#64748b', borderRadius: '2px' }} />
                         Realisasi 2025
@@ -454,8 +458,8 @@ export default function ComparisonModal({
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} />
+                        <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: '#0f223d',
@@ -466,8 +470,8 @@ export default function ComparisonModal({
                           }}
                         />
                         <Bar dataKey="Realisasi 2025" fill="#64748b" radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="Target RKAP 2026" fill="#f59e0b" radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="Realisasi 2026" fill="#38bdf8" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="Target RKAP 2026" fill="var(--status-alert-text)" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="Realisasi 2026" fill="var(--accent-cyan)" radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -487,16 +491,16 @@ export default function ComparisonModal({
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }} className="card-table">
                     <thead>
                       <tr style={{ backgroundColor: '#13284a', borderBottom: '1px solid #1e3557', color: 'var(--text-muted)' }}>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700 }}>Indikator / Rekening</th>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Satuan</th>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Realisasi 2025</th>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Target RKAP 2026</th>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right', color: 'var(--accent-blue-text)' }}>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Indikator / Rekening</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Satuan</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Realisasi 2025</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Target RKAP 2026</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right', color: 'var(--accent-blue-text)' }}>
                           Realisasi 2026
                         </th>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>% RKAP</th>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>YoY Growth</th>
-                        <th scope="col" style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Status</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>% RKAP</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>YoY Growth</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -513,6 +517,8 @@ export default function ComparisonModal({
                             return `${v.toLocaleString('id-ID')} ${item.satuan}`;
                           };
 
+                          const hasRka = item.rkaPct > 0;
+                          const hasYoy = item.yoyPct > 0;
                           const yoyGrowth = item.yoyPct - 100;
                           const isYoYPos = yoyGrowth >= 0;
 
@@ -527,7 +533,7 @@ export default function ComparisonModal({
                               <td data-label="Indikator / Rekening" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-title)' }}>
                                 {item.name}
                               </td>
-                              <td data-label="Satuan" style={{ padding: '10px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                              <td data-label="Satuan" style={{ padding: '10px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px' }}>
                                 {item.satuan}
                               </td>
                               <td data-label="Realisasi 2025" style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text-muted)' }}>
@@ -543,25 +549,29 @@ export default function ComparisonModal({
                                 <span
                                   style={{
                                     fontWeight: 700,
-                                    color: item.rkaPct >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)',
+                                    color: !hasRka ? 'var(--text-muted)' : item.rkaPct >= 100 ? 'var(--status-good-text)' : 'var(--status-danger-text)',
                                   }}
                                 >
-                                  {item.rkaPct}%
+                                  {hasRka ? `${item.rkaPct.toFixed(2)}%` : '-'}
                                 </span>
                               </td>
                               <td data-label="YoY Growth" style={{ padding: '10px 14px', textAlign: 'right' }}>
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '2px',
-                                    fontWeight: 700,
-                                    color: isYoYPos ? 'var(--status-good-text)' : 'var(--status-danger-text)',
-                                  }}
-                                >
-                                  {isYoYPos ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                                  {formatPercentDelta(yoyGrowth + 100, 1)}
-                                </span>
+                                {hasYoy ? (
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '2px',
+                                      fontWeight: 700,
+                                      color: isYoYPos ? 'var(--status-good-text)' : 'var(--status-danger-text)',
+                                    }}
+                                  >
+                                    {isYoYPos ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                                    {item.yoyPct.toFixed(2)}%
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>-</span>
+                                )}
                               </td>
                               <td data-label="Status" style={{ padding: '10px 14px', textAlign: 'center' }}>
                                 <span
@@ -569,7 +579,7 @@ export default function ComparisonModal({
                                     display: 'inline-block',
                                     padding: '2px 8px',
                                     borderRadius: '12px',
-                                    fontSize: '12px',
+                                    fontSize: '10px',
                                     fontWeight: 700,
                                     backgroundColor: item.isGood ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
                                     color: item.isGood ? 'var(--status-good-text)' : 'var(--status-danger-text)',
@@ -605,7 +615,7 @@ export default function ComparisonModal({
             borderBottomRightRadius: '14px',
           }}
         >
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
             Sumber Data: Lembar Kerja Keuangan & Operasional Pelabuhan Terverifikasi
           </div>
           <button

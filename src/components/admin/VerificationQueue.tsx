@@ -159,7 +159,7 @@ export default function VerificationQueue({
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '16px' }}>
-              <FileCheck size={20} color="#38bdf8" />
+              <FileCheck size={20} color="var(--accent-blue-text)" />
               <span>Pusat Verifikasi & Tata Kelola Validasi Data</span>
             </h2>
             <p className="card-subtitle">
@@ -254,7 +254,7 @@ export default function VerificationQueue({
                 borderRadius: 'var(--radius-md)',
                 border: '1px dashed var(--border-subtle)'
               }}>
-                <CheckCircle2 size={40} color="#34d399" style={{ margin: '0 auto 10px' }} />
+                <CheckCircle2 size={40} color="var(--status-good-text)" style={{ margin: '0 auto 10px' }} />
                 <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>Tidak Ada Antrean Verifikasi Baru</h4>
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                   Seluruh data kinerja periode {selectedMonth}/{selectedYear} telah terverifikasi resmi oleh BOD Regional 4.

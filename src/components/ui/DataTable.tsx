@@ -79,7 +79,7 @@ export default function DataTable({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ position: 'relative', minWidth: '260px' }}>
-          <Search size={16} color="#94a3b8" aria-hidden="true" style={{ position: 'absolute', left: '12px', top: '11px' }} />
+          <Search size={16} color="var(--text-muted)" aria-hidden="true" style={{ position: 'absolute', left: '12px', top: '11px' }} />
           <input
             type="text"
             aria-label="Cari indikator, cabang, atau kode"

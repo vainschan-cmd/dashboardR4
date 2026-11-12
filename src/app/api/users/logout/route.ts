@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     if (session) {
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: session.sub,
           user_name: session.name,
           user_role: session.role,

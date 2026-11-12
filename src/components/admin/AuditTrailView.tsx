@@ -54,7 +54,7 @@ export default function AuditTrailView() {
         <div className="card-header">
           <div>
             <h2 className="card-title" style={{ fontSize: '16px' }}>
-              <History size={20} color="#38bdf8" />
+              <History size={20} color="var(--accent-blue-text)" />
               <span>Audit Trail & Log Aktivitas Sistem</span>
             </h2>
             <p className="card-subtitle">
@@ -70,7 +70,7 @@ export default function AuditTrailView() {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ position: 'relative', minWidth: '280px' }}>
-            <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '11px' }} />
+            <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '11px' }} />
             <input
               type="text"
               className="form-input"

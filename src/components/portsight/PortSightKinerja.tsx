@@ -458,10 +458,10 @@ export default function PortSightKinerja({
       {/* 2. Empat Kartu Ringkasan Kinerja Sesuai Cabang Terpilih */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
         {/* Waiting Time to Pilot (WTP) */}
-        <div className="dark-card" style={{ borderLeft: '4px solid #38bdf8' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--accent-cyan)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Waiting Time to Pilot (WTP)</span>
-            <Clock size={19} color="#38bdf8" />
+            <Clock size={19} color="var(--accent-blue-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.wtpVal} Jam
@@ -473,7 +473,7 @@ export default function PortSightKinerja({
         </div>
 
         {/* Curah Kering / Petikemas (TGH & TSD / BSH & BCH) */}
-        <div className="dark-card" style={{ borderLeft: '4px solid #10b981' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-good-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">
               {metrics.isAll
@@ -482,7 +482,7 @@ export default function PortSightKinerja({
                 ? 'Curah Kering (TGH / TSD)'
                 : 'Petikemas (BSH / BCH)'}
             </span>
-            {metrics.ckTsd > 0 || metrics.isAll ? <Ship size={19} color="#10b981" /> : <Box size={19} color="#10b981" />}
+            {metrics.ckTsd > 0 || metrics.isAll ? <Ship size={19} color="var(--status-good-text)" /> : <Box size={19} color="var(--status-good-text)" />}
           </div>
           <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.isAll ? (
@@ -520,7 +520,7 @@ export default function PortSightKinerja({
         </div>
 
         {/* Curah Cair (TGH & TSD) / General Cargo */}
-        <div className="dark-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+        <div className="dark-card" style={{ borderLeft: '4px solid var(--status-alert-text)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">
               {metrics.isAll
@@ -531,7 +531,7 @@ export default function PortSightKinerja({
                 ? 'General Cargo (TGH / TSD)'
                 : 'Curah Cair & Cargo'}
             </span>
-            <Gauge size={19} color="#f59e0b" />
+            <Gauge size={19} color="var(--status-alert-text)" />
           </div>
           <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.isAll ? (
@@ -574,7 +574,7 @@ export default function PortSightKinerja({
         <div className="dark-card" style={{ borderLeft: '4px solid #a855f7' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="kpi-header-label">Parameter Terdata</span>
-            <Layers size={19} color="#a855f7" />
+            <Layers size={19} color="var(--series-purple-text)" />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-title)', margin: '8px 0 4px' }}>
             {metrics.totalParam > 0 ? `${metrics.totalParam} Indikator` : '9 Indikator'}
@@ -742,7 +742,7 @@ export default function PortSightKinerja({
                   <Bar
                     dataKey="TSD"
                     name="TSD (Ton/Ship/Day)"
-                    fill="#38bdf8"
+                    fill="var(--accent-cyan)"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={45}
                   />
@@ -753,7 +753,7 @@ export default function PortSightKinerja({
                   <Bar
                     dataKey="TGH"
                     name="TGH (Ton/Gang/Jam)"
-                    fill="#10b981"
+                    fill="var(--status-good-text)"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={45}
                   />
@@ -764,7 +764,7 @@ export default function PortSightKinerja({
                   <Bar
                     dataKey="WTP"
                     name="WTP (Jam)"
-                    fill="#f59e0b"
+                    fill="var(--status-alert-text)"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={45}
                   />
@@ -776,7 +776,7 @@ export default function PortSightKinerja({
                     <Bar
                       dataKey="BSH"
                       name="BSH (Box/Ship/Hour)"
-                      fill="#38bdf8"
+                      fill="var(--accent-cyan)"
                       radius={[4, 4, 0, 0]}
                       maxBarSize={45}
                     />

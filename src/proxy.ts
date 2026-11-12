@@ -40,6 +40,9 @@ const PROTECTED_API_RULES: Array<{
   { pattern: /^\/api\/modules-data(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
   // Pre-aggregated Beranda figures; same permission as the raw module endpoint.
   { pattern: /^\/api\/dashboard\/summary(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
+  // Aggregation endpoints introduced by the UI overhaul (ported to SQLite).
+  { pattern: /^\/api\/beranda-summary(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
+  { pattern: /^\/api\/finansial-summary(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
 ];
 
 export async function proxy(request: NextRequest) {

@@ -18,7 +18,19 @@ import {
   Info
 } from 'lucide-react';
 import { OFFICIAL_BRANCHES, getBranchByCode } from '@/lib/constants';
-import { formatRupiahFull, formatNumber } from '@/lib/formatters';
+import { formatRupiahFull } from '@/lib/formatters';
+import {
+  FINANSIAL_ENTITAS_LIST,
+  FINANSIAL_REKENING_LIST,
+  formatPercentOrDash,
+  parseMetricPercent,
+} from '@/lib/finansialHelpers';
+import {
+  PERALATAN_ENTITAS_LIST,
+  PERALATAN_JENIS_ALAT_LIST,
+  PERALATAN_KATEGORI_LIST,
+  PERALATAN_KONDISI_LIST,
+} from '@/lib/peralatanHelpers';
 import { User } from '@/lib/types';
 
 export type ModuleType = 'finansial' | 'opkom' | 'kinerja' | 'utilisasi' | 'peralatan' | 'fasilitas';
@@ -57,7 +69,30 @@ const MONTHS_LIST = [
   { value: 12, name: 'Desember (Bulan 12)' },
 ];
 
-export default function ManualDataInputModal({
+/**
+ * Entry point with the access guard.
+ *
+ * The guard used to sit above every `useState` in the same function, which made
+ * every hook below it conditional — React requires hooks to run in the same
+ * order on every render, so opening the modal with a different role could shift
+ * the hook positions and corrupt state. Splitting the guard into its own
+ * component is what makes the early return legal.
+ */
+export default function ManualDataInputModal(props: ManualDataInputModalProps) {
+  const { isOpen, currentUser } = props;
+  // BOD / Viewer role is prohibited from manual input.
+  if (
+    !isOpen ||
+    currentUser?.role === 'viewer' ||
+    currentUser?.nipp === '10000' ||
+    String(currentUser?.name).toLowerCase().includes('bod')
+  ) {
+    return null;
+  }
+  return <ManualDataInputForm {...props} />;
+}
+
+function ManualDataInputForm({
   isOpen,
   onClose,
   defaultModule = 'finansial',
@@ -78,16 +113,12 @@ export default function ManualDataInputModal({
     return selectedTerminal && selectedTerminal !== 'ALL' ? selectedTerminal : 'R01';
   });
 
-  // 1. Finansial state
-  const [finRekening, setFinRekening] = useState('Pendapatan');
-  const [finCabang, setFinCabang] = useState<number>(10000000000);
-  const [finPmt, setFinPmt] = useState<number>(5000000000);
-  const [finPtp, setFinPtp] = useState<number>(0);
-  const [finPsl, setFinPsl] = useState<number>(1000000000);
-  const [finPjm, setFinPjm] = useState<number>(2000000000);
-  const [finEliminasi, setFinEliminasi] = useState<number>(0);
-  const [finYoy, setFinYoy] = useState<number>(105.2);
-  const [finRka, setFinRka] = useState<number>(102.4);
+  // 1. Finansial state (9 field standar)
+  const [finRekening, setFinRekening] = useState<string>('Pendapatan');
+  const [finEntitas, setFinEntitas] = useState<string>('CABANG');
+  const [finRealisasi, setFinRealisasi] = useState<number>(170176612011);
+  const [finRkaInput, setFinRkaInput] = useState<string>('99.01');
+  const [finYoyInput, setFinYoyInput] = useState<string>('103.00');
 
   // 2. Opkom state
   const [opLayanan, setOpLayanan] = useState('KAPAL');
@@ -108,13 +139,15 @@ export default function ManualDataInputModal({
   const [utYor, setUtYor] = useState<number>(42.1);
   const [utSor, setUtSor] = useState<number>(38.0);
 
-  // 5. Peralatan state
-  const [alKode, setAlKode] = useState('AL01');
-  const [alNama, setAlNama] = useState('Quay Container Crane');
-  const [alSingkat, setAlSingkat] = useState('QCC');
-  const [alJenis, setAlJenis] = useState('OPERASI KAPAL');
-  const [alJumlah, setAlJumlah] = useState<number>(4);
-  const [alUtilisasi, setAlUtilisasi] = useState<number>(68.5);
+  // 5. Peralatan state (9 kolom standar monitoring kondisi)
+  const [alTanggal, setAlTanggal] = useState<string>('2026-11-08');
+  const [alGrupEntitas, setAlGrupEntitas] = useState<string>('R4');
+  const [alNama, setAlNama] = useState<string>('Forklift 01');
+  const [alJenis, setAlJenis] = useState<string>('Forklift');
+  const [alKategori, setAlKategori] = useState<string>('Alat CY');
+  const [alKondisi, setAlKondisi] = useState<string>('READY');
+  const [alKerusakan, setAlKerusakan] = useState<string>('-');
+  const [alTindakLanjut, setAlTindakLanjut] = useState<string>('-');
 
   // 6. Fasilitas state
   const [fasNama, setFasNama] = useState('Dermaga Nusantara');
@@ -132,7 +165,8 @@ export default function ManualDataInputModal({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isOpen) return;
+    // Deferred one tick so the effect body does not synchronously cascade a
+    // second render before the modal paints.
     const timer = window.setTimeout(() => {
       setActiveModule(defaultModule);
       if (currentUser?.role === 'pic_cabang' && currentUser?.branch_id && currentUser.branch_id !== 'R99') {
@@ -141,27 +175,15 @@ export default function ManualDataInputModal({
         setBranchCode(selectedTerminal);
       }
     }, 0);
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [defaultModule, selectedTerminal, currentUser, isOpen, onClose]);
-
-  // BOD / Viewer role is prohibited from manual input
-  if (!isOpen || currentUser?.role === 'viewer' || currentUser?.nipp === '10000' || String(currentUser?.name).toLowerCase().includes('bod')) {
-    return null;
-  }
+    return () => window.clearTimeout(timer);
+  }, [defaultModule, selectedTerminal, currentUser, isOpen]);
 
   // Selected branch helper
   const branchObj = getBranchByCode(branchCode);
   const branchName = branchObj ? branchObj.name : branchCode;
 
-  // Auto-calculated konsolidasi
-  const computedKonsolidasi = finCabang + finPmt + finPtp + finPsl + finPjm + finEliminasi;
+  const parsedFinRka = parseMetricPercent(finRkaInput);
+  const parsedFinYoy = parseMetricPercent(finYoyInput);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,7 +191,7 @@ export default function ManualDataInputModal({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    let payloadData: Record<string, string | number> = {
+    let payloadData: Record<string, unknown> = {
       TAHUN: year,
       BULAN: month,
       KODE_CBG: branchCode,
@@ -180,15 +202,10 @@ export default function ManualDataInputModal({
       payloadData = {
         ...payloadData,
         REKENING: finRekening,
-        CABANG: finCabang,
-        PMT: finPmt,
-        PTP: finPtp,
-        PSL: finPsl,
-        PJM: finPjm,
-        ELIMINASI: finEliminasi,
-        KONSOLIDASI: computedKonsolidasi,
-        YOY: finYoy,
-        RKA: finRka,
+        ENTITAS: finEntitas,
+        REALISASI: finRealisasi,
+        RKA: finRealisasi === 0 && parsedFinRka === null ? '-' : parsedFinRka ?? '-',
+        YOY: finRealisasi === 0 && parsedFinYoy === null ? '-' : parsedFinYoy ?? '-',
       };
     } else if (activeModule === 'opkom') {
       payloadData = {
@@ -219,12 +236,15 @@ export default function ManualDataInputModal({
     } else if (activeModule === 'peralatan') {
       payloadData = {
         ...payloadData,
-        KD_ALAT: alKode,
-        NM_ALAT: alNama,
-        SINGKATAN_ALAT: alSingkat,
-        JNS_ALAT: alJenis,
-        JUMLAH: alJumlah,
-        UTILISASI: alUtilisasi,
+        tanggal: alTanggal,
+        grup_entitas: alGrupEntitas,
+        nama_cabang: branchName,
+        nama_alat: alNama,
+        jenis_alat: alJenis,
+        kategori_alat: alKategori,
+        kondisi: alKondisi,
+        kerusakan: alKerusakan,
+        tindak_lanjut: alTindakLanjut,
       };
     } else if (activeModule === 'fasilitas') {
       payloadData = {
@@ -271,9 +291,6 @@ export default function ManualDataInputModal({
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
       <div
         className="modal-content"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Input Data Manual Operasional dan Keuangan"
         style={{ maxWidth: '680px', width: '100%', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -298,15 +315,13 @@ export default function ManualDataInputModal({
               <h3 className="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
                 Input Data Manual Operasional & Keuangan
               </h3>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+              <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-muted)' }}>
                 Field input diselaraskan persis dengan struktur spreadsheet <strong>input_data.xlsx</strong>
               </p>
             </div>
           </div>
           <button
-            type="button"
             onClick={onClose}
-            aria-label="Tutup modal input manual"
             style={{
               background: 'transparent',
               border: 'none',
@@ -349,7 +364,7 @@ export default function ManualDataInputModal({
                   background: isSelected ? 'var(--bg-card)' : 'transparent',
                   color: isSelected ? 'var(--accent-blue)' : 'var(--text-secondary)',
                   fontWeight: isSelected ? 700 : 500,
-                  fontSize: '12px',
+                  fontSize: '11.5px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
@@ -405,7 +420,7 @@ export default function ManualDataInputModal({
                   gap: '8px',
                   padding: '10px 14px',
                   backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                  border: '1px solid #10b981',
+                  border: '1px solid var(--status-good-text)',
                   borderRadius: '8px',
                   color: 'var(--status-good-text)',
                   fontSize: '12px',
@@ -429,13 +444,13 @@ export default function ManualDataInputModal({
               }}
             >
               <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Building2 size={12} color="var(--accent-cyan)" />
                     <span>Cabang Pelabuhan (KODE_CBG)</span>
                   </span>
                   {isBranchLocked && (
-                    <span style={{ fontSize: '12px', color: 'var(--accent-cyan)', backgroundColor: 'rgba(2, 132, 199, 0.2)', padding: '1px 6px', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '10px', color: 'var(--accent-cyan)', backgroundColor: 'rgba(2, 132, 199, 0.2)', padding: '1px 6px', borderRadius: '8px' }}>
                       🔒 Terkunci PIC
                     </span>
                   )}
@@ -469,7 +484,7 @@ export default function ManualDataInputModal({
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <Calendar size={12} color="var(--accent-orange)" />
                   <span>Tahun (TAHUN)</span>
                 </label>
@@ -486,7 +501,7 @@ export default function ManualDataInputModal({
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <Calendar size={12} color="var(--accent-orange)" />
                   <span>Bulan (BULAN)</span>
                 </label>
@@ -508,160 +523,107 @@ export default function ManualDataInputModal({
 
             {/* MODULE SPECIFIC FIELDS */}
 
-            {/* 1. FINANCE / FINANSIAL */}
+            {/* 1. FINANCE / FINANSIAL (9 Field Standar) */}
             {activeModule === 'finansial' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Rekening Akuntansi (REKENING)
+                    </label>
+                    <select
+                      value={finRekening}
+                      onChange={(e) => setFinRekening(e.target.value)}
+                      className="form-control"
+                      style={{ fontWeight: 600 }}
+                    >
+                      {FINANSIAL_REKENING_LIST.map((rek) => (
+                        <option key={rek} value={rek}>
+                          {rek}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Entitas Pelaporan (ENTITAS)
+                    </label>
+                    <select
+                      value={finEntitas}
+                      onChange={(e) => setFinEntitas(e.target.value)}
+                      className="form-control"
+                      style={{ fontWeight: 600 }}
+                    >
+                      {FINANSIAL_ENTITAS_LIST.map((ent) => (
+                        <option key={ent} value={ent}>
+                          {ent}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
-                    Rekening Akuntansi (REKENING)
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    Realisasi Nominal Rp (REALISASI — gunakan angka negatif untuk Beban atau ELIMINASI)
                   </label>
-                  <select
-                    value={finRekening}
-                    onChange={(e) => setFinRekening(e.target.value)}
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={finRealisasi}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setFinRealisasi(Number.isFinite(val) ? val : 0);
+                      if (val === 0) {
+                        setFinRkaInput('-');
+                        setFinYoyInput('-');
+                      }
+                    }}
                     className="form-control"
-                    style={{ fontWeight: 600 }}
-                  >
-                    <option value="Pendapatan">Pendapatan (Revenue)</option>
-                    <option value="Beban">Beban (Operating Expense)</option>
-                    <option value="Laba Usaha">Laba Usaha (Operating Profit)</option>
-                    <option value="Laba Bersih">Laba Bersih (Net Profit)</option>
-                    <option value="EBITDA">EBITDA</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Porsi Cabang Rp (CABANG)
-                    </label>
-                    <input
-                      type="number"
-                      value={finCabang}
-                      onChange={(e) => setFinCabang(Number(e.target.value))}
-                      className="form-control"
-                      placeholder="Contoh: 170176612011"
-                      required
-                    />
-                    <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>
-                      {formatRupiahFull(finCabang)}
+                    placeholder="Contoh: 170176612011 atau -111088687271"
+                    required
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '11px' }}>
+                    <span style={{ color: finRealisasi < 0 ? 'var(--status-danger-text)' : 'var(--accent-cyan)', fontWeight: 600 }}>
+                      {formatRupiahFull(finRealisasi)}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      ({(finRealisasi / 1_000_000_000).toFixed(2)} Miliar Rp)
                     </span>
                   </div>
-
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Porsi PMT Rp (PMT)
-                    </label>
-                    <input
-                      type="number"
-                      value={finPmt}
-                      onChange={(e) => setFinPmt(Number(e.target.value))}
-                      className="form-control"
-                    />
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {formatRupiahFull(finPmt)}
-                    </span>
-                  </div>
-
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Porsi PTP Rp (PTP)
-                    </label>
-                    <input
-                      type="number"
-                      value={finPtp}
-                      onChange={(e) => setFinPtp(Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Porsi PSL Rp (PSL)
-                    </label>
-                    <input
-                      type="number"
-                      value={finPsl}
-                      onChange={(e) => setFinPsl(Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Porsi PJM Rp (PJM)
-                    </label>
-                    <input
-                      type="number"
-                      value={finPjm}
-                      onChange={(e) => setFinPjm(Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Eliminasi Rp (ELIMINASI)
-                    </label>
-                    <input
-                      type="number"
-                      value={finEliminasi}
-                      onChange={(e) => setFinEliminasi(Number(e.target.value))}
-                      className="form-control"
-                    />
-                  </div>
-                </div>
-
-                {/* Konsolidasi Auto Calculated Info */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block' }}>
-                      Total Konsolidasi Otomatis (KONSOLIDASI):
-                    </span>
-                    <strong style={{ fontSize: '16px', color: 'var(--accent-blue-text)' }}>
-                      {formatRupiahFull(computedKonsolidasi)}
-                    </strong>
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    ({formatNumber(computedKonsolidasi / 1_000_000_000, 2)} miliar)
-                  </span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Pertumbuhan YoY % (YOY)
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                      Pencapaian RKA % (RKA atau &quot;-&quot; jika 0)
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      value={finYoy}
-                      onChange={(e) => setFinYoy(Number(e.target.value))}
+                      type="text"
+                      value={finRkaInput}
+                      onChange={(e) => setFinRkaInput(e.target.value)}
                       className="form-control"
-                      placeholder="105.2"
+                      placeholder="99.01 atau -"
                     />
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                      Preview: {formatPercentOrDash(finRkaInput)}
+                    </span>
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Pencapaian RKA % (RKA)
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                      Pertumbuhan YoY % (YOY atau &quot;-&quot; jika 0)
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      value={finRka}
-                      onChange={(e) => setFinRka(Number(e.target.value))}
+                      type="text"
+                      value={finYoyInput}
+                      onChange={(e) => setFinYoyInput(e.target.value)}
                       className="form-control"
-                      placeholder="102.4"
+                      placeholder="103.00 atau -"
                     />
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                      Preview: {formatPercentOrDash(finYoyInput)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -672,7 +634,7 @@ export default function ManualDataInputModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Layanan Operasional (LAYANAN)
                     </label>
                     <select
@@ -690,7 +652,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Satuan Ukuran (SATUAN)
                     </label>
                     <select
@@ -710,7 +672,7 @@ export default function ManualDataInputModal({
                 </div>
 
                 <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                  <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                     Nilai Realisasi (JUMLAH)
                   </label>
                   <input
@@ -722,7 +684,7 @@ export default function ManualDataInputModal({
                     required
                   />
                   {opSatuan === 'Rp' && (
-                    <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--accent-cyan)' }}>
                       {formatRupiahFull(opJumlah)}
                     </span>
                   )}
@@ -730,7 +692,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       YoY % (YOY)
                     </label>
                     <input
@@ -743,7 +705,7 @@ export default function ManualDataInputModal({
                     />
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Pencapaian RKA % (RKA)
                     </label>
                     <input
@@ -764,7 +726,7 @@ export default function ManualDataInputModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Nama Kinerja (NM_KINE)
                     </label>
                     <select
@@ -790,7 +752,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Kode Kinerja (KD_KINE)
                     </label>
                     <input
@@ -806,7 +768,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Satuan Indikator (SATUAN)
                     </label>
                     <select
@@ -824,7 +786,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Nilai Capaian (NILAI)
                     </label>
                     <input
@@ -845,7 +807,7 @@ export default function ManualDataInputModal({
             {activeModule === 'utilisasi' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                  <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                     Nama / Jenis Dermaga (DERMAGA)
                   </label>
                   <select
@@ -866,7 +828,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       BOR % (Berth Occupancy)
                     </label>
                     <input
@@ -881,7 +843,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       YOR % (Yard Occupancy)
                     </label>
                     <input
@@ -896,7 +858,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       SOR % (Shed Occupancy)
                     </label>
                     <input
@@ -913,115 +875,126 @@ export default function ManualDataInputModal({
               </div>
             )}
 
-            {/* 5. PERALATAN */}
+            {/* 5. PERALATAN (9 Kolom Standar Monitoring Kondisi) */}
             {activeModule === 'peralatan' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
-                      Nama Alat (NM_ALAT)
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Tanggal (tanggal)
+                    </label>
+                    <input
+                      type="date"
+                      value={alTanggal}
+                      onChange={(e) => setAlTanggal(e.target.value)}
+                      className="form-control"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Grup / Entitas
                     </label>
                     <select
-                      value={alNama}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAlNama(val);
-                        if (val.includes('Quay')) { setAlKode('AL01'); setAlSingkat('QCC'); setAlJenis('OPERASI KAPAL'); }
-                        else if (val.includes('Harbour')) { setAlKode('AL02'); setAlSingkat('HMC'); setAlJenis('OPERASI KAPAL'); }
-                        else if (val.includes('Rubber')) { setAlKode('AL04'); setAlSingkat('RTG'); setAlJenis('OPERASI LAPANGAN'); }
-                        else if (val.includes('Reach')) { setAlKode('AL05'); setAlSingkat('RS'); setAlJenis('OPERASI LAPANGAN'); }
-                        else if (val.includes('Forklift')) { setAlKode('AL11'); setAlSingkat('FL'); setAlJenis('OPERASI LAPANGAN'); }
-                        else if (val.includes('Head')) { setAlKode('AL08'); setAlSingkat('HT'); setAlJenis('OPERASI LAPANGAN'); }
-                        else if (val.includes('Tugboat')) { setAlKode('AL12'); setAlSingkat('TB'); setAlJenis('ALAT APUNG'); }
-                      }}
+                      value={alGrupEntitas}
+                      onChange={(e) => setAlGrupEntitas(e.target.value)}
                       className="form-control"
                       style={{ fontWeight: 600 }}
                     >
-                      <option value="Quay Container Crane">Quay Container Crane (QCC)</option>
-                      <option value="Harbour Mobile Crane">Harbour Mobile Crane (HMC)</option>
-                      <option value="Rubber Tyred Gantry Crane">Rubber Tyred Gantry Crane (RTG)</option>
-                      <option value="Reach Stacker">Reach Stacker (RS)</option>
-                      <option value="Forklift">Forklift (FL)</option>
-                      <option value="Head Truck">Head Truck (HT)</option>
-                      <option value="Terminal Tractor">Terminal Tractor (TT)</option>
-                      <option value="Kapal Tunda (Tugboat)">Kapal Tunda (TB)</option>
-                      <option value="Kapal Pandu (Pilot Boat)">Kapal Pandu (PB)</option>
+                      {PERALATAN_ENTITAS_LIST.map((ent) => (
+                        <option key={ent} value={ent}>{ent}</option>
+                      ))}
                     </select>
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
-                      Kode Alat (KD_ALAT)
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Kategori Alat
                     </label>
-                    <input
-                      type="text"
-                      value={alKode}
-                      onChange={(e) => setAlKode(e.target.value.toUpperCase())}
+                    <select
+                      value={alKategori}
+                      onChange={(e) => setAlKategori(e.target.value)}
                       className="form-control"
-                      placeholder="AL01"
-                      required
-                    />
+                    >
+                      {PERALATAN_KATEGORI_LIST.map((kat) => (
+                        <option key={kat} value={kat}>{kat}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Singkatan (SINGKATAN_ALAT)
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Nama Alat (nama_alat)
                     </label>
                     <input
                       type="text"
-                      value={alSingkat}
-                      onChange={(e) => setAlSingkat(e.target.value.toUpperCase())}
+                      value={alNama}
+                      onChange={(e) => setAlNama(e.target.value)}
                       className="form-control"
-                      placeholder="QCC"
+                      placeholder="Contoh: RTG 04 / Forklift 01"
+                      required
                     />
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Jenis Alat (JNS_ALAT)
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Jenis Alat (jenis_alat)
                     </label>
                     <select
                       value={alJenis}
                       onChange={(e) => setAlJenis(e.target.value)}
                       className="form-control"
                     >
-                      <option value="OPERASI KAPAL">OPERASI KAPAL</option>
-                      <option value="OPERASI LAPANGAN">OPERASI LAPANGAN</option>
-                      <option value="ALAT APUNG">ALAT APUNG</option>
-                      <option value="ALAT BANTU">ALAT BANTU</option>
+                      {PERALATAN_JENIS_ALAT_LIST.map((jns) => (
+                        <option key={jns} value={jns}>{jns}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                      Kondisi (kondisi)
+                    </label>
+                    <select
+                      value={alKondisi}
+                      onChange={(e) => setAlKondisi(e.target.value)}
+                      className="form-control"
+                      style={{ fontWeight: 700 }}
+                    >
+                      {PERALATAN_KONDISI_LIST.map((kon) => (
+                        <option key={kon} value={kon}>{kon}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
-                      Populasi Unit (JUMLAH)
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                      Kerusakan (isi &apos;-&apos; jika tidak ada)
                     </label>
-                    <input
-                      type="number"
-                      value={alJumlah}
-                      onChange={(e) => setAlJumlah(Number(e.target.value))}
+                    <textarea
+                      rows={2}
+                      value={alKerusakan}
+                      onChange={(e) => setAlKerusakan(e.target.value)}
                       className="form-control"
-                      placeholder="4"
-                      required
+                      placeholder="- atau deskripsi kerusakan..."
                     />
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
-                      Utilisasi Jam / % (UTILISASI)
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                      Tindak Lanjut (isi &apos;-&apos; jika tidak ada)
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={alUtilisasi}
-                      onChange={(e) => setAlUtilisasi(Number(e.target.value))}
+                    <textarea
+                      rows={2}
+                      value={alTindakLanjut}
+                      onChange={(e) => setAlTindakLanjut(e.target.value)}
                       className="form-control"
-                      placeholder="68.5"
-                      required
+                      placeholder="- atau rencana perbaikan / sparepart..."
                     />
                   </div>
                 </div>
@@ -1033,7 +1006,7 @@ export default function ManualDataInputModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Nama Fasilitas (nm_pasfel)
                     </label>
                     <input
@@ -1047,7 +1020,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-title)', marginBottom: '4px', display: 'block' }}>
                       Jenis Fasilitas (jns_faspel)
                     </label>
                     <select
@@ -1068,7 +1041,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Panjang m (panjang)
                     </label>
                     <input
@@ -1081,7 +1054,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Lebar m (lebar)
                     </label>
                     <input
@@ -1094,7 +1067,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Kedalaman (mLws)
                     </label>
                     <input
@@ -1108,7 +1081,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Satuan (satuan)
                     </label>
                     <input
@@ -1123,7 +1096,7 @@ export default function ManualDataInputModal({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Luas / Kapasitas Nilai (nilai)
                     </label>
                     <input
@@ -1136,7 +1109,7 @@ export default function ManualDataInputModal({
                   </div>
 
                   <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Keterangan / Segmen (ket)
                     </label>
                     <input
@@ -1164,7 +1137,7 @@ export default function ManualDataInputModal({
               backgroundColor: 'var(--bg-inner)',
             }}
           >
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Info size={14} color="var(--accent-blue)" />
               <span>Tersimpan ke file Excel & database real-time</span>
             </div>
@@ -1175,7 +1148,7 @@ export default function ManualDataInputModal({
                 onClick={onClose}
                 className="btn-dark"
                 disabled={loading}
-                style={{ padding: '8px 16px', fontSize: '12px' }}
+                style={{ padding: '8px 16px', fontSize: '12.5px' }}
               >
                 Batal
               </button>
@@ -1185,7 +1158,7 @@ export default function ManualDataInputModal({
                 disabled={loading}
                 style={{
                   padding: '8px 18px',
-                  fontSize: '12px',
+                  fontSize: '12.5px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',

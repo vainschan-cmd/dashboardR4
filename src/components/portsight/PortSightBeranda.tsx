@@ -1,864 +1,1422 @@
 'use client';
 
-import React, { useState } from 'react';
-import {
-  AlertTriangle,
-  Building2,
-  Ship,
-  Layers,
-  Activity,
-  RotateCcw,
-  DollarSign,
-  ExternalLink,
-  FileSpreadsheet,
-  BarChart3,
-  Gauge,
-  CheckCircle2,
-  Lock,
-} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
-  ComposedChart,
   BarChart,
   Bar,
-  Line,
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid,
+  ReferenceLine,
+  LabelList,
+  PieChart,
+  Pie,
   Cell,
 } from 'recharts';
-import { getSelectedBranchLabel } from '@/lib/constants';
-import { User, UserRole } from '@/lib/types';
-import { useBerandaAnalytics, BerandaKpiItem } from '@/hooks/useBerandaAnalytics';
-import ExecutiveKonsolidasiDashboard from './ExecutiveKonsolidasiDashboard';
+import {
+  Banknote,
+  Coins,
+  FilterX,
+  Search,
+  Check,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+  Lock,
+  AlertCircle,
+} from 'lucide-react';
+import type { User, UserRole } from '@/lib/types';
+import { getMonthNameId } from '@/lib/finansialHelpers';
+import { formatBebanTriliun, formatRupiahFull } from '@/lib/formatters';
+import {
+  BERANDA_ENTITAS_COLORS,
+  BERANDA_ENTITAS_ORDER,
+  formatBerandaJuta,
+  formatBerandaMiliar,
+  formatBerandaSummaryRupiah,
+  formatIdDecimal2,
+  formatIdPercent2,
+  type BerandaBopoBranchRow,
+  type BerandaEntityShareRow,
+  type BerandaPjmBottomRow,
+  type BerandaStackedBranchRow,
+} from '@/lib/berandaSummary';
+import { useBerandaAnalytics } from '@/hooks/useBerandaAnalytics';
 
 interface PortSightBerandaProps {
-  selectedTerminal?: string;
-  selectedPeriod?: string;
-  onSelectTerminal?: (terminalId: string) => void;
-  onNavigateTab?: (tabId: string, branchCode?: string) => void;
-  onOpenDrilldown?: (item: BerandaKpiItem | Record<string, unknown>) => void;
+  selectedTerminal: string;
+  selectedPeriod: string;
+  onSelectTerminal: (terminalId: string) => void;
+  onNavigateTab: (tabId: string, branchCode?: string) => void;
+  onOpenDrilldown?: (item: Record<string, unknown>) => void;
   currentUser?: User | null;
-  userRole?: UserRole;
+  userRole: UserRole;
   comparisonMode?: string;
   onOpenComparisonModal?: () => void;
 }
 
-export default function PortSightBeranda({
-  selectedTerminal = 'ALL',
-  selectedPeriod = 'YTD Sep 2026',
-  onSelectTerminal,
-  onNavigateTab,
-  onOpenDrilldown,
-  currentUser,
-  userRole,
-  comparisonMode = 'all',
-  onOpenComparisonModal,
-}: PortSightBerandaProps) {
-  // Search state is reserved for the branch filter; the input lives in the header.
-  const [terminalSearch] = useState<string>('');
-  const [dashboardView, setDashboardView] = useState<'konsolidasi' | 'visual' | 'cards'>('konsolidasi');
+interface CustomTooltipPayloadItem<T> {
+  payload?: T;
+}
 
-  const {
-    loading,
-    verifiedOnly,
-    setVerifiedOnly,
-    verificationSummary,
-    isPicCabang,
-    isNone,
-    isAll,
-    isSingle,
-    isMulti,
-    selectedCodes,
-    activeBranch,
-    serviceKpis,
-    financeKpis,
-    mainCombinedChartData,
-    gaugeMetrics,
-    servicesGroupedChartData,
-  } = useBerandaAnalytics({
-    selectedTerminal,
-    selectedPeriod,
-    currentUser,
-    userRole,
-    terminalSearch,
-  });
+interface CustomTooltipProps<T> {
+  active?: boolean;
+  payload?: Array<CustomTooltipPayloadItem<T>>;
+}
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div
-          className="skeleton-shimmer"
-          style={{ height: '48px', borderRadius: 'var(--radius-md)' }}
-        />
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-            gap: '16px',
-          }}
+interface LabelRenderProps {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  height?: number | string;
+  value?: number | string | boolean | null;
+}
+
+interface PieLabelRenderProps {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  percent?: number;
+  payload?: BerandaEntityShareRow;
+}
+
+const RADIAN = Math.PI / 180;
+
+function renderPieSliceLabel({
+  cx = 0,
+  cy = 0,
+  midAngle = 0,
+  innerRadius = 0,
+  outerRadius = 0,
+  percent = 0,
+  payload,
+}: PieLabelRenderProps) {
+  if (!payload || percent < 0.03) return null;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={12}
+      fontWeight={800}
+      style={{ pointerEvents: 'none', textShadow: '0 1px 2px rgba(0,0,0,0.45)' }}
+    >
+      {`${payload.roundedPct}%`}
+    </text>
+  );
+}
+
+function renderPjmNegativeLabel(props: LabelRenderProps) {
+  const num = Number(props.value ?? 0);
+  if (!Number.isFinite(num)) return null;
+
+  const rawX = Number(props.x ?? 0);
+  const rawY = Number(props.y ?? 0);
+  const rawWidth = Number(props.width ?? 0);
+  const rawHeight = Number(props.height ?? 0);
+
+  const barLeft = rawWidth < 0 ? rawX + rawWidth : rawX;
+  const barRight = rawWidth < 0 ? rawX : rawX + rawWidth;
+  const barWidthAbs = Math.abs(rawWidth);
+  const cy = rawY + rawHeight / 2;
+  const text = formatBerandaJuta(num);
+
+  if (num >= 0) {
+    if (barWidthAbs >= 88) {
+      return (
+        <text
+          x={barRight - 6}
+          y={cy}
+          fill="#ffffff"
+          textAnchor="end"
+          dominantBaseline="central"
+          fontSize={10}
+          fontWeight={700}
+          style={{ pointerEvents: 'none' }}
         >
-          <div
-            className="skeleton-shimmer"
-            style={{ height: '290px', borderRadius: 'var(--radius-md)' }}
-          />
-          <div
-            className="skeleton-shimmer"
-            style={{ height: '290px', borderRadius: 'var(--radius-md)' }}
-          />
-        </div>
-        <div
-          className="skeleton-shimmer"
-          style={{ height: '320px', borderRadius: 'var(--radius-md)' }}
-        />
-      </div>
+          {text}
+        </text>
+      );
+    }
+    return (
+      <text
+        x={barRight + 6}
+        y={cy}
+        fill="var(--text-main)"
+        textAnchor="start"
+        dominantBaseline="central"
+        fontSize={10}
+        fontWeight={700}
+        style={{ pointerEvents: 'none' }}
+      >
+        {text}
+      </text>
+    );
+  }
+
+  if (barWidthAbs >= 88) {
+    return (
+      <text
+        x={barLeft + 6}
+        y={cy}
+        fill="#ffffff"
+        textAnchor="start"
+        dominantBaseline="central"
+        fontSize={10}
+        fontWeight={700}
+        style={{ pointerEvents: 'none' }}
+      >
+        {text}
+      </text>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      {/* Active Branch Filter Banner (When a specific branch is selected) */}
-      {!isAll && (
+    <text
+      x={barLeft - 6}
+      y={cy}
+      fill="var(--text-main)"
+      textAnchor="end"
+      dominantBaseline="central"
+      fontSize={10}
+      fontWeight={700}
+      style={{ pointerEvents: 'none' }}
+    >
+      {text}
+    </text>
+  );
+}
+
+function StackedBranchTooltip({
+  active,
+  payload,
+  metricLabel,
+}: CustomTooltipProps<BerandaStackedBranchRow> & { metricLabel: string }) {
+  if (!active || !payload || payload.length === 0 || !payload[0]?.payload) {
+    return null;
+  }
+  const row = payload[0].payload;
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 10,
+        padding: '10px 12px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+        minWidth: 200,
+        fontSize: 12,
+      }}
+    >
+      <div style={{ fontWeight: 800, color: 'var(--text-title)', marginBottom: 4 }}>
+        {row.nmCbg}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+        {metricLabel} (Non-Eliminasi)
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {BERANDA_ENTITAS_ORDER.map((ent) => (
+          <div
+            key={ent}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 2,
+                  backgroundColor: BERANDA_ENTITAS_COLORS[ent],
+                }}
+              />
+              {ent}
+            </span>
+            <span style={{ fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
+              {formatBerandaMiliar(row[ent])}
+            </span>
+          </div>
+        ))}
         <div
           style={{
+            marginTop: 4,
+            paddingTop: 4,
+            borderTop: '1px solid var(--border-subtle)',
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
-            backgroundColor: isPicCabang ? 'rgba(2, 132, 199, 0.16)' : 'rgba(2, 132, 199, 0.12)',
-            border: isPicCabang ? '1px solid rgba(2, 132, 199, 0.5)' : '1px solid rgba(2, 132, 199, 0.35)',
-            padding: '10px 16px',
-            borderRadius: 'var(--radius-md)',
-            flexWrap: 'wrap',
-            gap: '10px',
+            fontWeight: 800,
+            color: 'var(--text-title)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                // `UX-02`: a gradient tile with a coloured glow competed with the
-                // banner text for attention and carried no information. A flat
-                // accent surface with a decorative icon reads the same and does
-                // not look like a button.
-                backgroundColor: 'var(--blue-soft)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent-blue-text)',
-                flexShrink: 0,
-              }}
-            >
-              <Building2 size={16} strokeWidth={1.75} aria-hidden="true" />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)' }}>
-                {isPicCabang
-                  ? `Cabang Penugasan PIC: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`
-                  : isNone
-                  ? 'Pilihan Cabang Dikosongkan (Mode Reset)'
-                  : isMulti
-                  ? `Filter Aktif: ${getSelectedBranchLabel(selectedTerminal)}`
-                  : `Filter Aktif: [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}`}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {isPicCabang
-                  ? 'Tampilan dashboard, ringkasan eksekutif, dan data operasional disesuaikan khusus untuk cabang penugasan Anda.'
-                  : isNone
-                  ? 'Semua cabang saat ini tidak dicentang. Silakan pilih cabang yang ingin dipantau dari filter cabang di atas.'
-                  : isMulti
-                  ? `Menampilkan data operasional dan finansial masing-masing cabang terpilih (${selectedCodes.length} cabang, non-akumulasi).`
-                  : `Menampilkan performa dan data operasional khusus cabang ${activeBranch?.name || selectedTerminal}.`}
-              </div>
-            </div>
-          </div>
-
-          {isPicCabang ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '12px',
-                fontWeight: 700,
-                color: 'var(--accent-cyan)',
-                backgroundColor: 'rgba(2, 132, 199, 0.18)',
-                border: '1px solid rgba(2, 132, 199, 0.4)',
-                padding: '5px 12px',
-                borderRadius: 'var(--radius-pill)',
-              }}
-              title="Informasi terkunci sesuai akun PIC cabang"
-            >
-              <Lock size={12} strokeWidth={1.75} />
-              <span>Terkunci Sesuai Akun PIC Cabang</span>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              {onOpenComparisonModal && (
-                <button
-                  type="button"
-                  onClick={onOpenComparisonModal}
-                  className="btn-dark"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    fontSize: '12px',
-                    padding: '5px 12px',
-                    borderRadius: 'var(--radius-pill)',
-                    border: '1px solid rgba(56, 189, 248, 0.4)',
-                    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                    color: 'var(--accent-cyan)',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                  }}
-                  title="Buka Matriks Detail Komparasi Realisasi vs RKAP vs Realisasi 2025"
-                >
-                  <BarChart3 size={12} strokeWidth={1.75} />
-                  <span>Matriks vs RKAP & 2025</span>
-                </button>
-              )}
-              {onSelectTerminal && (
-                <button
-                  type="button"
-                  onClick={() => onSelectTerminal('ALL')}
-                  className="btn-dark"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '12px',
-                    padding: '5px 12px',
-                    borderRadius: 'var(--radius-pill)',
-                    borderColor: 'var(--accent-blue)',
-                    color: 'var(--accent-cyan)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                  title="Reset ke akumulasi seluruh 28 cabang"
-                >
-                  <RotateCcw size={12} strokeWidth={1.75} />
-                  <span>Tampilkan Akumulasi Semua Cabang (ALL)</span>
-                </button>
-              )}
-            </div>
-          )}
+          <span>Total</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatBerandaMiliar(row.total)}</span>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
 
-      {/* View Switcher & Data Verification Status Filter */}
+function BopoTooltip({ active, payload }: CustomTooltipProps<BerandaBopoBranchRow>) {
+  if (!active || !payload || payload.length === 0 || !payload[0]?.payload) {
+    return null;
+  }
+  const row = payload[0].payload;
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 10,
+        padding: '10px 12px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+        minWidth: 205,
+        fontSize: 12,
+      }}
+    >
+      <div style={{ fontWeight: 800, color: 'var(--text-title)', marginBottom: 6 }}>
+        {row.nmCbg}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+        <span style={{ color: 'var(--text-muted)' }}>BOPO</span>
+        <span style={{ fontWeight: 800, color: 'var(--accent-blue-text)' }}>{formatIdPercent2(row.bopo)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11 }}>
+        <span style={{ color: 'var(--text-muted)' }}>Pendapatan</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {formatBerandaSummaryRupiah(row.pendapatan)}
+        </span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11 }}>
+        <span style={{ color: 'var(--text-muted)' }}>Beban</span>
+        <span
+          style={{ fontWeight: 600, color: 'var(--text-secondary)' }}
+          title={formatRupiahFull(row.beban)}
+        >
+          {formatBebanTriliun(row.beban)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function EntityShareTooltip({ active, payload }: CustomTooltipProps<BerandaEntityShareRow>) {
+  if (!active || !payload || payload.length === 0 || !payload[0]?.payload) {
+    return null;
+  }
+  const row = payload[0].payload;
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 10,
+        padding: '8px 12px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+        fontSize: 12,
+      }}
+    >
+      <div style={{ fontWeight: 800, color: 'var(--text-title)', marginBottom: 4 }}>
+        {row.entitas}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ color: 'var(--text-muted)' }}>Laba Bersih</span>
+        <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+          {formatBerandaSummaryRupiah(row.totalRealisasi)}
+        </span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ color: 'var(--text-muted)' }}>Kontribusi</span>
+        <span style={{ fontWeight: 700, color: 'var(--accent-blue-text)' }}>
+          {formatIdPercent2(row.exactPct)} ({row.roundedPct}%)
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PjmBottomTooltip({ active, payload }: CustomTooltipProps<BerandaPjmBottomRow>) {
+  if (!active || !payload || payload.length === 0 || !payload[0]?.payload) {
+    return null;
+  }
+  const row = payload[0].payload;
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 10,
+        padding: '8px 12px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+        fontSize: 12,
+      }}
+    >
+      <div style={{ fontWeight: 800, color: 'var(--text-title)', marginBottom: 4 }}>
+        {row.nmCbg}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ color: 'var(--text-muted)' }}>Laba Area PJM</span>
+        <span style={{ fontWeight: 800, color: 'var(--status-danger-text)' }}>{formatBerandaJuta(row.nilaiJt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function KpiSubMetrics({ yoy, rka }: { yoy: number | null; rka: number | null }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+        fontSize: 12,
+        fontWeight: 600,
+        color: 'var(--text-muted)',
+        marginTop: 2,
+      }}
+    >
+      <span>
+        YoY:{' '}
+        <span style={{ color: 'var(--status-good-text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+          {yoy !== null ? formatIdDecimal2(yoy) : '-'}
+        </span>
+      </span>
+      <span aria-hidden="true" style={{ color: 'var(--border-subtle)' }}>|</span>
+      <span>
+        RKA:{' '}
+        <span style={{ color: 'var(--status-danger-text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+          {rka !== null ? formatIdDecimal2(rka) : '-'}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+export default function PortSightBeranda({
+  selectedTerminal,
+  onSelectTerminal,
+  currentUser,
+  userRole,
+}: PortSightBerandaProps) {
+  const {
+    tahun,
+    bulan,
+    selectedBranches,
+    verifiedOnly,
+    isBodViewer,
+    isPicCabang,
+    loading,
+    refreshing,
+    error,
+    summary,
+    setTahun,
+    setBulan,
+    toggleBranch,
+    clearBranches,
+    setVerifiedOnly,
+    resetFilters,
+    refresh,
+  } = useBerandaAnalytics({
+    selectedTerminal,
+    currentUser,
+    userRole,
+    onSelectTerminal,
+  });
+
+  const [branchSearch, setBranchSearch] = useState<string>('');
+
+  const availableYears = useMemo(
+    () => summary?.filters.availableYears ?? [2025, 2026],
+    [summary]
+  );
+  const availableMonths = useMemo(
+    () => summary?.filters.availableMonths ?? [8, 9],
+    [summary]
+  );
+  const availableBranches = useMemo(
+    () => summary?.filters.availableBranches ?? [],
+    [summary]
+  );
+
+  const filteredBranchOptions = useMemo(() => {
+    const q = branchSearch.trim().toLowerCase();
+    if (!q) return availableBranches;
+    return availableBranches.filter((b) => b.nmCbg.toLowerCase().includes(q));
+  }, [availableBranches, branchSearch]);
+
+  const activeBranchNames = summary?.filters.selectedBranches ?? selectedBranches;
+  const activeBranchLabel = useMemo(() => {
+    if (isPicCabang) {
+      return summary?.filters.assignedBranchName || 'Cabang Anda';
+    }
+    if (activeBranchNames.length === 0 || activeBranchNames.length >= availableBranches.length) {
+      return `Semua Cabang (${availableBranches.length})`;
+    }
+    if (activeBranchNames.length <= 2) {
+      return activeBranchNames.join(', ');
+    }
+    return `${activeBranchNames.length} Cabang Dipilih`;
+  }, [isPicCabang, summary?.filters.assignedBranchName, activeBranchNames, availableBranches.length]);
+
+  const bopoRows = useMemo(
+    () => summary?.charts.bopoPerCabang ?? [],
+    [summary]
+  );
+  const maxBopo = useMemo(() => {
+    let max = 100;
+    for (const row of bopoRows) {
+      if (row.bopo > max) max = row.bopo;
+    }
+    return Math.ceil(max / 10) * 10;
+  }, [bopoRows]);
+
+  const bopoChartHeight = Math.max(240, bopoRows.length * 22 + 24);
+
+  const pjmRows = useMemo(
+    () => summary?.charts.bottom10LabaPjm ?? [],
+    [summary]
+  );
+  const pjmDomain = useMemo<[number, number]>(() => {
+    if (pjmRows.length === 0) return [-1000, 0];
+    let min = 0;
+    let max = 0;
+    for (const row of pjmRows) {
+      if (row.nilaiJt < min) min = row.nilaiJt;
+      if (row.nilaiJt > max) max = row.nilaiJt;
+    }
+    if (min === 0 && max === 0) return [-100, 0];
+    return [min < 0 ? min * 1.08 : 0, max > 0 ? max * 1.15 : 0];
+  }, [pjmRows]);
+
+  const kpis = summary?.kpis;
+  const top10Laba = useMemo(
+    () => summary?.charts.top10LabaArea ?? [],
+    [summary]
+  );
+  const top10Pendapatan = useMemo(
+    () => summary?.charts.top10PendapatanArea ?? [],
+    [summary]
+  );
+  const entityShare = useMemo(
+    () => summary?.charts.kontribusiLabaEntitas ?? [],
+    [summary]
+  );
+  const hasPositiveEntityShare = useMemo(
+    () => entityShare.some((item) => item.sliceValue > 0),
+    [entityShare]
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Top Status & Context Bar */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '8px',
-          padding: '8px 14px',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
           backgroundColor: 'var(--bg-card)',
-          borderRadius: 'var(--radius-md)',
           border: '1px solid var(--border-subtle)',
+          borderRadius: 12,
+          padding: '10px 14px',
+          boxShadow: 'var(--card-shadow)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <span
             style={{
-              fontSize: '12px',
+              fontSize: 13,
               fontWeight: 800,
-              color: 'var(--accent-cyan)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
+              color: 'var(--text-title)',
             }}
           >
-            <Activity size={14} strokeWidth={1.75} />
-            Ikhtisar Kinerja Eksekutif
+            Summary Keuangan Regional 4
           </span>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            • {isNone
-                ? 'Cabang Dikosongkan'
-                : isAll
-                ? 'Konsolidasi 28 Cabang Resmi Regional 4'
-                : isSingle
-                ? `Cabang: ${activeBranch?.name || selectedTerminal}`
-                : `${selectedCodes.length} Cabang Terpilih`}
-          </span>
-          <button
-            type="button"
-            onClick={() => setVerifiedOnly(prev => !prev)}
-            aria-pressed={verifiedOnly}
+          <span
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
               padding: '3px 10px',
-              borderRadius: '999px',
-              fontSize: '12px',
+              borderRadius: 9999,
+              fontSize: 11,
               fontWeight: 700,
-              cursor: 'pointer',
-              border: verifiedOnly
-                ? '1px solid var(--status-good-border)'
-                : '1px solid var(--status-alert-border)',
-              backgroundColor: verifiedOnly
-                ? 'var(--status-good-bg)'
-                : 'var(--status-alert-bg)',
-              color: verifiedOnly ? 'var(--status-good-text)' : 'var(--status-alert-text)',
+              backgroundColor: 'rgba(59, 130, 246, 0.14)',
+              color: 'var(--accent-blue-text)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
             }}
-            title={
-              verifiedOnly
-                ? 'Menampilkan hanya data yang telah diverifikasi resmi (klik untuk menyertakan data menunggu verifikasi)'
-                : 'Menampilkan seluruh data termasuk yang masih menunggu verifikasi (klik untuk memfilter hanya data terverifikasi)'
-            }
           >
-            <CheckCircle2 size={12} strokeWidth={1.75} aria-hidden="true" />
-            {/* `COPY-05`: the old copy ("Filter: Data Terverifikasi Resmi") read as a
-                status label while being a clickable toggle. State first, action
-                second, and the toggle nature is exposed via aria-pressed. */}
-            <span>{verifiedOnly ? 'Hanya data terverifikasi' : 'Semua status data'}</span>
-            <span className="sr-only">
-              {verifiedOnly
-                ? 'Aktif. Klik untuk menampilkan semua status data.'
-                : 'Tidak aktif. Klik untuk hanya menampilkan data terverifikasi.'}
-            </span>
-          </button>
-          {verificationSummary.pendingCount > 0 && (
+            Tahun {summary?.filters.tahun ?? tahun} • Bulan {summary?.filters.bulan ?? bulan} (
+            {getMonthNameId(summary?.filters.bulan ?? bulan)})
+          </span>
+          <span
+            style={{
+              padding: '3px 10px',
+              borderRadius: 9999,
+              fontSize: 11,
+              fontWeight: 600,
+              backgroundColor: 'var(--bg-inner)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            {activeBranchLabel}
+          </span>
+          {isPicCabang && (
             <span
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontSize: '12px',
+                gap: 4,
+                padding: '3px 9px',
+                borderRadius: 9999,
+                fontSize: 11,
                 fontWeight: 700,
-                backgroundColor: 'rgba(245, 158, 11, 0.14)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
+                backgroundColor: 'rgba(245, 158, 11, 0.15)',
                 color: 'var(--status-alert-text)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
               }}
-              title="Terdapat data input baru yang sedang menunggu persetujuan Admin Regional"
             >
-              <AlertTriangle size={11} strokeWidth={1.75} />
-              <span className="tabular-nums">{verificationSummary.pendingCount} Menunggu Verifikasi</span>
+              <Lock size={11} /> Akses Terbatas Cabang
             </span>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-inner)', padding: '3px', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          {!isBodViewer && summary?.verificationSummary && (
+            <button
+              type="button"
+              onClick={() => setVerifiedOnly(!verifiedOnly)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '5px 10px',
+                borderRadius: 8,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: verifiedOnly
+                  ? '1px solid rgba(16, 185, 129, 0.45)'
+                  : '1px solid var(--border-subtle)',
+                backgroundColor: verifiedOnly ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-inner)',
+                color: verifiedOnly ? 'var(--status-good-text)' : 'var(--text-secondary)',
+              }}
+              title="Filter khusus data berstatus terverifikasi"
+            >
+              <ShieldCheck size={13} />
+              {verifiedOnly ? 'Hanya Terverifikasi' : 'Semua Status'}
+              {summary.verificationSummary.pending > 0 && (
+                <span style={{ opacity: 0.8 }}>({summary.verificationSummary.pending} pending)</span>
+              )}
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={() => setDashboardView('konsolidasi')}
+            onClick={resetFilters}
             style={{
-              padding: '5px 12px',
-              fontSize: '12px',
-              fontWeight: dashboardView === 'konsolidasi' ? 700 : 500,
-              backgroundColor: dashboardView === 'konsolidasi' ? 'var(--accent-blue)' : 'transparent',
-              color: dashboardView === 'konsolidasi' ? 'var(--text-on-accent)' : 'var(--text-muted)',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
+              gap: 5,
+              padding: '5px 10px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-inner)',
+              color: 'var(--text-secondary)',
             }}
           >
-            <Gauge size={13} strokeWidth={1.75} />
-            <span>Dashboard Konsolidasi</span>
+            <RotateCcw size={12} /> Reset Default
           </button>
+
           <button
             type="button"
-            onClick={() => setDashboardView('visual')}
+            onClick={refresh}
+            disabled={refreshing}
             style={{
-              padding: '5px 12px',
-              fontSize: '12px',
-              fontWeight: dashboardView === 'visual' ? 700 : 500,
-              backgroundColor: dashboardView === 'visual' ? 'var(--accent-blue)' : 'transparent',
-              color: dashboardView === 'visual' ? 'var(--text-on-accent)' : 'var(--text-muted)',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
+              gap: 5,
+              padding: '5px 10px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: refreshing ? 'wait' : 'pointer',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-inner)',
+              color: 'var(--text-title)',
             }}
           >
-            <BarChart3 size={13} strokeWidth={1.75} />
-            <span>Grafik Terpadu</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setDashboardView('cards')}
-            style={{
-              padding: '5px 12px',
-              fontSize: '12px',
-              fontWeight: dashboardView === 'cards' ? 700 : 500,
-              backgroundColor: dashboardView === 'cards' ? 'var(--accent-blue)' : 'transparent',
-              color: dashboardView === 'cards' ? 'var(--text-on-accent)' : 'var(--text-muted)',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <Layers size={13} strokeWidth={1.75} />
-            <span>Kartu Metrik</span>
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Muat Ulang
           </button>
         </div>
       </div>
 
-      {dashboardView === 'konsolidasi' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <ExecutiveKonsolidasiDashboard
-            selectedTerminal={selectedTerminal}
-          />
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 14px',
+            borderRadius: 10,
+            backgroundColor: 'var(--status-danger-bg)',
+            border: '1px solid var(--status-danger-border)',
+            color: 'var(--status-danger-text)',
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          <AlertCircle size={15} />
+          <span>{error}</span>
         </div>
-      ) : dashboardView === 'visual' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Bagian Atas: Metrik Finansial & KPI Gauge */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-              gap: '16px',
-            }}
-          >
-            {/* 1. Finansial Kombinasi Bar & Line Chart */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <DollarSign size={16} strokeWidth={1.75} style={{ color: 'var(--accent-blue-text)' }} />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
-                    Kinerja Finansial (Pendapatan, Beban, Laba Usaha)
+      )}
+
+      {/* Workspace Grid: Left Slicers + Right Dashboard Content */}
+      <div className="beranda-summary-workspace">
+        {/* LEFT SLICERS COLUMN */}
+        <aside className="beranda-slicer-column" aria-label="Filter Summary Keuangan">
+          {/* Slicer: TAHUN */}
+          <div className="beranda-slicer-card">
+            <div className="beranda-slicer-header">
+              <span>TAHUN</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                {tahun}
+              </span>
+            </div>
+            <div className="beranda-slicer-list">
+              {availableYears.map((yr) => {
+                const isActive = yr === tahun;
+                return (
+                  <button
+                    key={yr}
+                    type="button"
+                    onClick={() => setTahun(yr)}
+                    className={`beranda-slicer-btn ${isActive ? 'is-active' : ''}`}
+                  >
+                    <span>{yr}</span>
+                    {isActive && <Check size={13} color="var(--accent-blue-text)" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Slicer: BULAN */}
+          <div className="beranda-slicer-card">
+            <div className="beranda-slicer-header">
+              <span>BULAN</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
+                {getMonthNameId(bulan)}
+              </span>
+            </div>
+            <div className="beranda-slicer-list">
+              {availableMonths.map((mo) => {
+                const isActive = mo === bulan;
+                return (
+                  <button
+                    key={mo}
+                    type="button"
+                    onClick={() => setBulan(mo)}
+                    className={`beranda-slicer-btn ${isActive ? 'is-active' : ''}`}
+                  >
+                    <span>
+                      {mo}{' '}
+                      <span style={{ fontSize: 11, opacity: 0.72, fontWeight: 500 }}>
+                        ({getMonthNameId(mo)})
+                      </span>
+                    </span>
+                    {isActive && <Check size={13} color="var(--accent-blue-text)" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Slicer: NM_CBG */}
+          <div className="beranda-slicer-card">
+            <div className="beranda-slicer-header">
+              <span>NM_CBG</span>
+              {!isPicCabang && selectedBranches.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearBranches}
+                  title="Tampilkan semua cabang"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '2px 6px',
+                    borderRadius: 6,
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    color: 'var(--status-danger-text)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <FilterX size={11} /> Clear
+                </button>
+              )}
+            </div>
+
+            {!isPicCabang && availableBranches.length > 5 && (
+              <div style={{ padding: '6px 6px 2px', position: 'relative' }}>
+                <Search
+                  size={12}
+                  style={{
+                    position: 'absolute',
+                    left: 14,
+                    top: 15,
+                    color: 'var(--text-muted)',
+                    pointerEvents: 'none',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={branchSearch}
+                  onChange={(e) => setBranchSearch(e.target.value)}
+                  placeholder="Cari cabang..."
+                  aria-label="Cari nama cabang"
+                  style={{
+                    width: '100%',
+                    padding: '5px 8px 5px 26px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-subtle)',
+                    backgroundColor: 'var(--bg-input)',
+                    color: 'var(--text-main)',
+                    fontSize: 11.5,
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="beranda-slicer-list beranda-slicer-scroll">
+              {!isPicCabang && (
+                <button
+                  type="button"
+                  onClick={clearBranches}
+                  className={`beranda-slicer-btn ${selectedBranches.length === 0 ? 'is-active' : ''}`}
+                >
+                  <span>Semua Cabang ({availableBranches.length})</span>
+                  {selectedBranches.length === 0 && <Check size={13} color="var(--accent-blue-text)" />}
+                </button>
+              )}
+
+              {filteredBranchOptions.map((opt) => {
+                const isSelected = isPicCabang
+                  ? true
+                  : selectedBranches.includes(opt.nmCbg);
+                return (
+                  <button
+                    key={opt.nmCbg}
+                    type="button"
+                    disabled={isPicCabang}
+                    onClick={() => toggleBranch(opt.nmCbg)}
+                    className={`beranda-slicer-btn ${isSelected ? 'is-active' : ''}`}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {opt.nmCbg}
+                    </span>
+                    {isSelected && <Check size={13} color="var(--accent-blue-text)" />}
+                  </button>
+                );
+              })}
+
+              {filteredBranchOptions.length === 0 && (
+                <div
+                  style={{
+                    padding: 12,
+                    textAlign: 'center',
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  Cabang tidak ditemukan
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        {/* RIGHT DASHBOARD CONTENT */}
+        <div className="beranda-main-area">
+          {/* TOP 4 KPI CARDS */}
+          <section className="beranda-kpi-grid" aria-label="KPI Keuangan Area">
+            {/* 1. Laba Area */}
+            <div className="beranda-kpi-card">
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'rgba(59, 130, 246, 0.14)',
+                  color: 'var(--accent-blue-text)',
+                  flexShrink: 0,
+                }}
+              >
+                <Banknote size={28} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-title)' }}>
+                  Laba Area
+                </div>
+                <div
+                  style={{
+                    fontSize: 24,
+                    fontWeight: 800,
+                    color: 'var(--accent-blue-text)',
+                    lineHeight: 1.15,
+                    fontVariantNumeric: 'tabular-nums',
+                    marginTop: 2,
+                  }}
+                >
+                  {loading && !kpis ? '...' : kpis?.labaArea.formatted ?? 'Rp 0'}
+                </div>
+                <KpiSubMetrics
+                  yoy={kpis?.labaArea.yoy ?? null}
+                  rka={kpis?.labaArea.rka ?? null}
+                />
+              </div>
+            </div>
+
+            {/* 2. Pendapatan */}
+            <div className="beranda-kpi-card">
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'rgba(112, 173, 71, 0.16)',
+                  color: 'var(--status-good-text)',
+                  flexShrink: 0,
+                }}
+              >
+                <Coins size={28} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-title)' }}>
+                  Pendapatan
+                </div>
+                <div
+                  style={{
+                    fontSize: 24,
+                    fontWeight: 800,
+                    color: 'var(--status-good-text)',
+                    lineHeight: 1.15,
+                    fontVariantNumeric: 'tabular-nums',
+                    marginTop: 2,
+                  }}
+                >
+                  {loading && !kpis ? '...' : kpis?.pendapatan.formatted ?? 'Rp 0'}
+                </div>
+                <KpiSubMetrics
+                  yoy={kpis?.pendapatan.yoy ?? null}
+                  rka={kpis?.pendapatan.rka ?? null}
+                />
+              </div>
+            </div>
+
+            {/* 3. Beban */}
+            <div className="beranda-kpi-card">
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'rgba(237, 125, 49, 0.16)',
+                  color: 'var(--accent-orange-text)',
+                  flexShrink: 0,
+                }}
+              >
+                <Coins size={28} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-title)' }}>
+                  Beban
+                </div>
+                <div
+                  style={{
+                    fontSize: 24,
+                    fontWeight: 800,
+                    color: 'var(--accent-orange-text)',
+                    lineHeight: 1.15,
+                    fontVariantNumeric: 'tabular-nums',
+                    marginTop: 2,
+                  }}
+                  title={
+                    kpis
+                      ? `${formatBebanTriliun(kpis.beban.value, { includeCurrency: false })} (${formatRupiahFull(kpis.beban.value)})`
+                      : 'Rp 0,00 T'
+                  }
+                >
+                  {loading && !kpis ? '...' : kpis?.beban.formatted ?? 'Rp 0,00 T'}
+                </div>
+                <KpiSubMetrics
+                  yoy={kpis?.beban.yoy ?? null}
+                  rka={kpis?.beban.rka ?? null}
+                />
+              </div>
+            </div>
+
+            {/* 4. BOPO */}
+            <div className="beranda-kpi-card is-bopo">
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-on-dark-muted)' }}>Bopo</div>
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 800,
+                  color: 'var(--status-alert-on-dark)',
+                  lineHeight: 1.15,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {loading && !kpis ? '...' : kpis?.bopo.formatted ?? '0,00%'}
+              </div>
+            </div>
+          </section>
+
+          {/* 5 CHARTS BENTO GRID */}
+          <section className="beranda-charts-bento" aria-label="Grafik Ringkasan Keuangan">
+            {/* LEFT COLUMN: Top 10 Laba + Top 10 Pendapatan */}
+            <div className="beranda-chart-stack-col">
+              {/* Grafik 1: 10 Cabang Terbesar Laba Area */}
+              <div className="beranda-chart-card">
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    marginBottom: 4,
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      color: 'var(--text-title)',
+                    }}
+                  >
+                    10 Cabang Terbesar Laba Area
+                  </h3>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Miliar (Rp)
                   </span>
                 </div>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Realisasi vs RKAP & YoY
-                </span>
+
+                <div style={{ width: '100%', height: 245 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={top10Laba}
+                      stackOffset="sign"
+                      margin={{ top: 6, right: 12, left: 4, bottom: 2 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        horizontal={false}
+                        stroke="var(--border-subtle)"
+                      />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(val) => formatIdDecimal2(Number(val))}
+                        tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                        axisLine={{ stroke: 'var(--border-subtle)' }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="nmCbg"
+                        width={116}
+                        interval={0}
+                        tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <ReferenceLine x={0} stroke="var(--text-muted)" strokeOpacity={0.45} />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                        content={<StackedBranchTooltip metricLabel="Laba Area" />}
+                      />
+                      {BERANDA_ENTITAS_ORDER.map((ent) => (
+                        <Bar
+                          key={ent}
+                          dataKey={ent}
+                          stackId="laba"
+                          fill={BERANDA_ENTITAS_COLORS[ent]}
+                          barSize={12}
+                          isAnimationActive={false}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    gap: 10,
+                    paddingTop: 6,
+                    borderTop: '1px solid var(--border-subtle)',
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {BERANDA_ENTITAS_ORDER.map((ent) => (
+                    <span key={ent} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span
+                        style={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: 2,
+                          backgroundColor: BERANDA_ENTITAS_COLORS[ent],
+                        }}
+                      />
+                      {ent}
+                    </span>
+                  ))}
+                </div>
               </div>
 
-              <div style={{ width: '100%', height: 240 }}>
+              {/* Grafik 2: 10 Cabang Terbesar Pendapatan Area */}
+              <div className="beranda-chart-card">
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    marginBottom: 4,
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      color: 'var(--text-title)',
+                    }}
+                  >
+                    10 Cabang Terbesar Pendapatan Area
+                  </h3>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Miliar (Rp)
+                  </span>
+                </div>
+
+                <div style={{ width: '100%', height: 245 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={top10Pendapatan}
+                      stackOffset="sign"
+                      margin={{ top: 6, right: 12, left: 4, bottom: 2 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        horizontal={false}
+                        stroke="var(--border-subtle)"
+                      />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(val) => formatIdDecimal2(Number(val))}
+                        tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                        axisLine={{ stroke: 'var(--border-subtle)' }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="nmCbg"
+                        width={116}
+                        interval={0}
+                        tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                        content={<StackedBranchTooltip metricLabel="Pendapatan Area" />}
+                      />
+                      {BERANDA_ENTITAS_ORDER.map((ent) => (
+                        <Bar
+                          key={ent}
+                          dataKey={ent}
+                          stackId="pendapatan"
+                          fill={BERANDA_ENTITAS_COLORS[ent]}
+                          barSize={12}
+                          isAnimationActive={false}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    gap: 10,
+                    paddingTop: 6,
+                    borderTop: '1px solid var(--border-subtle)',
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {BERANDA_ENTITAS_ORDER.map((ent) => (
+                    <span key={ent} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span
+                        style={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: 2,
+                          backgroundColor: BERANDA_ENTITAS_COLORS[ent],
+                        }}
+                      />
+                      {ent}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* CENTER COLUMN: BOPO AREA PER CABANG */}
+            <div className="beranda-chart-card beranda-bopo-col">
+              <div className="beranda-bopo-banner">BOPO AREA PER CABANG</div>
+              <div style={{ width: '100%', height: bopoChartHeight }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={mainCombinedChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.07)" vertical={false} />
-                    <XAxis dataKey="kpi" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                    <YAxis yAxisId="left" stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" M" />
-                    <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={11} tickLine={false} unit="%" domain={[0, 140]} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'var(--bg-surface)',
-                        borderColor: 'var(--border-subtle)',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        color: 'var(--text-main)',
-                      }}
+                  <BarChart
+                    layout="vertical"
+                    data={bopoRows}
+                    margin={{ top: 4, right: 54, left: 4, bottom: 4 }}
+                  >
+                    <XAxis type="number" domain={[0, maxBopo]} hide />
+                    <YAxis
+                      type="category"
+                      dataKey="nmCbg"
+                      width={118}
+                      interval={0}
+                      tick={{ fill: 'var(--text-secondary)', fontSize: 11, fontWeight: 500 }}
+                      axisLine={false}
+                      tickLine={false}
                     />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }} />
-                    <Bar yAxisId="left" dataKey="nominalRealisasi" name="Realisasi (Miliar Rp)" fill="#0284c7" radius={[4, 4, 0, 0]} barSize={28} />
-                    <Bar yAxisId="left" dataKey="nominalTarget" name="Target RKAP (Miliar Rp)" fill="rgba(148, 163, 184, 0.25)" stroke="#64748b" radius={[4, 4, 0, 0]} barSize={28} />
-                    <Line yAxisId="right" type="monotone" dataKey="capaianRkap" name="% Capaian RKAP" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 4, fill: '#f59e0b' }} />
-                  </ComposedChart>
+                    <Tooltip
+                      cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                      content={<BopoTooltip />}
+                    />
+                    <Bar
+                      dataKey="bopo"
+                      fill="#4472c4"
+                      radius={[0, 4, 4, 0]}
+                      barSize={14}
+                      isAnimationActive={false}
+                    >
+                      <LabelList
+                        dataKey="bopo"
+                        position="right"
+                        formatter={(val) => formatIdPercent2(Number(val ?? 0))}
+                        style={{
+                          fill: 'var(--text-main)',
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                        }}
+                      />
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* 2. KPI Gauge Indicators (Pendapatan, Beban, Laba, Kesiapan Alat) */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Gauge size={16} strokeWidth={1.75} style={{ color: 'var(--status-good-text)' }} />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
-                    KPI Gauge & Kesiapan Alat (RFU)
+            {/* RIGHT COLUMN: % Kontribusi Entitas + 10 Terendah PJM */}
+            <div className="beranda-chart-stack-col">
+              {/* Grafik 4: % KONTRIBUSI LABA AREA PER ENTITAS */}
+              <div className="beranda-chart-card">
+                <h3
+                  style={{
+                    margin: '0 0 4px',
+                    fontSize: 13.5,
+                    fontWeight: 800,
+                    color: 'var(--text-title)',
+                    textAlign: 'center',
+                  }}
+                >
+                  % KONTRIBUSI LABA AREA PER ENTITAS
+                </h3>
+
+                <div style={{ width: '100%', height: 215 }}>
+                  {hasPositiveEntityShare ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={entityShare}
+                          dataKey="sliceValue"
+                          nameKey="entitas"
+                          cx="50%"
+                          cy="50%"
+                          startAngle={90}
+                          endAngle={-270}
+                          innerRadius={44}
+                          outerRadius={84}
+                          paddingAngle={1}
+                          labelLine={false}
+                          label={renderPieSliceLabel}
+                          isAnimationActive={false}
+                        >
+                          {entityShare.map((entry) => (
+                            <Cell
+                              key={entry.entitas}
+                              fill={BERANDA_ENTITAS_COLORS[entry.entitas]}
+                              stroke="var(--bg-card)"
+                              strokeWidth={1.5}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<EntityShareTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div
+                      style={{
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 12,
+                        color: 'var(--text-muted)',
+                        textAlign: 'center',
+                        padding: 16,
+                      }}
+                    >
+                      Tidak ada kontribusi laba positif pada filter cabang aktif
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    gap: 10,
+                    paddingTop: 6,
+                    borderTop: '1px solid var(--border-subtle)',
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {entityShare.map((entry) => (
+                    <span
+                      key={entry.entitas}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                    >
+                      <span
+                        style={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: 2,
+                          backgroundColor: BERANDA_ENTITAS_COLORS[entry.entitas],
+                        }}
+                      />
+                      {entry.entitas} ({entry.roundedPct}%)
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grafik 5: 10 Cabang Terendah Laba Area PJM */}
+              <div className="beranda-chart-card" style={{ flex: 1 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    marginBottom: 4,
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      color: 'var(--text-title)',
+                    }}
+                  >
+                    10 Cabang Terendah Laba Area PJM
+                  </h3>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Juta (Rp)
                   </span>
                 </div>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Pencapaian vs Target Resmi
-                </span>
-              </div>
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: '10px',
-                  flex: 1,
-                }}
-              >
-                {gaugeMetrics.map((g, idx) => {
-                  const circumference = Math.PI * 34;
-                  const clampedPct = Math.min(Math.max(g.percentage, 0), 150);
-                  const strokeOffset = circumference - (clampedPct / 150) * circumference;
-
-                  return (
-                    <div
-                      key={`gauge-${idx}`}
-                      style={{
-                        backgroundColor: 'var(--bg-inner)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: '8px',
-                        padding: '10px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                      }}
-                      title={`${g.title}: ${g.fullRealisasi || g.realisasi} (${g.target})`}
+                <div style={{ width: '100%', height: 270 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={pjmRows}
+                      margin={{ top: 6, right: 6, left: 86, bottom: 4 }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
-                          {g.title}
-                        </span>
-                        <span className={`status-badge-chip ${g.isGood ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '12px', padding: '1px 5px' }}>
-                          {g.isGood ? 'Baik' : 'Waspada'}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0' }}>
-                        <svg width="68" height="42" viewBox="0 0 80 48">
-                          <path
-                            d="M 6 42 A 34 34 0 0 1 74 42"
-                            fill="none"
-                            stroke="rgba(255, 255, 255, 0.08)"
-                            strokeWidth={7}
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M 6 42 A 34 34 0 0 1 74 42"
-                            fill="none"
-                            stroke={g.color}
-                            strokeWidth={7}
-                            strokeDasharray={circumference}
-                            strokeDashoffset={strokeOffset}
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                        <div style={{ textAlign: 'right' }}>
-                          <div className="tabular-nums" style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-title)' }}>
-                            {g.percentage}%
-                          </div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Capaian RKAP
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px' }}>
-                        <div
-                          className="tabular-nums"
-                          style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                          title={g.fullRealisasi || g.realisasi}
-                        >
-                          {g.realisasi}
-                        </div>
-                        <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          <span>{g.target}</span>
-                          <span className={g.isGood ? 'text-positive' : 'text-alert'}>{g.yoy}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Bagian Bawah: Kinerja Layanan Pelabuhan & Utilisasi Dermaga (BOR) */}
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Ship size={16} strokeWidth={1.75} style={{ color: 'var(--accent-cyan)' }} />
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
-                  Kinerja Layanan {isSingle ? `Cabang [${selectedTerminal}] ${activeBranch?.name || selectedTerminal}` : 'Pelabuhan Terintegrasi'} & BOR
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#06b6d4' }} />
-                  Capaian RKAP (%)
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#3b82f6' }} />
-                  Pertumbuhan YoY (%)
-                </span>
-              </div>
-            </div>
-
-            <div style={{ width: '100%', height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={servicesGroupedChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.07)" vertical={false} />
-                  <XAxis dataKey="layanan" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                  <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit="%" domain={[0, 140]} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--bg-surface)',
-                      borderColor: 'var(--border-subtle)',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      color: 'var(--text-main)',
-                    }}
-                    formatter={(val: unknown, name: unknown, item: { payload?: { fullNominal?: string; nominal?: string } }) => [
-                      `${String(val ?? '')}% (${item.payload?.fullNominal || item.payload?.nominal || ''})`,
-                      name === 'capaianRkap' ? 'Pencapaian RKAP' : 'Pertumbuhan YoY'
-                    ]}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }} />
-                  <Bar dataKey="capaianRkap" name="Capaian RKAP (%)" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={24}>
-                    {servicesGroupedChartData.map((entry, index) => (
-                      <Cell key={`cell-rkap-${index}`} fill={entry.status === 'Baik' ? '#06b6d4' : '#f59e0b'} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="pertumbuhanYoy" name="Pertumbuhan YoY (%)" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={24}>
-                    {servicesGroupedChartData.map((entry, index) => (
-                      <Cell key={`cell-yoy-${index}`} fill={entry.pertumbuhanYoy >= 0 ? '#10b981' : '#ef4444'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Quick Metrics Breakdown Strip */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                gap: '8px',
-                marginTop: '4px',
-              }}
-            >
-              {servicesGroupedChartData.map((s, idx) => (
-                <div
-                  key={`strip-${idx}`}
-                  style={{
-                    backgroundColor: 'var(--bg-inner)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '6px',
-                    padding: '8px 10px',
-                  }}
-                  title={`${s.layanan}: ${s.fullNominal || s.nominal}`}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>
-                      {s.layanan}
-                    </span>
-                    <span className={`status-badge-chip ${s.status === 'Baik' ? 'status-baik' : 'status-waspada'}`} style={{ fontSize: '12px', padding: '1px 4px' }}>
-                      {s.status}
-                    </span>
-                  </div>
-                  <div className="tabular-nums" style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', marginTop: '2px' }}>
-                    {s.nominal}
-                  </div>
-                  <div className="tabular-nums" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    <span>RKAP {s.capaianRkap}%</span>
-                    <span className={s.pertumbuhanYoy >= 0 ? 'text-positive' : 'text-alert'}>
-                      {s.pertumbuhanYoy >= 0 ? '+' : ''}{s.pertumbuhanYoy}%
-                    </span>
-                  </div>
+                      <XAxis type="number" domain={pjmDomain} hide />
+                      <YAxis
+                        type="category"
+                        dataKey="nmCbg"
+                        orientation="right"
+                        width={92}
+                        interval={0}
+                        tick={{ fill: 'var(--text-secondary)', fontSize: 11, fontWeight: 500 }}
+                        axisLine={{ stroke: 'var(--border-subtle)' }}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                        content={<PjmBottomTooltip />}
+                      />
+                      <Bar
+                        dataKey="nilaiJt"
+                        fill="#c00000"
+                        radius={[4, 0, 0, 4]}
+                        barSize={16}
+                        isAnimationActive={false}
+                      >
+                        <LabelList dataKey="nilaiJt" content={renderPjmNegativeLabel} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
+          </section>
         </div>
-      ) : (
-        <>
-          {/* 1. Kinerja Operasional Semua Layanan Pelabuhan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa) */}
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: 'var(--accent-cyan)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    backgroundColor: 'rgba(2, 132, 199, 0.08)',
-                    padding: '4px 10px',
-                    borderRadius: 'var(--radius-pill)',
-                    border: '1px solid rgba(2, 132, 199, 0.25)',
-                  }}
-                >
-                  <Ship size={13} strokeWidth={1.75} />
-                  Kinerja Operasional Semua Layanan (Kapal, Petikemas, Barang, Penumpang, Rupa-rupa)
-                </span>
-              </div>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                {isNone
-                  ? 'Pilih cabang untuk melihat data'
-                  : isAll
-                  ? 'Konsolidasi 28 Cabang Resmi Regional 4'
-                  : isSingle
-                  ? `Realisasi Cabang: ${activeBranch?.name || selectedTerminal}`
-                  : `${selectedCodes.length} Cabang Terpilih`}
-              </span>
-            </div>
-
-            <div className="kpi-row-5">
-              {serviceKpis.map((kpi, idx) => (
-                <div
-                  key={`srv-${idx}`}
-                  className="kpi-summary-box"
-                  onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
-                  style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
-                  title={`${kpi.title}: ${kpi.fullValue || kpi.value} (Target: ${kpi.rawTarget})`}
-                >
-                  <div className="kpi-header-label">{kpi.title}</div>
-                  <div className="kpi-huge-number tabular-nums">{kpi.value}</div>
-                  <div className="kpi-comparison-rows tabular-nums">
-                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
-                      <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
-                        <strong>{kpi.comp1}</strong>
-                      </div>
-                    )}
-                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
-                      <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
-                        <strong>{kpi.comp2}</strong>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 2. Kinerja Finansial, Beban Biaya & Mutu Operasi */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', marginTop: '14px', flexWrap: 'wrap', gap: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: 'var(--accent-blue-text)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                    padding: '4px 10px',
-                    borderRadius: 'var(--radius-pill)',
-                    border: '1px solid rgba(56, 189, 248, 0.25)',
-                  }}
-                >
-                  <DollarSign size={13} strokeWidth={1.75} />
-                  Kinerja Finansial, Efisiensi Beban Biaya & Mutu Operasi
-                </span>
-              </div>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Pendapatan − Beban Biaya = Laba Usaha
-              </span>
-            </div>
-
-            <div className="kpi-row-5">
-              {financeKpis.map((kpi, idx) => (
-                <div
-                  key={`fin-${idx}`}
-                  className="kpi-summary-box"
-                  onClick={() => onOpenDrilldown && onOpenDrilldown(kpi)}
-                  style={{ cursor: onOpenDrilldown ? 'pointer' : 'default' }}
-                  title={`${kpi.title}: ${kpi.fullValue || kpi.value} (Target: ${kpi.rawTarget})`}
-                >
-                  <div className="kpi-header-label">{kpi.title}</div>
-                  <div className="kpi-huge-number tabular-nums">{kpi.value}</div>
-                  <div className="kpi-comparison-rows tabular-nums">
-                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'rkap') && (
-                      <div className={kpi.comp1Good ? 'text-positive' : 'text-alert'}>
-                        <strong>{kpi.comp1}</strong>
-                      </div>
-                    )}
-                    {(!comparisonMode || comparisonMode === 'all' || comparisonMode === 'yoy') && (
-                      <div className={kpi.comp2Good ? 'text-positive' : 'text-alert'}>
-                        <strong>{kpi.comp2}</strong>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Footer Sumber Data Utama */}
-      <div
-        style={{
-          marginTop: '8px',
-          paddingTop: '10px',
-          borderTop: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontSize: '12px',
-          color: 'var(--text-muted)',
-        }}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <FileSpreadsheet size={13} strokeWidth={1.75} color="var(--accent-blue)" />
-          <span>Sumber: data pelaporan cabang Regional 4</span>
-        </span>
-        {onNavigateTab && (
-          <button
-            type="button"
-            onClick={() => onNavigateTab('import_center')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--accent-blue-text)',
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-              padding: 0,
-            }}
-            title="Buka Pusat Impor & Sinkronisasi Spreadsheet"
-          >
-            <span>Pusat Data</span>
-            <ExternalLink size={10} strokeWidth={1.75} />
-          </button>
-        )}
       </div>
     </div>
   );
