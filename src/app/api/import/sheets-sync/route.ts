@@ -30,21 +30,21 @@ export async function POST(req: NextRequest) {
     }
 
     const batchId = `batch_gsheet_${Date.now()}`;
-    const validation = validateSpreadsheetRows(fetchResult.data, {
+    const validation = await validateSpreadsheetRows(fetchResult.data, {
       uploaderUsername: uploader || 'pic_gsheet',
       sourceType: 'google_sheets',
       batchId
     });
 
     // Update integration config
-    const currentCfg = dbQueries.getGoogleSheetsConfig();
+    const currentCfg = await dbQueries.getGoogleSheetsConfig();
     currentCfg.spreadsheet_id = fetchResult.spreadsheetId;
     currentCfg.sheet_name = sheetName || currentCfg.sheet_name;
     currentCfg.last_sync_at = new Date().toISOString();
-    dbQueries.saveGoogleSheetsConfig(currentCfg);
+    await dbQueries.saveGoogleSheetsConfig(currentCfg);
 
     // Audit log
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: uploader || 'usr_gsheet',
       user_name: uploader || 'Google Sheets Sync',
       user_role: userRole || 'pic_dept_regional',

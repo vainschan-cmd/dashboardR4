@@ -3,16 +3,30 @@ import { dbQueries, toSafeDbConfig, toSafeIntegrationCredentials, toSafeUser } f
 
 export async function GET() {
   try {
-    const branches = dbQueries.getBranches();
-    const departments = dbQueries.getDepartments();
-    const indicators = dbQueries.getIndicators();
-    const users = dbQueries.getUsers().map(toSafeUser);
-    const templates = dbQueries.getTemplates();
-    const equipment = dbQueries.getEquipmentCatalog();
-    const gsheetsConfig = dbQueries.getGoogleSheetsConfig();
-    const systemParams = dbQueries.getSystemParameters();
+    const [
+      branches,
+      departments,
+      indicators,
+      rawUsers,
+      templates,
+      equipment,
+      gsheetsConfig,
+      systemParams,
+      rawCredentials,
+    ] = await Promise.all([
+      dbQueries.getBranches(),
+      dbQueries.getDepartments(),
+      dbQueries.getIndicators(),
+      dbQueries.getUsers(),
+      dbQueries.getTemplates(),
+      dbQueries.getEquipmentCatalog(),
+      dbQueries.getGoogleSheetsConfig(),
+      dbQueries.getSystemParameters(),
+      dbQueries.getIntegrationCredentials(),
+    ]);
+    const users = rawUsers.map(toSafeUser);
     const dbConfig = toSafeDbConfig(dbQueries.getDbConfig());
-    const credentials = toSafeIntegrationCredentials(dbQueries.getIntegrationCredentials());
+    const credentials = toSafeIntegrationCredentials(rawCredentials);
 
     return NextResponse.json({
       success: true,

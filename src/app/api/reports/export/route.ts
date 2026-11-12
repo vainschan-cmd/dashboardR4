@@ -19,10 +19,10 @@ export async function GET(req: NextRequest) {
     const userRole = auth.session.role;
 
     if (type === 'template') {
-      const templates = dbQueries.getTemplates();
+      const templates = await dbQueries.getTemplates();
       const targetTpl = (department_id ? templates.find(t => t.department_id === department_id) : templates[0]) || templates[0];
-      const branches = dbQueries.getBranches();
-      const indicators = dbQueries.getIndicators(targetTpl.department_id);
+      const branches = await dbQueries.getBranches();
+      const indicators = await dbQueries.getIndicators(targetTpl.department_id);
 
       const buffer = generateTemplateWorkbook(targetTpl, branches, indicators);
       const filename = `Template_${targetTpl.name.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Default: Export filtered records to Excel (scoped by branch for pic_cabang)
-    const records = dbQueries.getMonthlyRecords({
+    const records = await dbQueries.getMonthlyRecords({
       branch_id,
       department_id,
       month,
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     const filename = `Laporan_Eksekutif_Kinerja_Pelabuhan${periodStr}.xlsx`;
 
     // Audit log with verified JWT identity
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

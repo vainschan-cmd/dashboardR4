@@ -4,7 +4,28 @@ import os from 'os';
 import * as xlsx from 'xlsx';
 import { getBranchByCode, getCanonicalBranchCode, getBranchNameByCode } from './constants';
 import { getBranchId } from './ingestInputData';
-import { getDb, dbQueries } from './db';
+import { withTransaction, dbQueries } from './db';
+import {
+  averageValidMetric,
+  canonicalRekening,
+  getFinansialMonthlyRecordId,
+  getFinansialRowId,
+  getIndicatorIdForRekening,
+  parseMetricPercent,
+  parseRealisasi,
+} from './finansialHelpers';
+import {
+  normalizeGrupEntitas,
+  normalizeKondisi,
+  normalizeNullableText,
+  normalizeTanggalISO,
+  resolvePeralatanBranchCode,
+} from './peralatanHelpers';
+
+function serializeSnapshot(val: unknown): string | null {
+  if (!val) return null;
+  return typeof val === 'string' ? val : JSON.stringify(val);
+}
 
 export type ModuleType = 'finansial' | 'opkom' | 'kinerja' | 'utilisasi' | 'peralatan' | 'fasilitas';
 
@@ -37,7 +58,7 @@ export function getInputDataSpreadsheetPath(): string {
   return path.join(dataDir, 'input_data.xlsx');
 }
 
-export function saveManualInputRecord(payload: ManualInputPayload): {
+export async function saveManualInputRecord(payload: ManualInputPayload): Promise<{
   success: boolean;
   message: string;
   isUpdate: boolean;
@@ -45,9 +66,8 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
   recordId: string;
   monthlyRecordId: string | null;
   record: any;
-} {
+}> {
   const { module, data, user } = payload;
-  const db = getDb();
   const nowIso = new Date().toISOString();
   const uploadedBy = user?.nipp || user?.id || 'manual_user';
   const verificationStatus = 'pending_verification' as const;
@@ -68,64 +88,60 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
   let recordId = '';
   let monthlyRecordId: string | null = null;
 
-  const stmtUpsertMonthlyRecord = db.prepare(`
-    INSERT INTO monthly_records (
-      id, branch_id, department_id, indicator_id, month, year,
-      target, realization, unit, achievement_pct, status_color, notes,
-      source_type, batch_id, verification_status, revision_notes,
-      uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual_input', ?, 'pending_verification', NULL, ?, ?, NULL, NULL, 0)
-    ON CONFLICT(id) DO UPDATE SET
-      branch_id = excluded.branch_id,
-      department_id = excluded.department_id,
-      indicator_id = excluded.indicator_id,
-      month = excluded.month,
-      year = excluded.year,
-      target = excluded.target,
-      realization = excluded.realization,
-      unit = excluded.unit,
-      achievement_pct = excluded.achievement_pct,
-      status_color = excluded.status_color,
-      notes = excluded.notes,
-      source_type = 'manual_input',
-      batch_id = excluded.batch_id,
-      verification_status = 'pending_verification',
-      revision_notes = NULL,
-      uploaded_by = excluded.uploaded_by,
-      uploaded_at = excluded.uploaded_at,
-      verified_by = NULL,
-      verified_at = NULL,
-      is_simulated = 0
-  `);
+  await withTransaction(async (client) => {
+    const upsertMonthlyRecordSql = `
+      INSERT INTO monthly_records (
+        id, branch_id, department_id, indicator_id, month, year,
+        target, realization, unit, achievement_pct, status_color, notes,
+        source_type, batch_id, verification_status, revision_notes,
+        uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'manual_input', $13, 'pending_verification', NULL, $14, $15::timestamptz, NULL, NULL, FALSE)
+      ON CONFLICT (id) DO UPDATE SET
+        branch_id = EXCLUDED.branch_id,
+        department_id = EXCLUDED.department_id,
+        indicator_id = EXCLUDED.indicator_id,
+        month = EXCLUDED.month,
+        year = EXCLUDED.year,
+        target = EXCLUDED.target,
+        realization = EXCLUDED.realization,
+        unit = EXCLUDED.unit,
+        achievement_pct = EXCLUDED.achievement_pct,
+        status_color = EXCLUDED.status_color,
+        notes = EXCLUDED.notes,
+        source_type = 'manual_input',
+        batch_id = EXCLUDED.batch_id,
+        verification_status = 'pending_verification',
+        revision_notes = NULL,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
+        verified_by = NULL,
+        verified_at = NULL,
+        is_simulated = FALSE
+    `;
+    const stmtUpsertMonthlyRecord = {
+      run: async (...params: any[]) => client.query(upsertMonthlyRecordSql, params),
+    };
 
   if (module === 'finansial') {
-    const rekening = String(data.rekening ?? data.REKENING ?? 'Pendapatan').trim();
-    const cabang = Number(data.cabang ?? data.CABANG ?? 0);
-    const pmt = Number(data.pmt ?? data.PMT ?? 0);
-    const ptp = Number(data.ptp ?? data.PTP ?? 0);
-    const psl = Number(data.psl ?? data.PSL ?? 0);
-    const pjm = Number(data.pjm ?? data.PJM ?? 0);
-    const eliminasi = Number(data.eliminasi ?? data.ELIMINASI ?? 0);
-    const konsolidasiVal = data.konsolidasi ?? data.KONSOLIDASI;
-    const konsolidasi =
-      konsolidasiVal !== undefined && konsolidasiVal !== null && konsolidasiVal !== ''
-        ? Number(konsolidasiVal)
-        : cabang + pmt + ptp + psl + pjm + eliminasi;
-    const yoy = Number(data.yoy ?? data.YOY ?? 100);
-    const rka = Number(data.rka ?? data.RKA ?? 100);
+    const rekening = canonicalRekening(data.rekening ?? data.REKENING ?? 'Pendapatan');
+    const entitas = String(data.entitas ?? data.ENTITAS ?? 'CABANG').trim().toUpperCase();
+    const realisasi = parseRealisasi(data.realisasi ?? data.REALISASI ?? 0);
+    const rkaNum = realisasi === 0 && String(data.rka ?? data.RKA ?? '').trim() === '-'
+      ? null
+      : parseMetricPercent(data.rka ?? data.RKA);
+    const yoyNum = realisasi === 0 && String(data.yoy ?? data.YOY ?? '').trim() === '-'
+      ? null
+      : parseMetricPercent(data.yoy ?? data.YOY);
 
-    const rekLower = rekening.toLowerCase();
-    let indId = 'kpi_rev';
-    if (rekLower.includes('beban')) indId = 'kpi_cost';
-    else if (rekLower.includes('bersih')) indId = 'kpi_net_profit';
-    else if (rekLower.includes('laba')) indId = 'kpi_profit';
+    const indId = getIndicatorIdForRekening(rekening);
+    monthlyRecordId = getFinansialMonthlyRecordId(year, month, branchCode, rekening);
+    recordId = getFinansialRowId(year, month, branchCode, rekening, entitas);
 
-    monthlyRecordId = `rec_fin_${year}_${month}_${branchCode}_${indId}`;
-    recordId = `mod_fin_${year}_${month}_${branchCode}_${slugKey(rekening)}`;
-
-    const existing = db
-      .prepare('SELECT * FROM module_finansial WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND LOWER(rekening) = LOWER(?))')
-      .get(recordId, year, month, branchCode, rekening) as any;
+    const existingRes = await client.query(
+      'SELECT * FROM module_finansial WHERE id = $1 OR (year = $2 AND month = $3 AND branch_code = $4 AND LOWER(rekening) = LOWER($5) AND UPPER(entitas) = UPPER($6))',
+      [recordId, year, month, branchCode, rekening, entitas]
+    );
+    const existing = existingRes.rows[0];
 
     let snapshotJson: string | null = null;
     if (existing) {
@@ -134,74 +150,75 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({
-              cabang_rp: existing.cabang_rp,
-              pmt_rp: existing.pmt_rp,
-              ptp_rp: existing.ptp_rp,
-              psl_rp: existing.psl_rp,
-              pjm_rp: existing.pjm_rp,
-              eliminasi_rp: existing.eliminasi_rp,
-              konsolidasi_rp: existing.konsolidasi_rp,
-              yoy: existing.yoy,
+              entitas: existing.entitas,
+              realisasi: existing.realisasi,
               rka: existing.rka,
+              yoy: existing.yoy,
             })
-          : existing.verified_snapshot_json || null;
+          : serializeSnapshot(existing.verified_snapshot_json);
     }
 
-    db.prepare(`
-      INSERT INTO module_finansial (
-        id, monthly_record_id, year, month, branch_code, branch_name, rekening,
-        cabang_rp, pmt_rp, ptp_rp, psl_rp, pjm_rp, eliminasi_rp, konsolidasi_rp,
-        yoy, rka, source_type, verification_status, uploaded_by, uploaded_at,
+    await client.query(
+      `INSERT INTO module_finansial (
+        id, monthly_record_id, year, month, branch_code, branch_name, rekening, entitas,
+        realisasi, rka, yoy, source_type, verification_status, uploaded_by, uploaded_at,
         verified_by, verified_at, revision_notes, verified_snapshot_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual_input', 'pending_verification', ?, ?, NULL, NULL, NULL, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        monthly_record_id = excluded.monthly_record_id,
-        branch_name = excluded.branch_name,
-        rekening = excluded.rekening,
-        cabang_rp = excluded.cabang_rp,
-        pmt_rp = excluded.pmt_rp,
-        ptp_rp = excluded.ptp_rp,
-        psl_rp = excluded.psl_rp,
-        pjm_rp = excluded.pjm_rp,
-        eliminasi_rp = excluded.eliminasi_rp,
-        konsolidasi_rp = excluded.konsolidasi_rp,
-        yoy = excluded.yoy,
-        rka = excluded.rka,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'manual_input', 'pending_verification', $12, $13::timestamptz, NULL, NULL, NULL, $14::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        monthly_record_id = EXCLUDED.monthly_record_id,
+        branch_name = EXCLUDED.branch_name,
+        rekening = EXCLUDED.rekening,
+        entitas = EXCLUDED.entitas,
+        realisasi = EXCLUDED.realisasi,
+        rka = EXCLUDED.rka,
+        yoy = EXCLUDED.yoy,
         source_type = 'manual_input',
         verification_status = 'pending_verification',
-        uploaded_by = excluded.uploaded_by,
-        uploaded_at = excluded.uploaded_at,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
         verified_by = NULL,
         verified_at = NULL,
         revision_notes = NULL,
-        verified_snapshot_json = excluded.verified_snapshot_json
-    `).run(
-      recordId,
-      monthlyRecordId,
-      year,
-      month,
-      branchCode,
-      branchName,
-      rekening,
-      cabang,
-      pmt,
-      ptp,
-      psl,
-      pjm,
-      eliminasi,
-      konsolidasi,
-      yoy,
-      rka,
-      uploadedBy,
-      nowIso,
-      snapshotJson
+        verified_snapshot_json = EXCLUDED.verified_snapshot_json`,
+      [
+        recordId,
+        monthlyRecordId,
+        year,
+        month,
+        branchCode,
+        branchName,
+        rekening,
+        entitas,
+        realisasi,
+        rkaNum,
+        yoyNum,
+        uploadedBy,
+        nowIso,
+        snapshotJson,
+      ]
     );
 
-    const konsolidasiM = Number((konsolidasi / 1_000_000_000).toFixed(2));
-    const targetM = rka > 0 ? Number((konsolidasiM / (rka / 100)).toFixed(2)) : konsolidasiM;
-    const statusColor = rka >= 100 ? 'green' : rka >= 95 ? 'yellow' : 'red';
+    // Hitung ulang total konsolidasi (menjumlahkan seluruh entitas termasuk ELIMINASI) untuk monthly_records
+    const siblingRes = await client.query(
+      'SELECT realisasi, rka FROM module_finansial WHERE year = $1 AND month = $2 AND branch_code = $3 AND LOWER(rekening) = LOWER($4)',
+      [year, month, branchCode, rekening]
+    );
+    const totalConsolidatedRealisasi = siblingRes.rows.reduce(
+      (sum: number, row: any) => sum + parseRealisasi(row.realisasi),
+      0
+    );
+    const avgRka = averageValidMetric(
+      siblingRes.rows
+        .filter((row: any) => parseRealisasi(row.realisasi) !== 0)
+        .map((row: any) => row.rka)
+    );
+    const effectiveRka = avgRka === '-' ? (rkaNum ?? 0) : avgRka;
+    const konsolidasiM = Number((totalConsolidatedRealisasi / 1_000_000_000).toFixed(2));
+    const targetM = effectiveRka > 0 ? Number((konsolidasiM / (effectiveRka / 100)).toFixed(2)) : konsolidasiM;
+    const statusColor =
+      avgRka === '-' && rkaNum === null ? 'neutral' : effectiveRka >= 100 ? 'green' : effectiveRka >= 95 ? 'yellow' : 'red';
 
-    stmtUpsertMonthlyRecord.run(
+    await stmtUpsertMonthlyRecord.run(
       monthlyRecordId,
       branchId,
       'dept_keu',
@@ -211,9 +228,9 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       targetM,
       konsolidasiM,
       'Miliar Rp',
-      Number(rka.toFixed(1)),
+      Number(effectiveRka.toFixed(2)),
       statusColor,
-      `Input manual finansial (${rekening}) oleh ${user?.name || uploadedBy}`,
+      `Input manual finansial (${rekening} - ${entitas}) oleh ${user?.name || uploadedBy}`,
       `batch_manual_${Date.now()}`,
       uploadedBy,
       nowIso
@@ -225,16 +242,10 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       KODE_CBG: branchCode,
       NM_CBG: branchName,
       REKENING: rekening,
-      CABANG: cabang,
-      PMT: pmt,
-      PTP: ptp,
-      PSL: psl,
-      PJM: pjm,
-      ELIMINASI: eliminasi,
-      KONSOLIDASI: konsolidasi,
-      YOY: yoy,
-      RKA: rka,
-      verificationStatus,
+      ENTITAS: entitas,
+      REALISASI: realisasi,
+      RKA: rkaNum === null ? '-' : rkaNum,
+      YOY: yoyNum === null ? '-' : yoyNum,
     };
   } else if (module === 'opkom') {
     const layanan = String(data.layanan ?? data.LAYANAN ?? 'KAPAL').trim().toUpperCase();
@@ -253,9 +264,11 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     monthlyRecordId = `rec_opkom_${year}_${month}_${branchCode}_${layanan.replace(/[^a-zA-Z0-9]/g, '_')}_${slugKey(satuan)}`;
     recordId = `mod_opkom_${year}_${month}_${branchCode}_${slugKey(layanan)}_${slugKey(satuan)}`;
 
-    const existing = db
-      .prepare('SELECT * FROM module_opkom WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND UPPER(layanan) = UPPER(?) AND UPPER(satuan) = UPPER(?))')
-      .get(recordId, year, month, branchCode, layanan, satuan) as any;
+    const existingRes = await client.query(
+      'SELECT * FROM module_opkom WHERE id = $1 OR (year = $2 AND month = $3 AND branch_code = $4 AND UPPER(layanan) = UPPER($5) AND UPPER(satuan) = UPPER($6))',
+      [recordId, year, month, branchCode, layanan, satuan]
+    );
+    const existing = existingRes.rows[0];
 
     let snapshotJson: string | null = null;
     if (existing) {
@@ -268,46 +281,47 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
               yoy: existing.yoy,
               rka: existing.rka,
             })
-          : existing.verified_snapshot_json || null;
+          : serializeSnapshot(existing.verified_snapshot_json);
     }
 
-    db.prepare(`
-      INSERT INTO module_opkom (
+    await client.query(
+      `INSERT INTO module_opkom (
         id, monthly_record_id, year, month, branch_code, branch_name, layanan, satuan,
         jumlah_rp, yoy, rka, source_type, verification_status, uploaded_by, uploaded_at,
         verified_by, verified_at, revision_notes, verified_snapshot_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual_input', 'pending_verification', ?, ?, NULL, NULL, NULL, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        monthly_record_id = excluded.monthly_record_id,
-        branch_name = excluded.branch_name,
-        layanan = excluded.layanan,
-        satuan = excluded.satuan,
-        jumlah_rp = excluded.jumlah_rp,
-        yoy = excluded.yoy,
-        rka = excluded.rka,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'manual_input', 'pending_verification', $12, $13::timestamptz, NULL, NULL, NULL, $14::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        monthly_record_id = EXCLUDED.monthly_record_id,
+        branch_name = EXCLUDED.branch_name,
+        layanan = EXCLUDED.layanan,
+        satuan = EXCLUDED.satuan,
+        jumlah_rp = EXCLUDED.jumlah_rp,
+        yoy = EXCLUDED.yoy,
+        rka = EXCLUDED.rka,
         source_type = 'manual_input',
         verification_status = 'pending_verification',
-        uploaded_by = excluded.uploaded_by,
-        uploaded_at = excluded.uploaded_at,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
         verified_by = NULL,
         verified_at = NULL,
         revision_notes = NULL,
-        verified_snapshot_json = excluded.verified_snapshot_json
-    `).run(
-      recordId,
-      monthlyRecordId,
-      year,
-      month,
-      branchCode,
-      branchName,
-      layanan,
-      satuan,
-      jumlah,
-      yoy,
-      rka,
-      uploadedBy,
-      nowIso,
-      snapshotJson
+        verified_snapshot_json = EXCLUDED.verified_snapshot_json`,
+      [
+        recordId,
+        monthlyRecordId,
+        year,
+        month,
+        branchCode,
+        branchName,
+        layanan,
+        satuan,
+        jumlah,
+        yoy,
+        rka,
+        uploadedBy,
+        nowIso,
+        snapshotJson,
+      ]
     );
 
     const isRupiah = satuan.toLowerCase() === 'rp';
@@ -315,7 +329,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     const targetVal = rka > 0 ? Number((realizationVal / (rka / 100)).toFixed(2)) : realizationVal;
     const statusColor = rka >= 100 ? 'green' : rka >= 95 ? 'yellow' : 'red';
 
-    stmtUpsertMonthlyRecord.run(
+    await stmtUpsertMonthlyRecord.run(
       monthlyRecordId,
       branchId,
       'dept_ops',
@@ -398,9 +412,11 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     monthlyRecordId = `rec_kine_${year}_${month}_${branchCode}_${indId}`;
     recordId = `mod_kine_${year}_${month}_${branchCode}_${slugKey(kdKine)}_${slugKey(nmKine)}_${slugKey(satuan)}`;
 
-    const existing = db
-      .prepare('SELECT * FROM module_kinerja WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND UPPER(kd_kine) = UPPER(?) AND UPPER(satuan) = UPPER(?))')
-      .get(recordId, year, month, branchCode, kdKine, satuan) as any;
+    const existingRes = await client.query(
+      'SELECT * FROM module_kinerja WHERE id = $1 OR (year = $2 AND month = $3 AND branch_code = $4 AND UPPER(kd_kine) = UPPER($5) AND UPPER(satuan) = UPPER($6))',
+      [recordId, year, month, branchCode, kdKine, satuan]
+    );
+    const existing = existingRes.rows[0];
 
     let snapshotJson: string | null = null;
     if (existing) {
@@ -409,44 +425,45 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({ nilai: existing.nilai })
-          : existing.verified_snapshot_json || null;
+          : serializeSnapshot(existing.verified_snapshot_json);
     }
 
-    db.prepare(`
-      INSERT INTO module_kinerja (
+    await client.query(
+      `INSERT INTO module_kinerja (
         id, monthly_record_id, year, month, branch_code, branch_name, kd_kine, nm_kine, satuan,
         nilai, source_type, verification_status, uploaded_by, uploaded_at,
         verified_by, verified_at, revision_notes, verified_snapshot_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual_input', 'pending_verification', ?, ?, NULL, NULL, NULL, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        monthly_record_id = excluded.monthly_record_id,
-        branch_name = excluded.branch_name,
-        kd_kine = excluded.kd_kine,
-        nm_kine = excluded.nm_kine,
-        satuan = excluded.satuan,
-        nilai = excluded.nilai,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'manual_input', 'pending_verification', $11, $12::timestamptz, NULL, NULL, NULL, $13::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        monthly_record_id = EXCLUDED.monthly_record_id,
+        branch_name = EXCLUDED.branch_name,
+        kd_kine = EXCLUDED.kd_kine,
+        nm_kine = EXCLUDED.nm_kine,
+        satuan = EXCLUDED.satuan,
+        nilai = EXCLUDED.nilai,
         source_type = 'manual_input',
         verification_status = 'pending_verification',
-        uploaded_by = excluded.uploaded_by,
-        uploaded_at = excluded.uploaded_at,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
         verified_by = NULL,
         verified_at = NULL,
         revision_notes = NULL,
-        verified_snapshot_json = excluded.verified_snapshot_json
-    `).run(
-      recordId,
-      monthlyRecordId,
-      year,
-      month,
-      branchCode,
-      branchName,
-      kdKine,
-      nmKine,
-      satuan,
-      nilai,
-      uploadedBy,
-      nowIso,
-      snapshotJson
+        verified_snapshot_json = EXCLUDED.verified_snapshot_json`,
+      [
+        recordId,
+        monthlyRecordId,
+        year,
+        month,
+        branchCode,
+        branchName,
+        kdKine,
+        nmKine,
+        satuan,
+        nilai,
+        uploadedBy,
+        nowIso,
+        snapshotJson,
+      ]
     );
 
     const achPct = isHigherBetter
@@ -454,7 +471,7 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       : Number(((target / Math.max(nilai, 0.01)) * 100).toFixed(1));
     const statusColor = achPct >= 100 ? 'green' : achPct >= 90 ? 'yellow' : 'red';
 
-    stmtUpsertMonthlyRecord.run(
+    await stmtUpsertMonthlyRecord.run(
       monthlyRecordId,
       branchId,
       'dept_ops',
@@ -493,9 +510,11 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
     monthlyRecordId = `rec_util_${year}_${month}_${branchCode}_bor_${dermaga.replace(/[^a-zA-Z0-9]/g, '_')}`;
     recordId = `mod_util_${year}_${month}_${branchCode}_${slugKey(dermaga)}`;
 
-    const existing = db
-      .prepare('SELECT * FROM module_utilisasi WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND UPPER(dermaga) = UPPER(?))')
-      .get(recordId, year, month, branchCode, dermaga) as any;
+    const existingRes = await client.query(
+      'SELECT * FROM module_utilisasi WHERE id = $1 OR (year = $2 AND month = $3 AND branch_code = $4 AND UPPER(dermaga) = UPPER($5))',
+      [recordId, year, month, branchCode, dermaga]
+    );
+    const existing = existingRes.rows[0];
 
     let snapshotJson: string | null = null;
     if (existing) {
@@ -504,51 +523,52 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({ bor: existing.bor, yor: existing.yor, sor: existing.sor })
-          : existing.verified_snapshot_json || null;
+          : serializeSnapshot(existing.verified_snapshot_json);
     }
 
-    db.prepare(`
-      INSERT INTO module_utilisasi (
+    await client.query(
+      `INSERT INTO module_utilisasi (
         id, monthly_record_id, year, month, branch_code, branch_name, kd_jenderm, dermaga,
         bor, yor, sor, source_type, verification_status, uploaded_by, uploaded_at,
         verified_by, verified_at, revision_notes, verified_snapshot_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual_input', 'pending_verification', ?, ?, NULL, NULL, NULL, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        monthly_record_id = excluded.monthly_record_id,
-        branch_name = excluded.branch_name,
-        kd_jenderm = excluded.kd_jenderm,
-        dermaga = excluded.dermaga,
-        bor = excluded.bor,
-        yor = excluded.yor,
-        sor = excluded.sor,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'manual_input', 'pending_verification', $12, $13::timestamptz, NULL, NULL, NULL, $14::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        monthly_record_id = EXCLUDED.monthly_record_id,
+        branch_name = EXCLUDED.branch_name,
+        kd_jenderm = EXCLUDED.kd_jenderm,
+        dermaga = EXCLUDED.dermaga,
+        bor = EXCLUDED.bor,
+        yor = EXCLUDED.yor,
+        sor = EXCLUDED.sor,
         source_type = 'manual_input',
         verification_status = 'pending_verification',
-        uploaded_by = excluded.uploaded_by,
-        uploaded_at = excluded.uploaded_at,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
         verified_by = NULL,
         verified_at = NULL,
         revision_notes = NULL,
-        verified_snapshot_json = excluded.verified_snapshot_json
-    `).run(
-      recordId,
-      monthlyRecordId,
-      year,
-      month,
-      branchCode,
-      branchName,
-      kdJenderm,
-      dermaga,
-      bor,
-      yor,
-      sor,
-      uploadedBy,
-      nowIso,
-      snapshotJson
+        verified_snapshot_json = EXCLUDED.verified_snapshot_json`,
+      [
+        recordId,
+        monthlyRecordId,
+        year,
+        month,
+        branchCode,
+        branchName,
+        kdJenderm,
+        dermaga,
+        bor,
+        yor,
+        sor,
+        uploadedBy,
+        nowIso,
+        snapshotJson,
+      ]
     );
 
     const borPct = Number(((bor / 60) * 100).toFixed(1));
     const borColor = bor <= 65 ? 'green' : bor <= 75 ? 'yellow' : 'red';
-    stmtUpsertMonthlyRecord.run(
+    await stmtUpsertMonthlyRecord.run(
       monthlyRecordId,
       branchId,
       'dept_ops',
@@ -579,20 +599,34 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       verificationStatus,
     };
   } else if (module === 'peralatan') {
-    const kdAlat = String(data.kdAlat ?? data.KD_ALAT ?? 'AL01').trim().toUpperCase();
-    const nmAlat = String(data.namaAlat ?? data.nmAlat ?? data.NM_ALAT ?? 'Quay Container Crane').trim();
-    const singkatan = String(data.singkatan ?? data.SINGKATAN_ALAT ?? 'QCC').trim().toUpperCase();
-    const jnsAlat = String(data.jenisAlat ?? data.jnsAlat ?? data.JNS_ALAT ?? 'OPERASI KAPAL').trim().toUpperCase();
-    const jumlah = Number(data.jumlah ?? data.JUMLAH ?? 0);
-    const availability = Number(data.availability ?? data.AVAILABILITY ?? 0);
-    const utilisasi = Number(data.utilisasi ?? data.UTILISASI ?? 0);
+    const tanggal =
+      normalizeTanggalISO(data.tanggal) ||
+      `${year}-${String(month).padStart(2, '0')}-01`;
+    const grupEntitas = normalizeGrupEntitas(data.grup_entitas ?? data.grupEntitas ?? 'R4') || 'R4';
+    const namaCabang = String(data.nama_cabang ?? data.namaCabang ?? branchName).trim() || branchName;
+    const namaAlat = String(data.nama_alat ?? data.namaAlat ?? data.NM_ALAT ?? 'Unit Peralatan').trim();
+    const jenisAlat = String(data.jenis_alat ?? data.jenisAlat ?? data.JNS_ALAT ?? 'Chassis').trim();
+    const kategoriAlat = String(data.kategori_alat ?? data.kategoriAlat ?? 'Alat CY').trim() || 'Alat CY';
+    const kondisi = normalizeKondisi(data.kondisi ?? 'READY');
+    const kerusakan = normalizeNullableText(data.kerusakan);
+    const tindakLanjut = normalizeNullableText(data.tindak_lanjut ?? data.tindakLanjut);
 
-    monthlyRecordId = `rec_alat_qty_${year}_${month}_${branchCode}_${singkatan || slugKey(kdAlat || nmAlat)}`;
-    recordId = `mod_alat_${year}_${month}_${branchCode}_${slugKey(kdAlat || singkatan || nmAlat)}`;
+    const [tYrStr, tMoStr] = tanggal.split('-');
+    const recYear = Number(tYrStr) || year;
+    const recMonth = Number(tMoStr) || month;
+    const resolvedBranchCode = resolvePeralatanBranchCode(namaCabang, branchCode);
+    const resolvedBranchId = getBranchId(resolvedBranchCode, namaCabang);
 
-    const existing = db
-      .prepare('SELECT * FROM module_peralatan WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND (UPPER(kd_alat) = UPPER(?) OR LOWER(nm_alat) = LOWER(?)))')
-      .get(recordId, year, month, branchCode, kdAlat, nmAlat) as any;
+    monthlyRecordId = `rec_alat_rfu_${recYear}_${recMonth}_${resolvedBranchCode}`;
+    recordId = `mod_alat_${tanggal}_${slugKey(resolvedBranchCode)}_${slugKey(grupEntitas)}_${slugKey(namaAlat)}`;
+
+    const existingRes = await client.query(
+      `SELECT * FROM module_peralatan
+       WHERE id = $1
+          OR (tanggal = $2::date AND UPPER(grup_entitas) = UPPER($3) AND LOWER(nama_cabang) = LOWER($4) AND LOWER(nama_alat) = LOWER($5))`,
+      [recordId, tanggal, grupEntitas, namaCabang, namaAlat]
+    );
+    const existing = existingRes.rows[0];
 
     let snapshotJson: string | null = null;
     if (existing) {
@@ -601,86 +635,107 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       snapshotJson =
         existing.verification_status === 'verified'
           ? JSON.stringify({
-              jumlah: existing.jumlah,
-              availability: existing.availability,
-              utilisasi: existing.utilisasi,
+              kondisi: existing.kondisi,
+              kerusakan: existing.kerusakan,
+              tindak_lanjut: existing.tindak_lanjut,
             })
-          : existing.verified_snapshot_json || null;
+          : serializeSnapshot(existing.verified_snapshot_json);
     }
 
-    db.prepare(`
-      INSERT INTO module_peralatan (
-        id, monthly_record_id, year, month, branch_code, branch_name, kd_alat, nm_alat, singkatan, jns_alat,
-        jumlah, availability, utilisasi, source_type, verification_status, uploaded_by, uploaded_at,
+    await client.query(
+      `INSERT INTO module_peralatan (
+        id, monthly_record_id, branch_code, tanggal, grup_entitas, nama_cabang,
+        nama_alat, jenis_alat, kategori_alat, kondisi, kerusakan, tindak_lanjut,
+        source_type, verification_status, uploaded_by, uploaded_at,
         verified_by, verified_at, revision_notes, verified_snapshot_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual_input', 'pending_verification', ?, ?, NULL, NULL, NULL, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        monthly_record_id = excluded.monthly_record_id,
-        branch_name = excluded.branch_name,
-        kd_alat = excluded.kd_alat,
-        nm_alat = excluded.nm_alat,
-        singkatan = excluded.singkatan,
-        jns_alat = excluded.jns_alat,
-        jumlah = excluded.jumlah,
-        availability = excluded.availability,
-        utilisasi = excluded.utilisasi,
+      ) VALUES (
+        $1, $2, $3, $4::date, $5, $6,
+        $7, $8, $9, $10, $11, $12,
+        'manual_input', 'pending_verification', $13, $14::timestamptz,
+        NULL, NULL, NULL, $15::jsonb
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        monthly_record_id = EXCLUDED.monthly_record_id,
+        branch_code = EXCLUDED.branch_code,
+        tanggal = EXCLUDED.tanggal,
+        grup_entitas = EXCLUDED.grup_entitas,
+        nama_cabang = EXCLUDED.nama_cabang,
+        nama_alat = EXCLUDED.nama_alat,
+        jenis_alat = EXCLUDED.jenis_alat,
+        kategori_alat = EXCLUDED.kategori_alat,
+        kondisi = EXCLUDED.kondisi,
+        kerusakan = EXCLUDED.kerusakan,
+        tindak_lanjut = EXCLUDED.tindak_lanjut,
         source_type = 'manual_input',
         verification_status = 'pending_verification',
-        uploaded_by = excluded.uploaded_by,
-        uploaded_at = excluded.uploaded_at,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
         verified_by = NULL,
         verified_at = NULL,
         revision_notes = NULL,
-        verified_snapshot_json = excluded.verified_snapshot_json
-    `).run(
-      recordId,
-      monthlyRecordId,
-      year,
-      month,
-      branchCode,
-      branchName,
-      kdAlat,
-      nmAlat,
-      singkatan,
-      jnsAlat,
-      jumlah,
-      availability,
-      utilisasi,
-      uploadedBy,
-      nowIso,
-      snapshotJson
+        verified_snapshot_json = EXCLUDED.verified_snapshot_json`,
+      [
+        recordId,
+        monthlyRecordId,
+        resolvedBranchCode,
+        tanggal,
+        grupEntitas,
+        namaCabang,
+        namaAlat,
+        jenisAlat,
+        kategoriAlat,
+        kondisi,
+        kerusakan,
+        tindakLanjut,
+        uploadedBy,
+        nowIso,
+        snapshotJson,
+      ]
     );
 
-    stmtUpsertMonthlyRecord.run(
+    // Hitung ulang RFU snapshot bulan terkait untuk monthly_records (dept_tek)
+    const aggRes = await client.query<{ total: number; ready: number }>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE kondisi IN ('READY', 'READY DENGAN CATATAN'))::int AS ready
+       FROM module_peralatan
+       WHERE branch_code = $1 AND tanggal = $2::date`,
+      [resolvedBranchCode, tanggal]
+    );
+    const totalUnit = Number(aggRes.rows[0]?.total ?? 1);
+    const readyUnit = Number(aggRes.rows[0]?.ready ?? (kondisi === 'READY' || kondisi === 'READY DENGAN CATATAN' ? 1 : 0));
+    const rfuPct = totalUnit > 0 ? Number(((readyUnit / totalUnit) * 100).toFixed(1)) : 0;
+    const rfuAch = Number(((rfuPct / 90.0) * 100).toFixed(1));
+    const statusColor = rfuPct >= 90 ? 'green' : rfuPct >= 80 ? 'yellow' : 'red';
+
+    await stmtUpsertMonthlyRecord.run(
       monthlyRecordId,
-      branchId,
+      resolvedBranchId,
       'dept_tek',
-      'kpi_alat_qty',
-      month,
-      year,
-      Math.max(jumlah, 1),
-      jumlah,
-      'Unit',
-      100.0,
-      'green',
-      `Input manual peralatan (${nmAlat} - ${singkatan}) oleh ${user?.name || uploadedBy}`,
+      'kpi_rfu',
+      recMonth,
+      recYear,
+      90.0,
+      rfuPct,
+      '%',
+      rfuAch,
+      statusColor,
+      `Input manual peralatan (${namaAlat} - ${kondisi}) tanggal ${tanggal} oleh ${user?.name || uploadedBy}`,
       `batch_manual_${Date.now()}`,
       uploadedBy,
       nowIso
     );
 
     formattedRecord = {
-      TAHUN: year,
-      BULAN: month,
-      KODE_CBG: branchCode,
-      NM_CBG: branchName,
-      KD_ALAT: kdAlat,
-      NM_ALAT: nmAlat,
-      SINGKATAN_ALAT: singkatan,
-      JNS_ALAT: jnsAlat,
-      JUMLAH: jumlah,
-      AVAILABILITY: availability,
-      UTILISASI: utilisasi,
+      Tanggal: tanggal,
+      'Grup / Entitas': grupEntitas,
+      'Nama Cabang': namaCabang,
+      'Nama Alat': namaAlat,
+      'Jenis Alat': jenisAlat,
+      'Kategori Alat': kategoriAlat,
+      Kondisi: kondisi,
+      Kerusakan: kerusakan || '-',
+      'Tindak Lanjut': tindakLanjut || '-',
       verificationStatus,
     };
   } else if (module === 'fasilitas') {
@@ -695,9 +750,11 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
 
     recordId = `mod_fas_${year}_${month}_${branchCode}_${slugKey(nmPasfel)}_${slugKey(jnsFaspel)}`;
 
-    const existing = db
-      .prepare('SELECT * FROM module_fasilitas WHERE id = ? OR (year = ? AND month = ? AND branch_code = ? AND LOWER(nama_fasilitas) = LOWER(?))')
-      .get(recordId, year, month, branchCode, nmPasfel) as any;
+    const existingRes = await client.query(
+      'SELECT * FROM module_fasilitas WHERE id = $1 OR (year = $2 AND month = $3 AND branch_code = $4 AND LOWER(nama_fasilitas) = LOWER($5))',
+      [recordId, year, month, branchCode, nmPasfel]
+    );
+    const existing = existingRes.rows[0];
 
     let snapshotJson: string | null = null;
     if (existing) {
@@ -713,51 +770,52 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
               kapasitas: existing.kapasitas,
               keterangan: existing.keterangan,
             })
-          : existing.verified_snapshot_json || null;
+          : serializeSnapshot(existing.verified_snapshot_json);
     }
 
-    db.prepare(`
-      INSERT INTO module_fasilitas (
+    await client.query(
+      `INSERT INTO module_fasilitas (
         id, monthly_record_id, year, month, branch_code, branch_name, nama_fasilitas, jenis_fasilitas, satuan,
         panjang_m, lebar_m, mlws, luas_sqm, kapasitas, keterangan,
         source_type, verification_status, uploaded_by, uploaded_at,
         verified_by, verified_at, revision_notes, verified_snapshot_json
-      ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'manual_input', 'pending_verification', ?, ?, NULL, NULL, NULL, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        branch_name = excluded.branch_name,
-        nama_fasilitas = excluded.nama_fasilitas,
-        jenis_fasilitas = excluded.jenis_fasilitas,
-        satuan = excluded.satuan,
-        panjang_m = excluded.panjang_m,
-        lebar_m = excluded.lebar_m,
-        mlws = excluded.mlws,
-        luas_sqm = excluded.luas_sqm,
-        keterangan = excluded.keterangan,
+      ) VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL, $13, 'manual_input', 'pending_verification', $14, $15::timestamptz, NULL, NULL, NULL, $16::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        branch_name = EXCLUDED.branch_name,
+        nama_fasilitas = EXCLUDED.nama_fasilitas,
+        jenis_fasilitas = EXCLUDED.jenis_fasilitas,
+        satuan = EXCLUDED.satuan,
+        panjang_m = EXCLUDED.panjang_m,
+        lebar_m = EXCLUDED.lebar_m,
+        mlws = EXCLUDED.mlws,
+        luas_sqm = EXCLUDED.luas_sqm,
+        keterangan = EXCLUDED.keterangan,
         source_type = 'manual_input',
         verification_status = 'pending_verification',
-        uploaded_by = excluded.uploaded_by,
-        uploaded_at = excluded.uploaded_at,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
         verified_by = NULL,
         verified_at = NULL,
         revision_notes = NULL,
-        verified_snapshot_json = excluded.verified_snapshot_json
-    `).run(
-      recordId,
-      year,
-      month,
-      branchCode,
-      branchName,
-      nmPasfel,
-      jnsFaspel,
-      satuan,
-      panjang,
-      lebar,
-      mLws,
-      nilai,
-      ket,
-      uploadedBy,
-      nowIso,
-      snapshotJson
+        verified_snapshot_json = EXCLUDED.verified_snapshot_json`,
+      [
+        recordId,
+        year,
+        month,
+        branchCode,
+        branchName,
+        nmPasfel,
+        jnsFaspel,
+        satuan,
+        panjang,
+        lebar,
+        mLws,
+        nilai,
+        ket,
+        uploadedBy,
+        nowIso,
+        snapshotJson,
+      ]
     );
 
     formattedRecord = {
@@ -776,9 +834,28 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       verificationStatus,
     };
   }
+  });
 
   // Keep local spreadsheet export in sync without re-running full ingestInputData
   try {
+    const upsertSheetRow = (rowsList: any[], record: any, isFin: boolean): any[] => {
+      if (!isFin) {
+        return [...rowsList, record];
+      }
+      const idx = rowsList.findIndex(
+        r =>
+          Number(r.TAHUN) === Number(record.TAHUN) &&
+          Number(r.BULAN) === Number(record.BULAN) &&
+          String(r.KODE_CBG || '').trim().toUpperCase() === String(record.KODE_CBG).trim().toUpperCase() &&
+          String(r.REKENING || '').trim().toLowerCase() === String(record.REKENING).trim().toLowerCase() &&
+          String(r.ENTITAS || '').trim().toUpperCase() === String(record.ENTITAS).trim().toUpperCase()
+      );
+      const next = [...rowsList];
+      if (idx >= 0) next[idx] = record;
+      else next.push(record);
+      return next;
+    };
+
     const excelPath = getInputDataSpreadsheetPath();
     if (fs.existsSync(excelPath)) {
       const fileBuffer = fs.readFileSync(excelPath);
@@ -789,9 +866,9 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
         ws = xlsx.utils.json_to_sheet([]);
         xlsx.utils.book_append_sheet(wb, ws, sheetName);
       }
-      const existingRows: any[] = xlsx.utils.sheet_to_json(ws);
-      existingRows.push(formattedRecord);
-      wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(existingRows);
+      const existingRows: any[] = xlsx.utils.sheet_to_json(ws, { defval: '' });
+      const updatedRows = upsertSheetRow(existingRows, formattedRecord, module === 'finansial');
+      wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(updatedRows);
       const updatedBuf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
       fs.writeFileSync(excelPath, updatedBuf);
 
@@ -800,13 +877,85 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
         fs.writeFileSync(downloadsPath, updatedBuf);
       }
     }
+
+    if (module === 'finansial') {
+      const labarugiPath = path.join(path.dirname(excelPath), 'labarugi.xlsx');
+      if (fs.existsSync(labarugiPath)) {
+        const lbWb = xlsx.read(fs.readFileSync(labarugiPath), { type: 'buffer' });
+        const lbSheetName = lbWb.Sheets['labarugi'] ? 'labarugi' : lbWb.SheetNames[0];
+        const lbExisting: any[] = xlsx.utils.sheet_to_json(lbWb.Sheets[lbSheetName], { defval: '' });
+        const lbClean = lbExisting.map(r => ({
+          TAHUN: Number(r.TAHUN),
+          BULAN: Number(r.BULAN),
+          KODE_CBG: String(r.KODE_CBG || '').trim(),
+          NM_CBG: String(r.NM_CBG || '').trim(),
+          REKENING: String(r.REKENING || '').trim(),
+          ENTITAS: String(r.ENTITAS || '').trim(),
+          REALISASI: parseRealisasi(r[' REALISASI '] ?? r.REALISASI),
+          RKA: String(r[' RKA '] ?? r.RKA ?? '-').trim() === '-' ? '-' : parseMetricPercent(r[' RKA '] ?? r.RKA) ?? '-',
+          YOY: String(r[' YOY '] ?? r.YOY ?? '-').trim() === '-' ? '-' : parseMetricPercent(r[' YOY '] ?? r.YOY) ?? '-',
+        }));
+        const lbUpdated = upsertSheetRow(lbClean, formattedRecord, true);
+        lbWb.Sheets[lbSheetName] = xlsx.utils.json_to_sheet(lbUpdated);
+        fs.writeFileSync(labarugiPath, xlsx.write(lbWb, { type: 'buffer', bookType: 'xlsx' }));
+      }
+    } else if (module === 'peralatan') {
+      const alatXlsxPath = path.join(path.dirname(excelPath), 'peralatan.xlsx');
+      if (fs.existsSync(alatXlsxPath)) {
+        const alatWb = xlsx.read(fs.readFileSync(alatXlsxPath), { type: 'buffer' });
+        const alatSheetName =
+          alatWb.SheetNames.find(s => ['alat', 'peralatan'].includes(s.toLowerCase())) || alatWb.SheetNames[0];
+        const rawMatrix = xlsx.utils.sheet_to_json(alatWb.Sheets[alatSheetName], {
+          header: 1,
+          defval: '',
+        }) as any[][];
+        const headers = [
+          'Tanggal',
+          'Grup / Entitas',
+          'Nama Cabang',
+          'Nama Alat',
+          'Jenis Alat',
+          'Kategori Alat',
+          'Kondisi',
+          'Kerusakan',
+          'Tindak Lanjut',
+        ];
+        const newRow = [
+          formattedRecord.Tanggal,
+          formattedRecord['Grup / Entitas'],
+          formattedRecord['Nama Cabang'],
+          formattedRecord['Nama Alat'],
+          formattedRecord['Jenis Alat'],
+          formattedRecord['Kategori Alat'],
+          formattedRecord.Kondisi,
+          formattedRecord.Kerusakan,
+          formattedRecord['Tindak Lanjut'],
+        ];
+        const dataMatrix = rawMatrix.length > 0 ? rawMatrix : [headers];
+        const rowIdx = dataMatrix.findIndex(
+          r =>
+            Array.isArray(r) &&
+            normalizeTanggalISO(r[0]) === formattedRecord.Tanggal &&
+            String(r[1] || '').trim().toUpperCase() === formattedRecord['Grup / Entitas'] &&
+            String(r[2] || '').trim().toLowerCase() === String(formattedRecord['Nama Cabang']).toLowerCase() &&
+            String(r[3] || '').trim().toLowerCase() === String(formattedRecord['Nama Alat']).toLowerCase()
+        );
+        if (rowIdx >= 0) {
+          dataMatrix[rowIdx] = newRow;
+        } else {
+          dataMatrix.push(newRow);
+        }
+        alatWb.Sheets[alatSheetName] = xlsx.utils.aoa_to_sheet(dataMatrix);
+        fs.writeFileSync(alatXlsxPath, xlsx.write(alatWb, { type: 'buffer', bookType: 'xlsx' }));
+      }
+    }
   } catch (err) {
     console.warn('[ManualInput] Non-fatal spreadsheet export warning:', err);
   }
 
   // Audit log
   try {
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: user?.id || 'manual_user',
       user_name: user?.name || 'PIC Input Manual',
       user_role: (user?.role as any) || 'pic_cabang',

@@ -9,8 +9,8 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 100;
-    const logs = dbQueries.getAuditLogs(limit);
-    const batches = dbQueries.getImportBatches();
+    const logs = await dbQueries.getAuditLogs(limit);
+    const batches = await dbQueries.getImportBatches();
 
     return NextResponse.json({
       success: true,

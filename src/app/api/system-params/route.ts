@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   dbQueries,
   getDbPath,
+  query,
   sanitizeSafeDataFilePath,
   toSafeDbConfig,
   toSafeIntegrationCredentials,
@@ -16,14 +17,36 @@ export async function GET(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const params = dbQueries.getSystemParameters();
+    const params = await dbQueries.getSystemParameters();
     const dbConfig = toSafeDbConfig(dbQueries.getDbConfig());
-    const credentials = toSafeIntegrationCredentials(dbQueries.getIntegrationCredentials());
+    const credentials = toSafeIntegrationCredentials(await dbQueries.getIntegrationCredentials());
 
     const activeDbPath = getDbPath();
     const relativeDbPath = path.relative(process.cwd(), activeDbPath);
     let dbStats: any = null;
-    if (fs.existsSync(activeDbPath)) {
+    if (dbConfig.engine === 'postgres') {
+      try {
+        const sizeRes = await query<{ size_bytes: number }>(
+          'SELECT pg_database_size(current_database())::bigint AS size_bytes'
+        );
+        const sizeBytes = Number(sizeRes.rows[0]?.size_bytes || 0);
+        dbStats = {
+          exists: true,
+          engine: 'postgres',
+          sizeBytes,
+          sizeKb: Math.round(sizeBytes / 1024),
+          sizeMb: (sizeBytes / (1024 * 1024)).toFixed(2),
+          lastModified: new Date().toISOString(),
+          absolutePath: `postgresql://${dbConfig.pg_host}:${dbConfig.pg_port}/${dbConfig.pg_database}`,
+        };
+      } catch {
+        dbStats = {
+          exists: false,
+          engine: 'postgres',
+          absolutePath: `postgresql://${dbConfig.pg_host}:${dbConfig.pg_port}/${dbConfig.pg_database}`,
+        };
+      }
+    } else if (fs.existsSync(activeDbPath)) {
       try {
         const stat = fs.statSync(activeDbPath);
         dbStats = {
@@ -129,7 +152,7 @@ export async function POST(req: NextRequest) {
         'ed_dashboard.db',
         ['.db', '.sqlite', '.sqlite3']
       );
-      updatedDbConfig = dbQueries.saveDbConfig({
+      updatedDbConfig = await dbQueries.saveDbConfig({
         engine: dbCfg.engine || 'sqlite',
         sqlite_path: safeRelativePath,
         pg_host: dbCfg.pg_host || 'localhost',
@@ -142,7 +165,7 @@ export async function POST(req: NextRequest) {
       }, userName);
 
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: userId,
           user_name: userName,
           user_role: userRole,
@@ -163,7 +186,7 @@ export async function POST(req: NextRequest) {
         'input_data.xlsx',
         ['.xlsx', '.xls', '.csv']
       );
-      updatedCredentials = dbQueries.saveIntegrationCredentials({
+      updatedCredentials = await dbQueries.saveIntegrationCredentials({
         google_drive_email: creds.google_drive_email ? creds.google_drive_email.trim() : 'regdashr@gmail.com',
         google_drive_file_path: safeExcelPath,
         google_sheets_id: creds.google_sheets_id ? creds.google_sheets_id.trim() : '',
@@ -174,7 +197,7 @@ export async function POST(req: NextRequest) {
       }, userName);
 
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: userId,
           user_name: userName,
           user_role: userRole,
@@ -200,7 +223,7 @@ export async function POST(req: NextRequest) {
       const autoLogout = p.auto_logout_idle !== false;
       const defaultTheme = p.default_theme === 'dark' ? 'dark' : 'light';
 
-      updatedParams = dbQueries.saveSystemParameters({
+      updatedParams = await dbQueries.saveSystemParameters({
         session_timeout_minutes: timeout,
         auto_logout_idle: autoLogout,
         warning_before_minutes: warning,
@@ -209,7 +232,7 @@ export async function POST(req: NextRequest) {
       });
 
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: userId,
           user_name: userName,
           user_role: userRole,
@@ -224,9 +247,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      params: updatedParams || dbQueries.getSystemParameters(),
+      params: updatedParams || (await dbQueries.getSystemParameters()),
       dbConfig: toSafeDbConfig(updatedDbConfig || dbQueries.getDbConfig()),
-      credentials: toSafeIntegrationCredentials(updatedCredentials || dbQueries.getIntegrationCredentials()),
+      credentials: toSafeIntegrationCredentials(updatedCredentials || (await dbQueries.getIntegrationCredentials())),
       message: 'Konfigurasi parameter sistem, kredensial, dan database telah disimpan.',
     });
   } catch (error: any) {

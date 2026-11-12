@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
     }
 
     const dbUser =
-      dbQueries.getUserById(session.sub) ||
-      dbQueries.getUserByNipp(session.nipp);
+      (await dbQueries.getUserById(session.sub)) ||
+      (await dbQueries.getUserByNipp(session.nipp));
 
     if (!dbUser || !dbUser.active) {
       const unauthRes = NextResponse.json(
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     }
 
     const safeUser = toSafeUser(dbUser);
-    const systemParams = dbQueries.getSystemParameters();
+    const systemParams = await dbQueries.getSystemParameters();
 
     const response = NextResponse.json({
       success: true,

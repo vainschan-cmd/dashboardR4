@@ -665,6 +665,8 @@ export default function DashboardHome() {
         {activeTab === 'keuangan' && (
           <PortSightKeuangan
             selectedTerminal={selectedTerminal}
+            selectedPeriod={selectedPeriod}
+            currentUser={currentUser}
             onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('finansial')}
           />
         )}
@@ -699,6 +701,7 @@ export default function DashboardHome() {
         {activeTab === 'peralatan' && (
           <PortSightPeralatan
             selectedTerminal={selectedTerminal}
+            currentUser={currentUser}
             onOpenManualInput={isBod ? undefined : () => handleOpenManualInput('peralatan')}
           />
         )}

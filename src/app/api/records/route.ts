@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const verified_only = searchParams.get('verified_only') === 'true';
     const verification_status = searchParams.get('verification_status') || undefined;
 
-    const records = dbQueries.getMonthlyRecords({
+    const records = await dbQueries.getMonthlyRecords({
       branch_id,
       department_id,
       month,

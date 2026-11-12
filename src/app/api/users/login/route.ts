@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const rateLimit = checkLoginRateLimit(clientIp, inputNipp);
     if (!rateLimit.allowed) {
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: inputNipp,
           user_name: inputNipp,
           user_role: 'anonymous',
@@ -64,12 +64,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Authenticate User against scrypt password hash (No universal bypass)
-    const user = dbQueries.authenticateUser(inputNipp, inputPassword);
+    const user = await dbQueries.authenticateUser(inputNipp, inputPassword);
 
     if (!user) {
       recordLoginFailure(clientIp, inputNipp);
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: inputNipp,
           user_name: inputNipp,
           user_role: 'anonymous',
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 
     if (!user.active) {
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: user.id,
           user_name: user.name,
           user_role: user.role,
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Reset rate limit & Issue HttpOnly JWT Cookies
     resetLoginRateLimit(clientIp, inputNipp);
-    const systemParams = dbQueries.getSystemParameters();
+    const systemParams = await dbQueries.getSystemParameters();
     const safeUser = toSafeUser(user);
 
     const response = NextResponse.json({
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Record successful LOGIN in audit_logs
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: safeUser.id,
         user_name: safeUser.name,
         user_role: safeUser.role,

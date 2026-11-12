@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       }
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const result = importUsersFromSpreadsheet(buffer);
+      const result = await importUsersFromSpreadsheet(buffer);
 
       return NextResponse.json({
         success: true,
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'pull' || action === 'import' || action === 'ambil') {
       // Pull data from spreadsheet (Downloads or data folder)
-      const result = importUsersFromSpreadsheet();
+      const result = await importUsersFromSpreadsheet();
 
       return NextResponse.json({
         success: true,
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       });
     } else {
       // Default: Push data to spreadsheet (My Drive)
-      const users = dbQueries.getUsers();
+      const users = await dbQueries.getUsers();
       const filePath = exportUsersToSpreadsheet(users);
       const stat = fs.statSync(filePath);
 

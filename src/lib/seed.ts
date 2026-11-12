@@ -1,24 +1,25 @@
-import { getDb } from './db';
+import { withTransaction } from './db';
 import { hashPassword } from './auth';
 import { Branch, Department, User, KPIIndicator, TemplateConfig, KPIDirection, StatusColor } from './types';
 
-export function runSeed(force = false) {
-  const db = getDb();
-
+export async function runSeed(force = false) {
   console.log('Seeding official Pelindo Regional 4 (R4 PortDash) Master & Simulation Data...');
 
-  // Clear existing if force
-  db.exec(`
-    DELETE FROM monthly_records;
-    DELETE FROM kpi_indicators;
-    DELETE FROM templates;
-    DELETE FROM users;
-    DELETE FROM departments;
-    DELETE FROM branches;
-    DELETE FROM import_batches;
-    DELETE FROM audit_logs;
-    DELETE FROM integration_settings;
-  `);
+  await withTransaction(async (client) => {
+    // Clear existing if force
+    if (force) {
+      await client.query(`
+        DELETE FROM monthly_records;
+        DELETE FROM kpi_indicators;
+        DELETE FROM templates;
+        DELETE FROM users;
+        DELETE FROM departments;
+        DELETE FROM branches;
+        DELETE FROM import_batches;
+        DELETE FROM audit_logs;
+        DELETE FROM integration_settings;
+      `);
+    }
 
   // 1. Branches (8 Terminals of Pelindo Regional 4)
   const branches: Branch[] = [
@@ -192,12 +193,33 @@ export function runSeed(force = false) {
     },
   ];
 
-  const stmtBranch = db.prepare(`
+  const branchInsertSql = `
     INSERT INTO branches (id, code, name, region, address, phone, email, active, facilities, overview)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+    ON CONFLICT (id) DO UPDATE SET
+      code = EXCLUDED.code,
+      name = EXCLUDED.name,
+      region = EXCLUDED.region,
+      address = EXCLUDED.address,
+      phone = EXCLUDED.phone,
+      email = EXCLUDED.email,
+      active = EXCLUDED.active,
+      facilities = EXCLUDED.facilities,
+      overview = EXCLUDED.overview
+  `;
   for (const b of branches) {
-    stmtBranch.run(b.id, b.code, b.name, b.region, b.address, b.phone, b.email, b.active ? 1 : 0, JSON.stringify(b.facilities), b.overview || '');
+    await client.query(branchInsertSql, [
+      b.id,
+      b.code,
+      b.name,
+      b.region,
+      b.address,
+      b.phone,
+      b.email,
+      Boolean(b.active),
+      JSON.stringify(b.facilities),
+      b.overview || '',
+    ]);
   }
 
   // 2. Departments
@@ -210,12 +232,27 @@ export function runSeed(force = false) {
     { id: 'dept_pel', code: 'PEL', name: 'Pelanggan', pic_name: 'Dian Permatasari', pic_email: 'dian.pel@pelindo.co.id', active: true, description: 'Kepatuhan SLA, CSAT 1-5, keluhan masuk, umur tiket, dan kategori keluhan.' },
   ];
 
-  const stmtDept = db.prepare(`
+  const deptInsertSql = `
     INSERT INTO departments (id, code, name, pic_name, pic_email, active, description)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (id) DO UPDATE SET
+      code = EXCLUDED.code,
+      name = EXCLUDED.name,
+      pic_name = EXCLUDED.pic_name,
+      pic_email = EXCLUDED.pic_email,
+      active = EXCLUDED.active,
+      description = EXCLUDED.description
+  `;
   for (const d of departments) {
-    stmtDept.run(d.id, d.code, d.name, d.pic_name, d.pic_email, d.active ? 1 : 0, d.description || '');
+    await client.query(deptInsertSql, [
+      d.id,
+      d.code,
+      d.name,
+      d.pic_name,
+      d.pic_email,
+      Boolean(d.active),
+      d.description || '',
+    ]);
   }
 
   // 3. Users (RBAC & PIC Master)
@@ -228,12 +265,24 @@ export function runSeed(force = false) {
     { id: 'usr_pic_bpn', username: '10008', nipp: '10008', name: 'Fachruddin', email: 'faisal.bpn@pelindo.co.id', divisi: 'Divisi Operasional Terminal Cabang', departemen: 'Departemen Operasi Cabang Balikpapan', password: 'password123', role: 'pic_cabang', branch_id: 'R04', active: true },
   ];
 
-  const stmtUser = db.prepare(`
-    INSERT INTO users (id, username, nipp, name, email, divisi, departemen, password, role, branch_id, department_id, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const userInsertSql = `
+    INSERT INTO users (id, username, nipp, name, email, divisi, departemen, password_hash, role, branch_id, department_id, active)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (id) DO UPDATE SET
+      username = EXCLUDED.username,
+      nipp = EXCLUDED.nipp,
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      divisi = EXCLUDED.divisi,
+      departemen = EXCLUDED.departemen,
+      password_hash = EXCLUDED.password_hash,
+      role = EXCLUDED.role,
+      branch_id = EXCLUDED.branch_id,
+      department_id = EXCLUDED.department_id,
+      active = EXCLUDED.active
+  `;
   for (const u of users) {
-    stmtUser.run(
+    await client.query(userInsertSql, [
       u.id,
       u.username,
       u.nipp,
@@ -245,8 +294,8 @@ export function runSeed(force = false) {
       u.role,
       u.branch_id || null,
       u.department_id || null,
-      u.active ? 1 : 0
-    );
+      Boolean(u.active),
+    ]);
   }
 
   // 4. KPI Indicators
@@ -263,12 +312,34 @@ export function runSeed(force = false) {
     { id: 'kpi_lti', code: 'HSSE-LTI', name: 'Lost Time Injury', department_id: 'dept_hsse', category: 'K3', unit: 'Kasus', direction: 'lower_is_better', default_target: 0, is_core_kpi: true, active: true },
   ];
 
-  const stmtInd = db.prepare(`
+  const indInsertSql = `
     INSERT INTO kpi_indicators (id, code, name, department_id, category, unit, direction, formula_desc, default_target, is_core_kpi, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    ON CONFLICT (id) DO UPDATE SET
+      code = EXCLUDED.code,
+      name = EXCLUDED.name,
+      department_id = EXCLUDED.department_id,
+      category = EXCLUDED.category,
+      unit = EXCLUDED.unit,
+      direction = EXCLUDED.direction,
+      default_target = EXCLUDED.default_target,
+      is_core_kpi = EXCLUDED.is_core_kpi,
+      active = EXCLUDED.active
+  `;
   for (const k of indicators) {
-    stmtInd.run(k.id, k.code, k.name, k.department_id, k.category, k.unit, k.direction, '', k.default_target, k.is_core_kpi ? 1 : 0, 1);
+    await client.query(indInsertSql, [
+      k.id,
+      k.code,
+      k.name,
+      k.department_id,
+      k.category,
+      k.unit,
+      k.direction,
+      '',
+      k.default_target,
+      Boolean(k.is_core_kpi),
+      true,
+    ]);
   }
 
   // 5. Default Templates
@@ -285,31 +356,42 @@ export function runSeed(force = false) {
     { column_name: 'Keterangan', field_key: 'notes', data_type: 'string', required: false, sample_value: 'Pelaporan resmi R4 PortDash' },
   ];
 
-  const stmtTpl = db.prepare(`
+  const tplInsertSql = `
     INSERT INTO templates (id, department_id, version, name, description, columns, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)
+    ON CONFLICT (id) DO UPDATE SET
+      department_id = EXCLUDED.department_id,
+      version = EXCLUDED.version,
+      name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      columns = EXCLUDED.columns,
+      updated_at = EXCLUDED.updated_at
+  `;
   for (const d of departments) {
-    stmtTpl.run(
+    await client.query(tplInsertSql, [
       `tpl_${d.code.toLowerCase()}`,
       d.id,
       'v2.0-PortDash',
       `Template Resmi Pelaporan ${d.name} Pelindo Regional 4`,
       `Format data spreadsheet bulanan resmi untuk 8 terminal Pelindo Regional 4`,
       JSON.stringify(defaultColumns),
-      new Date().toISOString()
-    );
+      new Date().toISOString(),
+    ]);
   }
 
   // 6. Seed Monthly Records matching the presentation
-  const stmtRec = db.prepare(`
+  const recInsertSql = `
     INSERT INTO monthly_records (
       id, branch_id, department_id, indicator_id, month, year,
       target, realization, unit, achievement_pct, status_color, notes,
       source_type, batch_id, verification_status, revision_notes,
       uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `);
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::timestamptz, $19, $20::timestamptz, TRUE)
+    ON CONFLICT (id) DO NOTHING
+  `;
+  const stmtRec = {
+    run: async (...args: any[]) => client.query(recInsertSql, args),
+  };
 
   // Terminal baseline data
   const terminalData = [
@@ -329,7 +411,7 @@ export function runSeed(force = false) {
       const statusColor: StatusColor = isGood ? 'green' : 'yellow';
 
       // 1. Arus Petikemas (TEUs)
-      stmtRec.run(
+      await stmtRec.run(
         `rec_2026_${m}_${t.branchId}_teus`,
         t.branchId,
         'dept_ops',
@@ -354,7 +436,7 @@ export function runSeed(force = false) {
 
       // 2. Pendapatan Usaha (Revenue)
       const branchRev = Number((t.rkapPct * 2.5).toFixed(1));
-      stmtRec.run(
+      await stmtRec.run(
         `rec_2026_${m}_${t.branchId}_rev`,
         t.branchId,
         'dept_keu',
@@ -399,7 +481,7 @@ export function runSeed(force = false) {
         cargoVerifiedAt = null;
       }
 
-      stmtRec.run(
+      await stmtRec.run(
         `rec_2026_${m}_${t.branchId}_cargo`,
         t.branchId,
         'dept_ops',
@@ -448,7 +530,7 @@ export function runSeed(force = false) {
         rfuVerifiedAt = null;
       }
 
-      stmtRec.run(
+      await stmtRec.run(
         `rec_2026_${m}_${t.branchId}_rfu`,
         t.branchId,
         'dept_tek',
@@ -487,7 +569,7 @@ export function runSeed(force = false) {
         csatVerifiedAt = null;
       }
 
-      stmtRec.run(
+      await stmtRec.run(
         `rec_2026_${m}_${t.branchId}_csat`,
         t.branchId,
         'dept_pel',
@@ -512,44 +594,54 @@ export function runSeed(force = false) {
     }
   }
 
-  // 7. Seed Initial Audit Logs
-  db.prepare(`
-    INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity, entity_id, details, timestamp, ip_address)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    'aud_init_r4',
-    'usr_adminreg',
-    'Asqar',
-    'admin_regional',
-    'CONFIG_UPDATE',
-    'R4_PORTSIGHT',
-    'regional_4',
-    'Inisialisasi sistem R4 PortDash Pelindo Regional 4 (Makassar, 22/10/2026)',
-    new Date().toISOString(),
-    '127.0.0.1'
-  );
+    // 7. Seed Initial Audit Logs
+    await client.query(
+      `INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity, entity_id, details, timestamp, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        'aud_init_r4',
+        'usr_adminreg',
+        'Asqar',
+        'admin_regional',
+        'CONFIG_UPDATE',
+        'R4_PORTSIGHT',
+        'regional_4',
+        'Inisialisasi sistem R4 PortDash Pelindo Regional 4 (Makassar, 22/10/2026)',
+        new Date().toISOString(),
+        '127.0.0.1',
+      ]
+    );
 
-  // 8. Integration Settings (Google Sheets & Database via regdashr@gmail.com)
-  const gsheetConfig = {
-    id: 'cfg_gsheet',
-    spreadsheet_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
-    sheet_name: 'Input_Kinerja_Bulanan',
-    range: 'A2:L200',
-    service_account_email: 'regdashr@gmail.com',
-    api_key_configured: false,
-    status: 'ready_for_credentials',
-    last_sync_at: new Date().toISOString(),
-    auto_sync_enabled: true
-  };
+    // 8. Integration Settings (Google Sheets & Database via regdashr@gmail.com)
+    const gsheetConfig = {
+      id: 'cfg_gsheet',
+      spreadsheet_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
+      sheet_name: 'Input_Kinerja_Bulanan',
+      range: 'A2:L200',
+      service_account_email: 'regdashr@gmail.com',
+      api_key_configured: false,
+      status: 'ready_for_credentials',
+      last_sync_at: new Date().toISOString(),
+      auto_sync_enabled: true,
+    };
 
-  db.prepare(`
-    INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-    VALUES (?, 'google_sheets', ?, ?)
-  `).run('cfg_gsheet', JSON.stringify(gsheetConfig), new Date().toISOString());
+    await client.query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ($1, 'google_sheets', $2::jsonb, $3::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      ['cfg_gsheet', JSON.stringify(gsheetConfig), new Date().toISOString()]
+    );
+  });
 
   console.log('Seeding completed successfully for Pelindo Regional 4!');
 }
 
 if (require.main === module) {
-  runSeed(true);
+  runSeed(true).catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  });
 }

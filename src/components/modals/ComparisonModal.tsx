@@ -29,7 +29,14 @@ import {
   CartesianGrid
 } from 'recharts';
 import { formatRupiahFull } from '@/lib/formatters';
+import {
+  averageValidMetric,
+  canonicalRekening,
+  parseMetricPercent,
+  parseRealisasi,
+} from '@/lib/finansialHelpers';
 import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode, isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
+import type { FinansialRecord } from '@/lib/types';
 
 interface ComparisonModalProps {
   isOpen: boolean;
@@ -96,25 +103,30 @@ export default function ComparisonModal({
         if (json.success) {
           const items: MetricComparisonItem[] = [];
 
-          // 1. Process Finansial
-          const finRows: any[] = json.finansial || [];
-          const targetFinRows = finRows.filter(f => isBranchMatch(selectedTerminal, f.branchCode, f.branchName));
+          // 1. Process Finansial (9 field standar; mode konsolidasi menjumlahkan seluruh entitas termasuk ELIMINASI)
+          const finRows: FinansialRecord[] = json.finansial || [];
+          const targetFinRows = finRows.filter(f => isBranchMatch(selectedTerminal, f.KODE_CBG, f.NM_CBG));
 
-          // If multi-branch, keep branches separate; if ALL, aggregate
+          // If multi-branch, keep branches separate; if ALL or single, aggregate across ENTITAS
           const finMap: Record<string, { real: number; rkaArr: number[]; yoyArr: number[]; rekName: string; branchName: string }> = {};
           targetFinRows.forEach(f => {
-            const rek = f.rekening || 'Lainnya';
-            const bName = f.branchName || f.branchCode || 'Cabang';
+            const rek = canonicalRekening(f.REKENING);
+            const bName = f.NM_CBG || f.KODE_CBG || 'Cabang';
             const key = isMultiBranch ? `[${bName}] ${rek}` : rek;
             if (!finMap[key]) finMap[key] = { real: 0, rkaArr: [], yoyArr: [], rekName: rek, branchName: bName };
-            finMap[key].real += (f.konsolidasiRp || 0);
-            if (f.rka) finMap[key].rkaArr.push(f.rka);
-            if (f.yoy) finMap[key].yoyArr.push(f.yoy);
+            const realVal = parseRealisasi(f.REALISASI);
+            finMap[key].real += realVal;
+            const rkaParsed = parseMetricPercent(f.RKA);
+            const yoyParsed = parseMetricPercent(f.YOY);
+            if (realVal !== 0 && rkaParsed !== null) finMap[key].rkaArr.push(rkaParsed);
+            if (realVal !== 0 && yoyParsed !== null) finMap[key].yoyArr.push(yoyParsed);
           });
 
           Object.entries(finMap).forEach(([key, val], idx) => {
-            const avgRka = val.rkaArr.length > 0 ? (val.rkaArr.reduce((a, b) => a + b, 0) / val.rkaArr.length) : 100;
-            const avgYoy = val.yoyArr.length > 0 ? (val.yoyArr.reduce((a, b) => a + b, 0) / val.yoyArr.length) : 100;
+            const avgRkaRaw = averageValidMetric(val.rkaArr);
+            const avgYoyRaw = averageValidMetric(val.yoyArr);
+            const avgRka = typeof avgRkaRaw === 'number' ? avgRkaRaw : 0;
+            const avgYoy = typeof avgYoyRaw === 'number' ? avgYoyRaw : 0;
             const targetRkap = avgRka > 0 ? Math.round(val.real / (avgRka / 100)) : val.real;
             const real2025 = avgYoy > 0 ? Math.round(val.real / (avgYoy / 100)) : val.real;
             const isCost = val.rekName.toLowerCase().includes('beban') || val.real < 0;
@@ -127,11 +139,11 @@ export default function ComparisonModal({
               real2025,
               targetRkap,
               real2026: val.real,
-              rkaPct: Number(avgRka.toFixed(1)),
-              yoyPct: Number(avgYoy.toFixed(1)),
+              rkaPct: Number(avgRka.toFixed(2)),
+              yoyPct: Number(avgYoy.toFixed(2)),
               gapRkap: val.real - targetRkap,
               gapYoY: val.real - real2025,
-              isGood: isCost ? (avgRka <= 100) : (avgRka >= 100),
+              isGood: isCost ? (avgRka === 0 || avgRka <= 100) : (avgRka >= 100),
             });
           });
 
@@ -509,6 +521,8 @@ export default function ComparisonModal({
                             return `${v.toLocaleString('id-ID')} ${item.satuan}`;
                           };
 
+                          const hasRka = item.rkaPct > 0;
+                          const hasYoy = item.yoyPct > 0;
                           const yoyGrowth = item.yoyPct - 100;
                           const isYoYPos = yoyGrowth >= 0;
 
@@ -539,25 +553,29 @@ export default function ComparisonModal({
                                 <span
                                   style={{
                                     fontWeight: 700,
-                                    color: item.rkaPct >= 100 ? '#34d399' : '#f87171',
+                                    color: !hasRka ? '#94a3b8' : item.rkaPct >= 100 ? '#34d399' : '#f87171',
                                   }}
                                 >
-                                  {item.rkaPct}%
+                                  {hasRka ? `${item.rkaPct.toFixed(2)}%` : '-'}
                                 </span>
                               </td>
                               <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '2px',
-                                    fontWeight: 700,
-                                    color: isYoYPos ? '#34d399' : '#f87171',
-                                  }}
-                                >
-                                  {isYoYPos ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                                  {isYoYPos ? '+' : ''}{yoyGrowth.toFixed(1)}%
-                                </span>
+                                {hasYoy ? (
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '2px',
+                                      fontWeight: 700,
+                                      color: isYoYPos ? '#34d399' : '#f87171',
+                                    }}
+                                  >
+                                    {isYoYPos ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                                    {item.yoyPct.toFixed(2)}%
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#94a3b8', fontWeight: 600 }}>-</span>
+                                )}
                               </td>
                               <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                                 <span

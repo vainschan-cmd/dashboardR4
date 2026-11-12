@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { Pool, types, type PoolClient, type PoolConfig, type QueryResult, type QueryResultRow } from 'pg';
 import path from 'path';
 import fs from 'fs';
 import type {
@@ -17,15 +17,48 @@ import type {
   DatabaseConfig,
   IntegrationCredentials,
 } from './types';
-import { OFFICIAL_BRANCHES } from './constants';
 import { hashPassword, verifyPassword, isPasswordHashed } from './auth';
+
+// Normalize PostgreSQL driver type parsing so behavior aligns cleanly with JS types:
+// - OID 20 (INT8 / BIGINT, e.g. COUNT(*)) -> JS number
+// - OID 1700 (NUMERIC / DECIMAL) -> JS number
+// - OID 1184 / 1114 (TIMESTAMPTZ / TIMESTAMP) -> ISO-8601 UTC string
+types.setTypeParser(20, (val: string) => parseInt(val, 10));
+types.setTypeParser(1700, (val: string) => parseFloat(val));
+types.setTypeParser(1184, (val: string) => (val ? new Date(val).toISOString() : val));
+types.setTypeParser(1114, (val: string) => (val ? new Date(val + 'Z').toISOString() : val));
 
 export const SECRET_MASK = '••••••••';
 
-// Ensure data folder exists
+// Ensure data folder exists (for spreadsheets / safe local uploads & config metadata)
 const dataDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
+}
+
+function parseJsonValue<T>(val: unknown, fallback: T): T {
+  if (val === null || val === undefined || val === '') return fallback;
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return val as T;
+}
+
+function toIsoString(val: unknown): string {
+  if (!val) return new Date().toISOString();
+  if (val instanceof Date) return val.toISOString();
+  const s = String(val);
+  const parsed = Date.parse(s);
+  return Number.isNaN(parsed) ? s : new Date(parsed).toISOString();
+}
+
+function toIsoStringOrNull(val: unknown): string | null {
+  if (val === null || val === undefined || val === '') return null;
+  return toIsoString(val);
 }
 
 /**
@@ -38,7 +71,6 @@ export function sanitizeSafeDataFilePath(
 ): { safeRelativePath: string; resolvedAbsolutePath: string } {
   const cleaned = String(rawPath || '').trim();
   let baseName = cleaned ? path.basename(cleaned) : defaultFileName;
-  // Strip any null bytes or unsafe characters
   baseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '');
   if (!baseName || baseName === '.' || baseName === '..') {
     baseName = defaultFileName;
@@ -57,12 +89,13 @@ export function sanitizeSafeDataFilePath(
  */
 export function toSafeUser(raw: any): User {
   if (!raw) return raw;
-  const { password: _removedPassword, ...rest } = raw;
+  const { password: _removedPassword, password_hash: _removedPasswordHash, ...rest } = raw;
   return {
     ...rest,
     nipp: raw.nipp || raw.username,
     username: raw.username || raw.nipp,
     active: Boolean(raw.active),
+    created_at: raw.created_at ? toIsoString(raw.created_at) : undefined,
   };
 }
 
@@ -71,50 +104,81 @@ export function toSafeUser(raw: any): User {
  */
 export function toSafeDbConfig(cfg?: DatabaseConfig): DatabaseConfig {
   const source = cfg || getDbConfig();
+  const hasEnvPassword = Boolean(getEnvDatabaseUrl() || process.env.PGPASSWORD);
   return {
     ...source,
-    pg_password: source.pg_password ? SECRET_MASK : '',
+    pg_password: source.pg_password || hasEnvPassword ? SECRET_MASK : '',
   };
 }
 
 /**
  * Mask sensitive external API keys and tokens before returning in API responses.
  */
-export function toSafeIntegrationCredentials(creds?: IntegrationCredentials): IntegrationCredentials {
-  const source = creds || dbQueries.getIntegrationCredentials();
+export function toSafeIntegrationCredentials(creds: IntegrationCredentials): IntegrationCredentials {
   return {
-    ...source,
-    google_api_key: source.google_api_key ? SECRET_MASK : '',
-    api_gateway_token: source.api_gateway_token ? SECRET_MASK : '',
+    ...creds,
+    google_api_key: creds.google_api_key ? SECRET_MASK : '',
+    api_gateway_token: creds.api_gateway_token ? SECRET_MASK : '',
   };
+}
+
+function getEnvDatabaseUrl(): string | null {
+  const raw = (process.env.DATABASE_URL || process.env.POSTGRES_URL || '').trim();
+  if (!raw || raw.startsWith('file:')) return null;
+  if (raw.startsWith('postgresql://') || raw.startsWith('postgres://')) {
+    return raw;
+  }
+  return null;
 }
 
 // Database location & configuration management
 export function getDbConfig(): DatabaseConfig {
   const configPath = path.join(process.cwd(), 'data', 'db_config.json');
+  const envUrl = getEnvDatabaseUrl();
+
+  let parsedFromFile: Partial<DatabaseConfig> = {};
   if (fs.existsSync(configPath)) {
     try {
       const content = fs.readFileSync(configPath, 'utf8');
-      const parsed = JSON.parse(content);
-      const { safeRelativePath } = sanitizeSafeDataFilePath(parsed.sqlite_path, 'ed_dashboard.db');
-      return {
-        ...parsed,
-        sqlite_path: safeRelativePath,
-      };
+      parsedFromFile = JSON.parse(content);
     } catch (e) {
       console.error('Error reading db_config.json:', e);
     }
   }
+
+  let envHost: string | undefined;
+  let envPort: number | undefined;
+  let envDb: string | undefined;
+  let envUser: string | undefined;
+  let envSsl: boolean | undefined;
+
+  if (envUrl) {
+    try {
+      const u = new URL(envUrl);
+      envHost = u.hostname || undefined;
+      envPort = u.port ? Number(u.port) : undefined;
+      envDb = u.pathname ? u.pathname.replace(/^\//, '') : undefined;
+      envUser = u.username ? decodeURIComponent(u.username) : undefined;
+      envSsl = u.searchParams.get('sslmode') === 'require' || undefined;
+    } catch {
+      // ignore invalid URL parse for display fields
+    }
+  }
+
+  const { safeRelativePath } = sanitizeSafeDataFilePath(parsedFromFile.sqlite_path, 'ed_dashboard.db');
+
   return {
-    engine: 'sqlite',
-    sqlite_path: 'data/ed_dashboard.db',
-    pg_host: 'localhost',
-    pg_port: 5432,
-    pg_database: 'ed_dashboard',
-    pg_user: 'postgres',
-    pg_password: '',
-    pg_ssl: false,
-    max_connections: 10,
+    engine: envUrl ? 'postgres' : (parsedFromFile.engine === 'sqlite' ? 'sqlite' : 'postgres'),
+    sqlite_path: safeRelativePath,
+    pg_host: envHost || process.env.PGHOST || parsedFromFile.pg_host || 'localhost',
+    pg_port: envPort || (process.env.PGPORT ? Number(process.env.PGPORT) : undefined) || parsedFromFile.pg_port || 5432,
+    pg_database: envDb || process.env.PGDATABASE || parsedFromFile.pg_database || 'ed_dashboard',
+    pg_user: envUser || process.env.PGUSER || parsedFromFile.pg_user || 'postgres',
+    pg_password: parsedFromFile.pg_password || '',
+    pg_ssl: envSsl ?? parsedFromFile.pg_ssl ?? false,
+    max_connections: parsedFromFile.max_connections || 10,
+    updated_at: parsedFromFile.updated_at,
+    updated_by: parsedFromFile.updated_by,
   };
 }
 
@@ -129,70 +193,190 @@ export function getDbPath(): string {
   return path.join(process.cwd(), 'data', 'ed_dashboard.db');
 }
 
-let dbInstance: DatabaseSync | null = null;
-let transactionDepth = 0;
+function buildPgPoolConfig(cfg?: DatabaseConfig): PoolConfig {
+  const effectiveCfg = cfg || getDbConfig();
+  const envUrl = getEnvDatabaseUrl();
 
-export function withTransaction<T>(db: DatabaseSync, fn: () => T): T {
-  const isNested = transactionDepth > 0;
-  const savepointName = `sp_${transactionDepth}`;
-  transactionDepth++;
+  if (envUrl) {
+    return {
+      connectionString: envUrl,
+      max: Number(effectiveCfg.max_connections) || 10,
+      ssl: effectiveCfg.pg_ssl ? { rejectUnauthorized: false } : undefined,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    };
+  }
+
+  return {
+    host: effectiveCfg.pg_host || process.env.PGHOST || 'localhost',
+    port: Number(effectiveCfg.pg_port) || Number(process.env.PGPORT) || 5432,
+    database: effectiveCfg.pg_database || process.env.PGDATABASE || 'ed_dashboard',
+    user: effectiveCfg.pg_user || process.env.PGUSER || 'postgres',
+    password: effectiveCfg.pg_password || process.env.PGPASSWORD || '',
+    max: Number(effectiveCfg.max_connections) || 10,
+    ssl: effectiveCfg.pg_ssl ? { rejectUnauthorized: false } : undefined,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  };
+}
+
+const globalForPg = globalThis as unknown as {
+  __edDashboardPgPool?: Pool;
+  __edDashboardPgInitPromise?: Promise<void>;
+};
+
+export function getPool(): Pool {
+  if (!globalForPg.__edDashboardPgPool) {
+    globalForPg.__edDashboardPgPool = new Pool(buildPgPoolConfig());
+  }
+  return globalForPg.__edDashboardPgPool;
+}
+
+async function initPgSchema(pool: Pool): Promise<void> {
+  // Fast check: if schema tables already exist (e.g., migrated database), verify normalized module_finansial & module_peralatan columns too
+  const tblCheck = await pool.query(
+    `SELECT
+       to_regclass('public.branches') AS branches_tbl,
+       to_regclass('public.users') AS users_tbl,
+       to_regclass('public.module_finansial') AS mod_fin_tbl,
+       to_regclass('public.module_peralatan') AS mod_alat_tbl,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'module_finansial' AND column_name = 'entitas'
+       ) AS has_fin_entitas,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'module_peralatan' AND column_name = 'grup_entitas'
+       ) AS has_alat_entitas`
+  );
+  const row = tblCheck.rows[0];
+  const needsFinRecreation = Boolean(row?.mod_fin_tbl) && !row?.has_fin_entitas;
+  const needsAlatRecreation = Boolean(row?.mod_alat_tbl) && !row?.has_alat_entitas;
+  const needsSchema =
+    !row?.branches_tbl ||
+    !row?.users_tbl ||
+    !row?.mod_fin_tbl ||
+    !row?.mod_alat_tbl ||
+    needsFinRecreation ||
+    needsAlatRecreation;
+
+  if (needsFinRecreation) {
+    await pool.query('DROP TABLE IF EXISTS module_finansial');
+  }
+  if (needsAlatRecreation) {
+    await pool.query('DROP TABLE IF EXISTS module_peralatan');
+  }
+
+  if (needsSchema) {
+    const schemaPath = path.join(process.cwd(), 'data', 'schema.sql');
+    if (fs.existsSync(schemaPath)) {
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+      await pool.query(schemaSql);
+    }
+  }
+
+  // Ensure users exist if running against an empty database
   try {
-    if (isNested) {
-      db.exec(`SAVEPOINT ${savepointName}`);
+    const existing = await pool.query(
+      "SELECT COUNT(*)::int AS count FROM users WHERE nipp IS NOT NULL AND nipp != ''"
+    );
+    const count = Number(existing.rows[0]?.count ?? 0);
+
+    if (count === 0) {
+      const { INITIAL_OFFICIAL_PICS, exportUsersToSpreadsheet } = await import('./userPicSync');
+      for (let i = 0; i < INITIAL_OFFICIAL_PICS.length; i++) {
+        const u = INITIAL_OFFICIAL_PICS[i];
+        await pool.query(
+          `INSERT INTO users (id, username, nipp, name, email, divisi, departemen, password_hash, role, branch_id, department_id, active, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::timestamptz)
+           ON CONFLICT (id) DO UPDATE SET
+             username = EXCLUDED.username,
+             nipp = EXCLUDED.nipp,
+             name = EXCLUDED.name,
+             email = EXCLUDED.email,
+             divisi = EXCLUDED.divisi,
+             departemen = EXCLUDED.departemen,
+             password_hash = EXCLUDED.password_hash,
+             role = EXCLUDED.role,
+             branch_id = EXCLUDED.branch_id,
+             department_id = EXCLUDED.department_id,
+             active = EXCLUDED.active`,
+          [
+            `usr_${u.nipp}_${i + 1}`,
+            u.nipp,
+            u.nipp,
+            u.name,
+            u.email || `${u.nipp}@pelindo.co.id`,
+            u.divisi,
+            u.departemen,
+            hashPassword(u.password || 'password123'),
+            u.role,
+            u.branch_id || null,
+            u.department_id || null,
+            Boolean(u.active),
+            u.created_at || new Date().toISOString(),
+          ]
+        );
+      }
+      const allUsersRes = await pool.query('SELECT * FROM users ORDER BY nipp ASC');
+      exportUsersToSpreadsheet(allUsersRes.rows.map(toSafeUser));
     } else {
-      db.exec('BEGIN IMMEDIATE');
+      const userRowsRes = await pool.query('SELECT id, password_hash FROM users');
+      for (const userRow of userRowsRes.rows) {
+        const rawPass = userRow.password_hash || 'password123';
+        if (!isPasswordHashed(rawPass)) {
+          await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+            hashPassword(rawPass),
+            userRow.id,
+          ]);
+        }
+      }
     }
-    const result = fn();
-    if (isNested) {
-      db.exec(`RELEASE SAVEPOINT ${savepointName}`);
-    } else {
-      db.exec('COMMIT');
-    }
+  } catch (e) {
+    console.error('[PG] Auto-seed users check warning:', e);
+  }
+}
+
+export async function ensureInitialized(): Promise<void> {
+  if (!globalForPg.__edDashboardPgInitPromise) {
+    const pool = getPool();
+    globalForPg.__edDashboardPgInitPromise = initPgSchema(pool).catch((err) => {
+      globalForPg.__edDashboardPgInitPromise = undefined;
+      throw err;
+    });
+  }
+  await globalForPg.__edDashboardPgInitPromise;
+}
+
+export async function query<T extends QueryResultRow = any>(
+  text: string,
+  params?: any[]
+): Promise<QueryResult<T>> {
+  await ensureInitialized();
+  return getPool().query<T>(text, params);
+}
+
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  await ensureInitialized();
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
     return result;
   } catch (err) {
     try {
-      if (isNested) {
-        db.exec(`ROLLBACK TO SAVEPOINT ${savepointName}`);
-      } else {
-        db.exec('ROLLBACK');
-      }
+      await client.query('ROLLBACK');
     } catch (rollbackErr) {
-      console.error('[DB] Gagal melakukan rollback transaksi:', rollbackErr);
+      console.error('[PG] Gagal melakukan rollback transaksi:', rollbackErr);
     }
     throw err;
   } finally {
-    transactionDepth = Math.max(0, transactionDepth - 1);
+    client.release();
   }
 }
 
-function execSafeMigration(db: DatabaseSync, sql: string) {
-  try {
-    db.exec(sql);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes('duplicate column name')) {
-      console.warn('[DB Migration] Peringatan eksekusi migrasi:', msg);
-    }
-  }
-}
-
-export function getDb(): DatabaseSync {
-  if (!dbInstance) {
-    const activePath = getDbPath();
-    const dir = path.dirname(activePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    dbInstance = new DatabaseSync(activePath);
-    dbInstance.exec('PRAGMA journal_mode = WAL;');
-    dbInstance.exec('PRAGMA synchronous = NORMAL;');
-    dbInstance.exec('PRAGMA foreign_keys = ON;');
-    initSchema(dbInstance);
-  }
-  return dbInstance;
-}
-
-export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): DatabaseConfig {
+export async function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): Promise<DatabaseConfig> {
   const current = getDbConfig();
   const safePath = cfg.sqlite_path
     ? sanitizeSafeDataFilePath(cfg.sqlite_path, 'ed_dashboard.db').safeRelativePath
@@ -210,482 +394,100 @@ export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): 
     updated_at: new Date().toISOString(),
     updated_by: updatedBy || 'Administrator',
   };
+
+  // Persist non-secret metadata to db_config.json (never persist plaintext pg_password to json file)
+  const fileSnapshot: DatabaseConfig = {
+    ...updated,
+    pg_password: '',
+  };
   const configPath = path.join(process.cwd(), 'data', 'db_config.json');
-  fs.writeFileSync(configPath, JSON.stringify(updated, null, 2), 'utf8');
+  fs.writeFileSync(configPath, JSON.stringify(fileSnapshot, null, 2), 'utf8');
 
   try {
-    const db = getDb();
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES ('cfg_database', 'database_config', ?, ?)
-    `).run(JSON.stringify(updated), updated.updated_at!);
+    await query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ('cfg_database', 'database_config', $1::jsonb, $2::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(fileSnapshot), updated.updated_at!]
+    );
   } catch (e) {
-    console.warn('[DB] Gagal menyimpan konfigurasi database ke integration_settings:', e);
-  }
-
-  if (safePath && safePath !== current.sqlite_path) {
-    if (dbInstance) {
-      try {
-        dbInstance.close();
-      } catch (e) {
-        console.warn('[DB] Gagal menutup koneksi SQLite lama:', e);
-      }
-      dbInstance = null;
-    }
+    console.warn('[PG] Gagal menyimpan konfigurasi database ke integration_settings:', e);
   }
 
   return updated;
 }
 
-function initSchema(db: DatabaseSync) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS branches (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      region TEXT NOT NULL,
-      address TEXT,
-      phone TEXT,
-      email TEXT,
-      active INTEGER DEFAULT 1,
-      facilities TEXT,
-      overview TEXT,
-      order_seq INTEGER DEFAULT 99
-    );
-
-    CREATE TABLE IF NOT EXISTS departments (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      pic_name TEXT NOT NULL,
-      pic_email TEXT NOT NULL,
-      active INTEGER DEFAULT 1,
-      description TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS equipment_catalog (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      acronym TEXT NOT NULL,
-      category TEXT NOT NULL,
-      active INTEGER DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      nipp TEXT,
-      name TEXT NOT NULL,
-      email TEXT,
-      divisi TEXT,
-      departemen TEXT,
-      password TEXT,
-      role TEXT NOT NULL,
-      branch_id TEXT,
-      department_id TEXT,
-      active INTEGER DEFAULT 1,
-      created_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS kpi_indicators (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      department_id TEXT NOT NULL,
-      category TEXT NOT NULL,
-      unit TEXT NOT NULL,
-      direction TEXT DEFAULT 'higher_is_better',
-      formula_desc TEXT,
-      default_target REAL DEFAULT 0,
-      is_core_kpi INTEGER DEFAULT 0,
-      active INTEGER DEFAULT 1,
-      FOREIGN KEY (department_id) REFERENCES departments(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS templates (
-      id TEXT PRIMARY KEY,
-      department_id TEXT NOT NULL,
-      version TEXT NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      columns TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS monthly_records (
-      id TEXT PRIMARY KEY,
-      branch_id TEXT NOT NULL,
-      department_id TEXT NOT NULL,
-      indicator_id TEXT NOT NULL,
-      month INTEGER NOT NULL,
-      year INTEGER NOT NULL,
-      target REAL NOT NULL,
-      realization REAL NOT NULL,
-      unit TEXT NOT NULL,
-      achievement_pct REAL NOT NULL,
-      status_color TEXT NOT NULL,
-      notes TEXT,
-      source_type TEXT NOT NULL,
-      batch_id TEXT,
-      verification_status TEXT DEFAULT 'pending_verification',
-      revision_notes TEXT,
-      uploaded_by TEXT NOT NULL,
-      uploaded_at TEXT NOT NULL,
-      verified_by TEXT,
-      verified_at TEXT,
-      is_simulated INTEGER DEFAULT 1,
-      FOREIGN KEY (branch_id) REFERENCES branches(id),
-      FOREIGN KEY (department_id) REFERENCES departments(id),
-      FOREIGN KEY (indicator_id) REFERENCES kpi_indicators(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS import_batches (
-      id TEXT PRIMARY KEY,
-      filename_or_url TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      department_id TEXT,
-      branch_id TEXT,
-      period_month INTEGER NOT NULL,
-      period_year INTEGER NOT NULL,
-      total_rows INTEGER NOT NULL,
-      valid_rows INTEGER NOT NULL,
-      error_rows INTEGER NOT NULL,
-      status TEXT NOT NULL,
-      uploaded_by TEXT NOT NULL,
-      uploaded_at TEXT NOT NULL,
-      error_log TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS audit_logs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      user_name TEXT NOT NULL,
-      user_role TEXT NOT NULL,
-      action TEXT NOT NULL,
-      entity TEXT NOT NULL,
-      entity_id TEXT,
-      details TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      ip_address TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS integration_settings (
-      id TEXT PRIMARY KEY,
-      service_name TEXT UNIQUE NOT NULL,
-      config_json TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    -- Structured SQLite Module Tables (Single Source of Truth for all 6 modules)
-    CREATE TABLE IF NOT EXISTS module_finansial (
-      id TEXT PRIMARY KEY,
-      monthly_record_id TEXT,
-      year INTEGER NOT NULL,
-      month INTEGER NOT NULL,
-      branch_code TEXT NOT NULL,
-      branch_name TEXT NOT NULL,
-      rekening TEXT NOT NULL,
-      cabang_rp REAL DEFAULT 0,
-      pmt_rp REAL DEFAULT 0,
-      ptp_rp REAL DEFAULT 0,
-      psl_rp REAL DEFAULT 0,
-      pjm_rp REAL DEFAULT 0,
-      eliminasi_rp REAL DEFAULT 0,
-      konsolidasi_rp REAL DEFAULT 0,
-      yoy REAL DEFAULT 0,
-      rka REAL DEFAULT 0,
-      source_type TEXT DEFAULT 'google_sheets',
-      verification_status TEXT DEFAULT 'verified',
-      uploaded_by TEXT,
-      uploaded_at TEXT,
-      verified_by TEXT,
-      verified_at TEXT,
-      revision_notes TEXT,
-      verified_snapshot_json TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS module_opkom (
-      id TEXT PRIMARY KEY,
-      monthly_record_id TEXT,
-      year INTEGER NOT NULL,
-      month INTEGER NOT NULL,
-      branch_code TEXT NOT NULL,
-      branch_name TEXT NOT NULL,
-      layanan TEXT NOT NULL,
-      satuan TEXT NOT NULL,
-      jumlah_rp REAL DEFAULT 0,
-      yoy REAL DEFAULT 0,
-      rka REAL DEFAULT 0,
-      source_type TEXT DEFAULT 'google_sheets',
-      verification_status TEXT DEFAULT 'verified',
-      uploaded_by TEXT,
-      uploaded_at TEXT,
-      verified_by TEXT,
-      verified_at TEXT,
-      revision_notes TEXT,
-      verified_snapshot_json TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS module_kinerja (
-      id TEXT PRIMARY KEY,
-      monthly_record_id TEXT,
-      year INTEGER NOT NULL,
-      month INTEGER NOT NULL,
-      branch_code TEXT NOT NULL,
-      branch_name TEXT NOT NULL,
-      kd_kine TEXT NOT NULL,
-      nm_kine TEXT NOT NULL,
-      satuan TEXT NOT NULL,
-      nilai REAL DEFAULT 0,
-      source_type TEXT DEFAULT 'google_sheets',
-      verification_status TEXT DEFAULT 'verified',
-      uploaded_by TEXT,
-      uploaded_at TEXT,
-      verified_by TEXT,
-      verified_at TEXT,
-      revision_notes TEXT,
-      verified_snapshot_json TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS module_utilisasi (
-      id TEXT PRIMARY KEY,
-      monthly_record_id TEXT,
-      year INTEGER NOT NULL,
-      month INTEGER NOT NULL,
-      branch_code TEXT NOT NULL,
-      branch_name TEXT NOT NULL,
-      kd_jenderm TEXT,
-      dermaga TEXT NOT NULL,
-      bor REAL DEFAULT 0,
-      yor REAL DEFAULT 0,
-      sor REAL DEFAULT 0,
-      source_type TEXT DEFAULT 'google_sheets',
-      verification_status TEXT DEFAULT 'verified',
-      uploaded_by TEXT,
-      uploaded_at TEXT,
-      verified_by TEXT,
-      verified_at TEXT,
-      revision_notes TEXT,
-      verified_snapshot_json TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS module_peralatan (
-      id TEXT PRIMARY KEY,
-      monthly_record_id TEXT,
-      year INTEGER NOT NULL,
-      month INTEGER NOT NULL,
-      branch_code TEXT NOT NULL,
-      branch_name TEXT NOT NULL,
-      kd_alat TEXT NOT NULL,
-      nm_alat TEXT NOT NULL,
-      singkatan TEXT,
-      jns_alat TEXT,
-      jumlah REAL DEFAULT 0,
-      availability REAL DEFAULT 0,
-      utilisasi REAL DEFAULT 0,
-      source_type TEXT DEFAULT 'google_sheets',
-      verification_status TEXT DEFAULT 'verified',
-      uploaded_by TEXT,
-      uploaded_at TEXT,
-      verified_by TEXT,
-      verified_at TEXT,
-      revision_notes TEXT,
-      verified_snapshot_json TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS module_fasilitas (
-      id TEXT PRIMARY KEY,
-      monthly_record_id TEXT,
-      year INTEGER NOT NULL,
-      month INTEGER NOT NULL,
-      branch_code TEXT NOT NULL,
-      branch_name TEXT NOT NULL,
-      nama_fasilitas TEXT NOT NULL,
-      jenis_fasilitas TEXT NOT NULL,
-      satuan TEXT,
-      panjang_m REAL DEFAULT 0,
-      lebar_m REAL DEFAULT 0,
-      mlws REAL DEFAULT 0,
-      luas_sqm REAL DEFAULT 0,
-      kapasitas TEXT,
-      keterangan TEXT,
-      source_type TEXT DEFAULT 'google_sheets',
-      verification_status TEXT DEFAULT 'verified',
-      uploaded_by TEXT,
-      uploaded_at TEXT,
-      verified_by TEXT,
-      verified_at TEXT,
-      revision_notes TEXT,
-      verified_snapshot_json TEXT
-    );
-
-    -- Query optimization indexes for fast filtering and analytics
-    CREATE INDEX IF NOT EXISTS idx_records_branch_period ON monthly_records (branch_id, year, month);
-    CREATE INDEX IF NOT EXISTS idx_records_period ON monthly_records (year, month);
-    CREATE INDEX IF NOT EXISTS idx_records_branch ON monthly_records (branch_id);
-    CREATE INDEX IF NOT EXISTS idx_records_dept ON monthly_records (department_id);
-    CREATE INDEX IF NOT EXISTS idx_records_indicator ON monthly_records (indicator_id);
-    CREATE INDEX IF NOT EXISTS idx_records_status ON monthly_records (verification_status);
-    CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp DESC);
-    CREATE INDEX IF NOT EXISTS idx_import_batches_period ON import_batches (period_year, period_month);
-    CREATE INDEX IF NOT EXISTS idx_kpi_indicators_dept ON kpi_indicators (department_id);
-    CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
-    CREATE INDEX IF NOT EXISTS idx_mod_fin_branch_period ON module_finansial (branch_code, year, month);
-    CREATE INDEX IF NOT EXISTS idx_mod_fin_status ON module_finansial (verification_status);
-    CREATE INDEX IF NOT EXISTS idx_mod_fin_rec_id ON module_finansial (monthly_record_id);
-    CREATE INDEX IF NOT EXISTS idx_mod_opkom_branch_period ON module_opkom (branch_code, year, month);
-    CREATE INDEX IF NOT EXISTS idx_mod_opkom_status ON module_opkom (verification_status);
-    CREATE INDEX IF NOT EXISTS idx_mod_opkom_rec_id ON module_opkom (monthly_record_id);
-    CREATE INDEX IF NOT EXISTS idx_mod_kinerja_branch_period ON module_kinerja (branch_code, year, month);
-    CREATE INDEX IF NOT EXISTS idx_mod_kinerja_status ON module_kinerja (verification_status);
-    CREATE INDEX IF NOT EXISTS idx_mod_kinerja_rec_id ON module_kinerja (monthly_record_id);
-    CREATE INDEX IF NOT EXISTS idx_mod_util_branch_period ON module_utilisasi (branch_code, year, month);
-    CREATE INDEX IF NOT EXISTS idx_mod_util_status ON module_utilisasi (verification_status);
-    CREATE INDEX IF NOT EXISTS idx_mod_util_rec_id ON module_utilisasi (monthly_record_id);
-    CREATE INDEX IF NOT EXISTS idx_mod_alat_branch_period ON module_peralatan (branch_code, year, month);
-    CREATE INDEX IF NOT EXISTS idx_mod_alat_status ON module_peralatan (verification_status);
-    CREATE INDEX IF NOT EXISTS idx_mod_alat_rec_id ON module_peralatan (monthly_record_id);
-    CREATE INDEX IF NOT EXISTS idx_mod_fas_branch_period ON module_fasilitas (branch_code, year, month);
-    CREATE INDEX IF NOT EXISTS idx_mod_fas_status ON module_fasilitas (verification_status);
-  `);
-
-  execSafeMigration(db, "ALTER TABLE branches ADD COLUMN order_seq INTEGER DEFAULT 99;");
-  execSafeMigration(db, "UPDATE monthly_records SET branch_id = 'term_makassar' WHERE branch_id = 'term_new_makassar';");
-  execSafeMigration(db, "DELETE FROM branches WHERE id = 'term_new_makassar' OR code = 'TRM-NMK';");
-
-  try {
-    const updateOrderStmt = db.prepare("UPDATE branches SET order_seq = ? WHERE code = ?");
-    for (const b of OFFICIAL_BRANCHES) {
-      updateOrderStmt.run(b.order, b.code);
-    }
-  } catch (e) {
-    console.warn('[DB Migration] Gagal memperbarui urutan cabang:', e);
-  }
-
-  // User table migrations
-  execSafeMigration(db, "ALTER TABLE users ADD COLUMN nipp TEXT;");
-  execSafeMigration(db, "ALTER TABLE users ADD COLUMN divisi TEXT;");
-  execSafeMigration(db, "ALTER TABLE users ADD COLUMN departemen TEXT;");
-  execSafeMigration(db, "ALTER TABLE users ADD COLUMN password TEXT;");
-  execSafeMigration(db, "ALTER TABLE users ADD COLUMN created_at TEXT;");
-  execSafeMigration(
-    db,
-    "DELETE FROM users WHERE id IN ('usr_pic_nmk', 'usr_viewer', 'usr_super', 'usr_pic_ops', 'usr_adminreg') OR username IN ('pic_nmk', 'bod_regional', 'superadmin', 'pic_ops', 'adminreg');"
-  );
-
-  // Ensure default official PICs exist with NIPP and migrate any plaintext passwords to scrypt hashes
-  try {
-    const existing = db.prepare("SELECT COUNT(*) as count FROM users WHERE nipp IS NOT NULL AND nipp != ''").get() as { count: number };
-    if (!existing || existing.count === 0) {
-      const { INITIAL_OFFICIAL_PICS, exportUsersToSpreadsheet } = require('./userPicSync');
-      const insertStmt = db.prepare(`
-        INSERT OR REPLACE INTO users (id, username, nipp, name, email, divisi, departemen, password, role, branch_id, department_id, active, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      for (let i = 0; i < INITIAL_OFFICIAL_PICS.length; i++) {
-        const u = INITIAL_OFFICIAL_PICS[i];
-        insertStmt.run(
-          `usr_${u.nipp}_${i + 1}`,
-          u.nipp,
-          u.nipp,
-          u.name,
-          u.email || `${u.nipp}@pelindo.co.id`,
-          u.divisi,
-          u.departemen,
-          hashPassword(u.password || 'password123'),
-          u.role,
-          u.branch_id || null,
-          u.department_id || null,
-          u.active ? 1 : 0,
-          u.created_at || new Date().toISOString()
-        );
-      }
-      const allUsers = (db.prepare("SELECT * FROM users ORDER BY nipp ASC").all() as any[]).map(toSafeUser);
-      exportUsersToSpreadsheet(allUsers);
-    } else {
-      // Automatically migrate any legacy unhashed passwords in the database to scrypt hashes
-      const userRows = db.prepare("SELECT id, password FROM users").all() as Array<{ id: string; password: string | null }>;
-      const updatePassStmt = db.prepare("UPDATE users SET password = ? WHERE id = ?");
-      for (const row of userRows) {
-        const rawPass = row.password || 'password123';
-        if (!isPasswordHashed(rawPass)) {
-          updatePassStmt.run(hashPassword(rawPass), row.id);
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Auto-seed users error:', e);
-  }
-}
-
-// Helper to seed if empty
-export function isDatabaseEmpty(): boolean {
-  const db = getDb();
-  const row = db.prepare('SELECT COUNT(*) as count FROM branches').get() as { count: number };
-  return row.count === 0;
+// Helper to check if database is empty
+export async function isDatabaseEmpty(): Promise<boolean> {
+  const res = await query<{ count: number }>('SELECT COUNT(*)::int AS count FROM branches');
+  return Number(res.rows[0]?.count ?? 0) === 0;
 }
 
 // Database query helpers
 export const dbQueries = {
   // Branches
-  getBranches: (): Branch[] => {
-    const rows = getDb().prepare('SELECT * FROM branches ORDER BY order_seq ASC, code ASC').all() as any[];
-    return rows.map(r => ({
+  getBranches: async (): Promise<Branch[]> => {
+    const res = await query('SELECT * FROM branches ORDER BY order_seq ASC, code ASC');
+    return res.rows.map((r) => ({
       ...r,
       active: Boolean(r.active),
-      facilities: r.facilities ? JSON.parse(r.facilities) : {}
+      order_seq: r.order_seq !== undefined && r.order_seq !== null ? Number(r.order_seq) : 99,
+      facilities: parseJsonValue(r.facilities, {}),
     }));
   },
-  getBranchById: (id: string): Branch | null => {
-    const r = getDb().prepare('SELECT * FROM branches WHERE id = ?').get(id) as any;
+  getBranchById: async (id: string): Promise<Branch | null> => {
+    const res = await query('SELECT * FROM branches WHERE id = $1', [id]);
+    const r = res.rows[0];
     if (!r) return null;
     return {
       ...r,
       active: Boolean(r.active),
-      facilities: r.facilities ? JSON.parse(r.facilities) : {}
+      order_seq: r.order_seq !== undefined && r.order_seq !== null ? Number(r.order_seq) : 99,
+      facilities: parseJsonValue(r.facilities, {}),
     };
   },
 
   // Departments
-  getDepartments: (): Department[] => {
-    const rows = getDb().prepare('SELECT * FROM departments ORDER BY code ASC').all() as any[];
-    return rows.map(r => ({
+  getDepartments: async (): Promise<Department[]> => {
+    const res = await query('SELECT * FROM departments ORDER BY code ASC');
+    return res.rows.map((r) => ({
       ...r,
-      active: Boolean(r.active)
+      active: Boolean(r.active),
     }));
   },
 
   // Equipment Catalog
-  getEquipmentCatalog: (): EquipmentItem[] => {
-    const rows = getDb().prepare('SELECT * FROM equipment_catalog ORDER BY code ASC').all() as any[];
-    return rows.map(r => ({
+  getEquipmentCatalog: async (): Promise<EquipmentItem[]> => {
+    const res = await query('SELECT * FROM equipment_catalog ORDER BY code ASC');
+    return res.rows.map((r) => ({
       ...r,
-      active: Boolean(r.active)
+      active: Boolean(r.active),
     }));
   },
 
   // Users / PIC (Always sanitized via toSafeUser so password hash is never exposed)
-  getUsers: (): User[] => {
-    const rows = getDb().prepare('SELECT * FROM users ORDER BY nipp ASC, name ASC').all() as any[];
-    return rows.map(toSafeUser);
+  getUsers: async (): Promise<User[]> => {
+    const res = await query('SELECT * FROM users ORDER BY nipp ASC, name ASC');
+    return res.rows.map(toSafeUser);
   },
-  getUserByNipp: (nipp: string): User | null => {
-    const r = getDb().prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(nipp, nipp) as any;
-    if (!r) return null;
-    return toSafeUser(r);
+  getUserByNipp: async (nipp: string): Promise<User | null> => {
+    const res = await query('SELECT * FROM users WHERE nipp = $1 OR username = $1', [nipp]);
+    if (!res.rows[0]) return null;
+    return toSafeUser(res.rows[0]);
   },
-  getUserByUsername: (username: string): User | null => {
-    const r = getDb().prepare('SELECT * FROM users WHERE username = ? OR nipp = ?').get(username, username) as any;
-    if (!r) return null;
-    return toSafeUser(r);
+  getUserByUsername: async (username: string): Promise<User | null> => {
+    const res = await query('SELECT * FROM users WHERE username = $1 OR nipp = $1', [username]);
+    if (!res.rows[0]) return null;
+    return toSafeUser(res.rows[0]);
   },
-  getUserById: (id: string): User | null => {
-    const r = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
-    if (!r) return null;
-    return toSafeUser(r);
+  getUserById: async (id: string): Promise<User | null> => {
+    const res = await query('SELECT * FROM users WHERE id = $1', [id]);
+    if (!res.rows[0]) return null;
+    return toSafeUser(res.rows[0]);
   },
-  createUser: (data: {
+  createUser: async (data: {
     nipp: string;
     name: string;
     divisi: string;
@@ -695,8 +497,7 @@ export const dbQueries = {
     email?: string;
     branch_id?: string | null;
     department_id?: string | null;
-  }): User => {
-    const db = getDb();
+  }): Promise<User> => {
     const cleanNipp = String(data.nipp).trim();
     const id = `usr_${cleanNipp}_${Date.now()}`;
     const role: UserRole = data.role || 'pic_cabang';
@@ -704,23 +505,23 @@ export const dbQueries = {
     const hashedPassword = hashPassword(data.password || 'password123');
     const createdAt = new Date().toISOString();
 
-    const stmt = db.prepare(`
-      INSERT INTO users (id, username, nipp, name, email, divisi, departemen, password, role, branch_id, department_id, active, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    `);
-    stmt.run(
-      id,
-      cleanNipp,
-      cleanNipp,
-      data.name.trim(),
-      email,
-      data.divisi.trim(),
-      data.departemen.trim(),
-      hashedPassword,
-      role,
-      data.branch_id || null,
-      data.department_id || null,
-      createdAt
+    await query(
+      `INSERT INTO users (id, username, nipp, name, email, divisi, departemen, password_hash, role, branch_id, department_id, active, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE, $12::timestamptz)`,
+      [
+        id,
+        cleanNipp,
+        cleanNipp,
+        data.name.trim(),
+        email,
+        data.divisi.trim(),
+        data.departemen.trim(),
+        hashedPassword,
+        role,
+        data.branch_id || null,
+        data.department_id || null,
+        createdAt,
+      ]
     );
 
     const newUser: User = {
@@ -738,19 +539,18 @@ export const dbQueries = {
       created_at: createdAt,
     };
 
-    // Automatically sync master spreadsheet in My Drive
     try {
-      const { exportUsersToSpreadsheet } = require('./userPicSync');
-      exportUsersToSpreadsheet(dbQueries.getUsers());
+      const { exportUsersToSpreadsheet } = await import('./userPicSync');
+      exportUsersToSpreadsheet(await dbQueries.getUsers());
     } catch (e) {
       console.error('Failed to sync to spreadsheet on createUser:', e);
     }
 
     return newUser;
   },
-  updateUser: (id: string, data: Partial<User>): User | null => {
-    const db = getDb();
-    const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+  updateUser: async (id: string, data: Partial<User>): Promise<User | null> => {
+    const existingRes = await query('SELECT * FROM users WHERE id = $1', [id]);
+    const existing = existingRes.rows[0];
     if (!existing) return null;
 
     const name = data.name !== undefined ? data.name : existing.name;
@@ -761,59 +561,60 @@ export const dbQueries = {
     const branch_id = data.branch_id !== undefined ? data.branch_id : existing.branch_id;
     const department_id = data.department_id !== undefined ? data.department_id : existing.department_id;
     const email = data.email !== undefined ? data.email : (existing.email || `${cleanNipp}@pelindo.co.id`);
-    const active = data.active !== undefined ? (data.active ? 1 : 0) : existing.active;
-    const password =
+    const active = data.active !== undefined ? Boolean(data.active) : Boolean(existing.active);
+    const currentHash = existing.password_hash || existing.password || '';
+    const passwordHash =
       data.password && data.password.trim().length > 0
         ? hashPassword(data.password.trim())
-        : isPasswordHashed(existing.password)
-          ? existing.password
-          : hashPassword(existing.password || 'password123');
+        : isPasswordHashed(currentHash)
+          ? currentHash
+          : hashPassword(currentHash || 'password123');
 
-    db.prepare(`
-      UPDATE users 
-      SET name = ?, username = ?, nipp = ?, divisi = ?, departemen = ?, role = ?, branch_id = ?, department_id = ?, email = ?, active = ?, password = ?
-      WHERE id = ?
-    `).run(name, cleanNipp, cleanNipp, divisi, departemen, role, branch_id, department_id, email, active, password, id);
+    await query(
+      `UPDATE users
+       SET name = $1, username = $2, nipp = $3, divisi = $4, departemen = $5,
+           role = $6, branch_id = $7, department_id = $8, email = $9, active = $10, password_hash = $11
+       WHERE id = $12`,
+      [name, cleanNipp, cleanNipp, divisi, departemen, role, branch_id, department_id, email, active, passwordHash, id]
+    );
 
     try {
-      const { exportUsersToSpreadsheet } = require('./userPicSync');
-      exportUsersToSpreadsheet(dbQueries.getUsers());
+      const { exportUsersToSpreadsheet } = await import('./userPicSync');
+      exportUsersToSpreadsheet(await dbQueries.getUsers());
     } catch (e) {
-      console.warn('[DB] Gagal mengekspor daftar pengguna ke spreadsheet pada updateUser:', e);
+      console.warn('[PG] Gagal mengekspor daftar pengguna ke spreadsheet pada updateUser:', e);
     }
 
     return dbQueries.getUserById(id);
   },
-  deleteUser: (id: string): boolean => {
-    const db = getDb();
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  deleteUser: async (id: string): Promise<boolean> => {
+    await query('DELETE FROM users WHERE id = $1', [id]);
     try {
-      const { exportUsersToSpreadsheet } = require('./userPicSync');
-      exportUsersToSpreadsheet(dbQueries.getUsers());
+      const { exportUsersToSpreadsheet } = await import('./userPicSync');
+      exportUsersToSpreadsheet(await dbQueries.getUsers());
     } catch (e) {
-      console.warn('[DB] Gagal mengekspor daftar pengguna ke spreadsheet pada deleteUser:', e);
+      console.warn('[PG] Gagal mengekspor daftar pengguna ke spreadsheet pada deleteUser:', e);
     }
     return true;
   },
-  authenticateUser: (nipp: string, password: string): User | null => {
+  authenticateUser: async (nipp: string, password: string): Promise<User | null> => {
     const cleanNipp = String(nipp || '').trim();
     if (!cleanNipp || !password) return null;
 
-    const db = getDb();
-    const rawRow = db.prepare('SELECT * FROM users WHERE nipp = ? OR username = ?').get(cleanNipp, cleanNipp) as any;
+    const res = await query('SELECT * FROM users WHERE nipp = $1 OR username = $1', [cleanNipp]);
+    const rawRow = res.rows[0];
     if (!rawRow) return null;
 
-    const storedPassword = rawRow.password || '';
+    const storedPassword = rawRow.password_hash || rawRow.password || '';
     if (!verifyPassword(password, storedPassword)) {
       return null;
     }
 
-    // Upgrade to scrypt hash if row was somehow not yet hashed
     if (!isPasswordHashed(storedPassword)) {
       try {
-        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(password), rawRow.id);
+        await query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashPassword(password), rawRow.id]);
       } catch (e) {
-        console.warn('[DB] Gagal memutakhirkan hash kata sandi:', e);
+        console.warn('[PG] Gagal memutakhirkan hash kata sandi:', e);
       }
     }
 
@@ -821,82 +622,72 @@ export const dbQueries = {
   },
 
   // Indicators
-  getIndicators: (departmentId?: string): KPIIndicator[] => {
-    const db = getDb();
-    let rows: any[];
-    if (departmentId) {
-      rows = db.prepare('SELECT * FROM kpi_indicators WHERE department_id = ? ORDER BY code ASC').all(departmentId);
-    } else {
-      rows = db.prepare('SELECT * FROM kpi_indicators ORDER BY department_id ASC, code ASC').all();
-    }
-    return rows.map(r => ({
+  getIndicators: async (departmentId?: string): Promise<KPIIndicator[]> => {
+    const res = departmentId
+      ? await query('SELECT * FROM kpi_indicators WHERE department_id = $1 ORDER BY code ASC', [departmentId])
+      : await query('SELECT * FROM kpi_indicators ORDER BY department_id ASC, code ASC');
+    return res.rows.map((r) => ({
       ...r,
+      default_target: Number(r.default_target ?? 0),
       is_core_kpi: Boolean(r.is_core_kpi),
-      active: Boolean(r.active)
+      active: Boolean(r.active),
     }));
   },
 
   // Templates
-  getTemplates: (): TemplateConfig[] => {
-    const rows = getDb().prepare('SELECT * FROM templates ORDER BY department_id ASC').all() as any[];
-    return rows.map(r => ({
+  getTemplates: async (): Promise<TemplateConfig[]> => {
+    const res = await query('SELECT * FROM templates ORDER BY department_id ASC');
+    return res.rows.map((r) => ({
       ...r,
-      columns: JSON.parse(r.columns)
+      columns: parseJsonValue(r.columns, []),
+      updated_at: toIsoString(r.updated_at),
     }));
   },
-  getTemplateByDept: (deptId: string): TemplateConfig | null => {
-    const r = getDb().prepare('SELECT * FROM templates WHERE department_id = ?').get(deptId) as any;
+  getTemplateByDept: async (deptId: string): Promise<TemplateConfig | null> => {
+    const res = await query('SELECT * FROM templates WHERE department_id = $1', [deptId]);
+    const r = res.rows[0];
     if (!r) return null;
     return {
       ...r,
-      columns: JSON.parse(r.columns)
+      columns: parseJsonValue(r.columns, []),
+      updated_at: toIsoString(r.updated_at),
     };
   },
-  saveTemplate: (template: TemplateConfig) => {
-    const db = getDb();
-    const existing = db.prepare('SELECT id FROM templates WHERE id = ?').get(template.id);
-    if (existing) {
-      db.prepare(`
-        UPDATE templates 
-        SET department_id = ?, version = ?, name = ?, description = ?, columns = ?, updated_at = ?
-        WHERE id = ?
-      `).run(
-        template.department_id,
-        template.version,
-        template.name,
-        template.description,
-        JSON.stringify(template.columns),
-        new Date().toISOString(),
-        template.id
-      );
-    } else {
-      db.prepare(`
-        INSERT INTO templates (id, department_id, version, name, description, columns, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
+  saveTemplate: async (template: TemplateConfig): Promise<void> => {
+    await query(
+      `INSERT INTO templates (id, department_id, version, name, description, columns, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)
+       ON CONFLICT (id) DO UPDATE SET
+         department_id = EXCLUDED.department_id,
+         version = EXCLUDED.version,
+         name = EXCLUDED.name,
+         description = EXCLUDED.description,
+         columns = EXCLUDED.columns,
+         updated_at = EXCLUDED.updated_at`,
+      [
         template.id,
         template.department_id,
         template.version,
         template.name,
         template.description,
         JSON.stringify(template.columns),
-        new Date().toISOString()
-      );
-    }
+        new Date().toISOString(),
+      ]
+    );
   },
 
   // Monthly Records
-  getMonthlyRecords: (filter: {
+  getMonthlyRecords: async (filter: {
     branch_id?: string;
     department_id?: string;
     month?: number;
     year?: number;
     verified_only?: boolean;
     verification_status?: string;
-  }): MonthlyRecord[] => {
-    const db = getDb();
+  }): Promise<MonthlyRecord[]> => {
     const conditions: string[] = [];
     const params: any[] = [];
+    let paramIndex = 1;
 
     if (filter.branch_id && filter.branch_id !== 'ALL') {
       if (filter.branch_id === 'NONE') {
@@ -904,45 +695,47 @@ export const dbQueries = {
       } else {
         const tokens = filter.branch_id
           .split(',')
-          .map(t => t.trim())
+          .map((t) => t.trim())
           .filter(Boolean);
         if (tokens.length === 1) {
-          conditions.push('(r.branch_id = ? OR UPPER(b.code) = UPPER(?))');
-          params.push(tokens[0], tokens[0]);
+          const p = `$${paramIndex++}`;
+          conditions.push(`(r.branch_id = ${p} OR UPPER(b.code) = UPPER(${p}))`);
+          params.push(tokens[0]);
         } else if (tokens.length > 1) {
-          const placeholders = tokens.map(() => '(r.branch_id = ? OR UPPER(b.code) = UPPER(?))').join(' OR ');
-          conditions.push(`(${placeholders})`);
-          for (const tok of tokens) {
-            params.push(tok, tok);
-          }
+          const orParts = tokens.map((tok) => {
+            const p = `$${paramIndex++}`;
+            params.push(tok);
+            return `(r.branch_id = ${p} OR UPPER(b.code) = UPPER(${p}))`;
+          });
+          conditions.push(`(${orParts.join(' OR ')})`);
         }
       }
     }
     if (filter.department_id && filter.department_id !== 'ALL') {
-      conditions.push('r.department_id = ?');
+      conditions.push(`r.department_id = $${paramIndex++}`);
       params.push(filter.department_id);
     }
     if (filter.month) {
-      conditions.push('r.month = ?');
+      conditions.push(`r.month = $${paramIndex++}`);
       params.push(filter.month);
     }
     if (filter.year) {
-      conditions.push('r.year = ?');
+      conditions.push(`r.year = $${paramIndex++}`);
       params.push(filter.year);
     }
     if (filter.verified_only) {
       conditions.push("r.verification_status = 'verified'");
     } else if (filter.verification_status && filter.verification_status !== 'ALL') {
-      conditions.push('r.verification_status = ?');
+      conditions.push(`r.verification_status = $${paramIndex++}`);
       params.push(filter.verification_status);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const sql = `
-      SELECT r.*, 
-             b.name as branch_name, b.code as branch_code,
-             d.name as department_name,
-             k.name as indicator_name, k.code as indicator_code, k.direction
+      SELECT r.*,
+             b.name AS branch_name, b.code AS branch_code,
+             d.name AS department_name,
+             k.name AS indicator_name, k.code AS indicator_code, k.direction
       FROM monthly_records r
       JOIN branches b ON r.branch_id = b.id
       JOIN departments d ON r.department_id = d.id
@@ -951,42 +744,54 @@ export const dbQueries = {
       ORDER BY r.year DESC, r.month DESC, b.code ASC, k.code ASC
     `;
 
-    const rows = db.prepare(sql).all(...params) as any[];
-    return rows.map(r => ({
+    const res = await query(sql, params);
+    return res.rows.map((r) => ({
       ...r,
-      is_simulated: Boolean(r.is_simulated)
+      month: Number(r.month),
+      year: Number(r.year),
+      target: Number(r.target),
+      realization: Number(r.realization),
+      achievement_pct: Number(r.achievement_pct),
+      uploaded_at: toIsoString(r.uploaded_at),
+      verified_at: toIsoStringOrNull(r.verified_at),
+      is_simulated: Boolean(r.is_simulated),
     }));
   },
 
-  getMonthlyRecordsByIds: (recordIds: string[]): MonthlyRecord[] => {
+  getMonthlyRecordsByIds: async (recordIds: string[]): Promise<MonthlyRecord[]> => {
     if (!recordIds || recordIds.length === 0) return [];
-    const db = getDb();
-    const placeholders = recordIds.map(() => '?').join(', ');
-    const rows = db
-      .prepare(`SELECT * FROM monthly_records WHERE id IN (${placeholders})`)
-      .all(...recordIds) as any[];
-    return rows.map(r => ({
+    const res = await query('SELECT * FROM monthly_records WHERE id = ANY($1::varchar[])', [recordIds]);
+    return res.rows.map((r) => ({
       ...r,
+      month: Number(r.month),
+      year: Number(r.year),
+      target: Number(r.target),
+      realization: Number(r.realization),
+      achievement_pct: Number(r.achievement_pct),
+      uploaded_at: toIsoString(r.uploaded_at),
+      verified_at: toIsoStringOrNull(r.verified_at),
       is_simulated: Boolean(r.is_simulated),
     }));
   },
 
   // Update record verification across monthly_records and all module_* tables
-  updateRecordVerification: (
+  updateRecordVerification: async (
     recordIds: string[],
     status: 'verified' | 'revision_needed',
     verifiedBy: string,
     revisionNotes?: string
-  ) => {
+  ): Promise<void> => {
     if (!recordIds || recordIds.length === 0) return;
-    const db = getDb();
     const now = new Date().toISOString();
-    withTransaction(db, () => {
-      const stmt = db.prepare(`
-        UPDATE monthly_records
-        SET verification_status = ?, verified_by = ?, verified_at = ?, revision_notes = ?
-        WHERE id = ?
-      `);
+
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE monthly_records
+         SET verification_status = $1, verified_by = $2, verified_at = $3::timestamptz, revision_notes = $4
+         WHERE id = ANY($5::varchar[])`,
+        [status, verifiedBy, now, revisionNotes || null, recordIds]
+      );
+
       const moduleTables = [
         'module_finansial',
         'module_opkom',
@@ -995,43 +800,68 @@ export const dbQueries = {
         'module_peralatan',
         'module_fasilitas',
       ];
-      const moduleStmts = moduleTables.map(table =>
-        db.prepare(
+
+      for (const table of moduleTables) {
+        const sql =
           status === 'verified'
             ? `UPDATE ${table}
-               SET verification_status = ?, verified_by = ?, verified_at = ?, revision_notes = ?, verified_snapshot_json = NULL
-               WHERE id = ? OR monthly_record_id = ?`
+               SET verification_status = $1, verified_by = $2, verified_at = $3::timestamptz, revision_notes = $4, verified_snapshot_json = NULL
+               WHERE id = ANY($5::varchar[]) OR monthly_record_id = ANY($5::varchar[])`
             : `UPDATE ${table}
-               SET verification_status = ?, verified_by = ?, verified_at = ?, revision_notes = ?
-               WHERE id = ? OR monthly_record_id = ?`
-        )
-      );
-
-      for (const id of recordIds) {
-        stmt.run(status, verifiedBy, now, revisionNotes || null, id);
-        for (const modStmt of moduleStmts) {
-          modStmt.run(status, verifiedBy, now, revisionNotes || null, id, id);
-        }
+               SET verification_status = $1, verified_by = $2, verified_at = $3::timestamptz, revision_notes = $4
+               WHERE id = ANY($5::varchar[]) OR monthly_record_id = ANY($5::varchar[])`;
+        await client.query(sql, [status, verifiedBy, now, revisionNotes || null, recordIds]);
       }
     });
   },
 
   // Save imported records
-  insertMonthlyRecords: (records: Omit<MonthlyRecord, 'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'>[]) => {
+  insertMonthlyRecords: async (
+    records: Omit<
+      MonthlyRecord,
+      'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'
+    >[]
+  ): Promise<void> => {
     if (!records || records.length === 0) return;
-    const db = getDb();
-    withTransaction(db, () => {
-      const stmt = db.prepare(`
-        INSERT OR REPLACE INTO monthly_records (
+
+    await withTransaction(async (client) => {
+      const upsertSql = `
+        INSERT INTO monthly_records (
           id, branch_id, department_id, indicator_id, month, year,
           target, realization, unit, achievement_pct, status_color, notes,
           source_type, batch_id, verification_status, revision_notes,
           uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6,
+          $7, $8, $9, $10, $11, $12,
+          $13, $14, $15, $16,
+          $17, $18::timestamptz, $19, $20::timestamptz, $21
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          branch_id = EXCLUDED.branch_id,
+          department_id = EXCLUDED.department_id,
+          indicator_id = EXCLUDED.indicator_id,
+          month = EXCLUDED.month,
+          year = EXCLUDED.year,
+          target = EXCLUDED.target,
+          realization = EXCLUDED.realization,
+          unit = EXCLUDED.unit,
+          achievement_pct = EXCLUDED.achievement_pct,
+          status_color = EXCLUDED.status_color,
+          notes = EXCLUDED.notes,
+          source_type = EXCLUDED.source_type,
+          batch_id = EXCLUDED.batch_id,
+          verification_status = EXCLUDED.verification_status,
+          revision_notes = EXCLUDED.revision_notes,
+          uploaded_by = EXCLUDED.uploaded_by,
+          uploaded_at = EXCLUDED.uploaded_at,
+          verified_by = EXCLUDED.verified_by,
+          verified_at = EXCLUDED.verified_at,
+          is_simulated = EXCLUDED.is_simulated
+      `;
 
       for (const r of records) {
-        stmt.run(
+        await client.query(upsertSql, [
           r.id,
           r.branch_id,
           r.department_id,
@@ -1049,77 +879,99 @@ export const dbQueries = {
           r.verification_status,
           r.revision_notes || null,
           r.uploaded_by,
-          r.uploaded_at,
+          r.uploaded_at || new Date().toISOString(),
           r.verified_by || null,
           r.verified_at || null,
-          r.is_simulated ? 1 : 0
-        );
+          Boolean(r.is_simulated),
+        ]);
       }
     });
   },
 
   // Import Batches
-  createImportBatch: (batch: ImportBatch) => {
-    const db = getDb();
-    db.prepare(`
-      INSERT INTO import_batches (
+  createImportBatch: async (batch: ImportBatch): Promise<void> => {
+    await query(
+      `INSERT INTO import_batches (
         id, filename_or_url, source_type, department_id, branch_id,
         period_month, period_year, total_rows, valid_rows, error_rows,
         status, uploaded_by, uploaded_at, error_log
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      batch.id,
-      batch.filename_or_url,
-      batch.source_type,
-      batch.department_id || null,
-      batch.branch_id || null,
-      batch.period_month,
-      batch.period_year,
-      batch.total_rows,
-      batch.valid_rows,
-      batch.error_rows,
-      batch.status,
-      batch.uploaded_by,
-      batch.uploaded_at,
-      batch.error_log ? JSON.stringify(batch.error_log) : null
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::timestamptz, $14::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        filename_or_url = EXCLUDED.filename_or_url,
+        source_type = EXCLUDED.source_type,
+        department_id = EXCLUDED.department_id,
+        branch_id = EXCLUDED.branch_id,
+        period_month = EXCLUDED.period_month,
+        period_year = EXCLUDED.period_year,
+        total_rows = EXCLUDED.total_rows,
+        valid_rows = EXCLUDED.valid_rows,
+        error_rows = EXCLUDED.error_rows,
+        status = EXCLUDED.status,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = EXCLUDED.uploaded_at,
+        error_log = EXCLUDED.error_log`,
+      [
+        batch.id,
+        batch.filename_or_url,
+        batch.source_type,
+        batch.department_id || null,
+        batch.branch_id || null,
+        batch.period_month,
+        batch.period_year,
+        batch.total_rows,
+        batch.valid_rows,
+        batch.error_rows,
+        batch.status,
+        batch.uploaded_by,
+        batch.uploaded_at || new Date().toISOString(),
+        batch.error_log ? JSON.stringify(batch.error_log) : null,
+      ]
     );
   },
-  getImportBatches: (): ImportBatch[] => {
-    const rows = getDb().prepare('SELECT * FROM import_batches ORDER BY uploaded_at DESC LIMIT 50').all() as any[];
-    return rows.map(r => ({
+  getImportBatches: async (): Promise<ImportBatch[]> => {
+    const res = await query('SELECT * FROM import_batches ORDER BY uploaded_at DESC LIMIT 50');
+    return res.rows.map((r) => ({
       ...r,
-      error_log: r.error_log ? JSON.parse(r.error_log) : null
+      uploaded_at: toIsoString(r.uploaded_at),
+      error_log: parseJsonValue(r.error_log, null),
     }));
   },
 
   // Audit Log
-  createAuditLog: (log: Omit<AuditLog, 'id' | 'timestamp'>) => {
-    const db = getDb();
+  createAuditLog: async (log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<void> => {
     const id = 'aud_' + Math.random().toString(36).substring(2, 10);
     const timestamp = new Date().toISOString();
-    db.prepare(`
-      INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity, entity_id, details, timestamp, ip_address)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      log.user_id,
-      log.user_name,
-      log.user_role,
-      log.action,
-      log.entity,
-      log.entity_id || null,
-      log.details,
-      timestamp,
-      log.ip_address || '127.0.0.1'
+    await query(
+      `INSERT INTO audit_logs (id, user_id, user_name, user_role, action, entity, entity_id, details, timestamp, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10)`,
+      [
+        id,
+        log.user_id,
+        log.user_name,
+        log.user_role,
+        log.action,
+        log.entity,
+        log.entity_id || null,
+        log.details,
+        timestamp,
+        log.ip_address || '127.0.0.1',
+      ]
     );
   },
-  getAuditLogs: (limit = 100): AuditLog[] => {
-    return getDb().prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?').all(limit) as AuditLog[];
+  getAuditLogs: async (limit = 100): Promise<AuditLog[]> => {
+    const res = await query('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT $1', [limit]);
+    return res.rows.map((r) => ({
+      ...r,
+      timestamp: toIsoString(r.timestamp),
+    })) as AuditLog[];
   },
 
   // Google Sheets Config
-  getGoogleSheetsConfig: (): GoogleSheetsConfig => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'google_sheets'").get() as any;
+  getGoogleSheetsConfig: async (): Promise<GoogleSheetsConfig> => {
+    const res = await query(
+      "SELECT config_json FROM integration_settings WHERE service_name = 'google_sheets'"
+    );
+    const row = res.rows[0];
     if (!row) {
       return {
         id: 'cfg_gsheet',
@@ -1130,51 +982,66 @@ export const dbQueries = {
         api_key_configured: false,
         status: 'ready_for_credentials',
         last_sync_at: null,
-        auto_sync_enabled: false
+        auto_sync_enabled: false,
       };
     }
-    return JSON.parse(row.config_json);
+    return parseJsonValue<GoogleSheetsConfig>(row.config_json, {
+      id: 'cfg_gsheet',
+      spreadsheet_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
+      sheet_name: 'Input_Kinerja_Bulanan',
+      range: 'A2:L200',
+      service_account_email: 'regdashr@gmail.com',
+      api_key_configured: false,
+      status: 'ready_for_credentials',
+      last_sync_at: null,
+      auto_sync_enabled: false,
+    });
   },
-  saveGoogleSheetsConfig: (cfg: GoogleSheetsConfig) => {
-    const db = getDb();
+  saveGoogleSheetsConfig: async (cfg: GoogleSheetsConfig): Promise<void> => {
     const now = new Date().toISOString();
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES (?, 'google_sheets', ?, ?)
-    `).run('cfg_gsheet', JSON.stringify(cfg), now);
+    await query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ($1, 'google_sheets', $2::jsonb, $3::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      ['cfg_gsheet', JSON.stringify(cfg), now]
+    );
   },
 
   // System & Session Parameters
-  getSystemParameters: (): SystemParameters => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'system_parameters'").get() as any;
-    if (!row) {
-      return {
-        session_timeout_minutes: 30,
-        auto_logout_idle: true,
-        warning_before_minutes: 2,
-        default_theme: 'light',
-      };
-    }
-    return {
+  getSystemParameters: async (): Promise<SystemParameters> => {
+    const defaults: SystemParameters = {
       session_timeout_minutes: 30,
       auto_logout_idle: true,
       warning_before_minutes: 2,
       default_theme: 'light',
-      ...JSON.parse(row.config_json),
+    };
+    const res = await query(
+      "SELECT config_json FROM integration_settings WHERE service_name = 'system_parameters'"
+    );
+    const row = res.rows[0];
+    if (!row) return defaults;
+    return {
+      ...defaults,
+      ...parseJsonValue<Partial<SystemParameters>>(row.config_json, {}),
     };
   },
-  saveSystemParameters: (params: Partial<SystemParameters>): SystemParameters => {
-    const db = getDb();
-    const current = dbQueries.getSystemParameters();
+  saveSystemParameters: async (params: Partial<SystemParameters>): Promise<SystemParameters> => {
+    const current = await dbQueries.getSystemParameters();
     const updated: SystemParameters = {
       ...current,
       ...params,
       updated_at: new Date().toISOString(),
     };
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES ('cfg_system_params', 'system_parameters', ?, ?)
-    `).run(JSON.stringify(updated), updated.updated_at!);
+    await query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ('cfg_system_params', 'system_parameters', $1::jsonb, $2::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(updated), updated.updated_at!]
+    );
     return updated;
   },
 
@@ -1182,35 +1049,36 @@ export const dbQueries = {
   getDbConfig: (): DatabaseConfig => {
     return getDbConfig();
   },
-  saveDbConfig: (cfg: Partial<DatabaseConfig>, updatedBy?: string): DatabaseConfig => {
+  saveDbConfig: async (cfg: Partial<DatabaseConfig>, updatedBy?: string): Promise<DatabaseConfig> => {
     return saveDbConfig(cfg, updatedBy);
   },
 
   // External Integration Credentials (Google Drive, Sheets, Gateway)
-  getIntegrationCredentials: (): IntegrationCredentials => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'integration_credentials'").get() as any;
-    if (!row) {
-      return {
-        google_drive_email: 'regdashr@gmail.com',
-        google_drive_file_path: 'data/input_data.xlsx',
-        google_sheets_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
-        google_sheets_name: 'Input_Kinerja_Bulanan',
-        google_api_key: '',
-        api_gateway_url: 'https://api.pelindo.co.id/v1/r4',
-        api_gateway_token: '',
-      };
-    }
-    return {
+  getIntegrationCredentials: async (): Promise<IntegrationCredentials> => {
+    const defaults: IntegrationCredentials = {
       google_drive_email: 'regdashr@gmail.com',
       google_drive_file_path: 'data/input_data.xlsx',
       google_sheets_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
       google_sheets_name: 'Input_Kinerja_Bulanan',
-      ...JSON.parse(row.config_json),
+      google_api_key: '',
+      api_gateway_url: 'https://api.pelindo.co.id/v1/r4',
+      api_gateway_token: '',
+    };
+    const res = await query(
+      "SELECT config_json FROM integration_settings WHERE service_name = 'integration_credentials'"
+    );
+    const row = res.rows[0];
+    if (!row) return defaults;
+    return {
+      ...defaults,
+      ...parseJsonValue<Partial<IntegrationCredentials>>(row.config_json, {}),
     };
   },
-  saveIntegrationCredentials: (creds: Partial<IntegrationCredentials>, updatedBy?: string): IntegrationCredentials => {
-    const db = getDb();
-    const current = dbQueries.getIntegrationCredentials();
+  saveIntegrationCredentials: async (
+    creds: Partial<IntegrationCredentials>,
+    updatedBy?: string
+  ): Promise<IntegrationCredentials> => {
+    const current = await dbQueries.getIntegrationCredentials();
     const safeDrivePath = creds.google_drive_file_path
       ? sanitizeSafeDataFilePath(creds.google_drive_file_path, 'input_data.xlsx', ['.xlsx', '.xls', '.csv']).safeRelativePath
       : current.google_drive_file_path || 'data/input_data.xlsx';
@@ -1232,23 +1100,28 @@ export const dbQueries = {
       updated_at: new Date().toISOString(),
       updated_by: updatedBy || 'Administrator',
     };
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES ('cfg_credentials', 'integration_credentials', ?, ?)
-    `).run(JSON.stringify(updated), updated.updated_at!);
+
+    await query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ('cfg_credentials', 'integration_credentials', $1::jsonb, $2::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(updated), updated.updated_at!]
+    );
 
     try {
-      const currentGSheet = dbQueries.getGoogleSheetsConfig();
-      dbQueries.saveGoogleSheetsConfig({
+      const currentGSheet = await dbQueries.getGoogleSheetsConfig();
+      await dbQueries.saveGoogleSheetsConfig({
         ...currentGSheet,
         spreadsheet_id: updated.google_sheets_id || currentGSheet.spreadsheet_id,
         sheet_name: updated.google_sheets_name || currentGSheet.sheet_name,
         service_account_email: updated.google_drive_email || currentGSheet.service_account_email,
       });
     } catch (e) {
-      console.warn('[DB] Gagal menyinkronkan konfigurasi Google Sheets:', e);
+      console.warn('[PG] Gagal menyinkronkan konfigurasi Google Sheets:', e);
     }
 
     return updated;
-  }
+  },
 };

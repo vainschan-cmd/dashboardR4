@@ -99,8 +99,8 @@ export async function fetchGoogleSheetData(
 
   // When API key is not yet configured, return adapter test simulation rows
   // explicitly marked as Adapter Test Demo
-  const branches = dbQueries.getBranches();
-  const indicators = dbQueries.getIndicators('dept_ops');
+  const branches = await dbQueries.getBranches();
+  const indicators = await dbQueries.getIndicators('dept_ops');
 
   const demoDataRows = branches.slice(0, 3).flatMap(b => {
     return indicators.slice(0, 4).map(ind => ({

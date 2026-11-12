@@ -1,5 +1,5 @@
 {
-  "engine": "sqlite",
+  "engine": "postgres",
   "sqlite_path": "data/ed_dashboard.db",
   "pg_host": "localhost",
   "pg_port": 5432,
@@ -8,6 +8,6 @@
   "pg_password": "",
   "pg_ssl": false,
   "max_connections": 10,
-  "updated_at": "2026-11-04T05:37:54.032Z",
-  "updated_by": "Chandra"
+  "updated_at": "2026-11-12T00:16:00.000Z",
+  "updated_by": "System Migration"
 }

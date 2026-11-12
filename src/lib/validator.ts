@@ -21,7 +21,7 @@ export interface ValidationResult {
   parsedRecords: Array<Omit<MonthlyRecord, 'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'>>;
 }
 
-export function validateSpreadsheetRows(
+export async function validateSpreadsheetRows(
   rows: Array<Record<string, any>>,
   options: {
     departmentId?: string;
@@ -31,15 +31,15 @@ export function validateSpreadsheetRows(
     sourceType: 'upload_xlsx' | 'upload_csv' | 'google_sheets';
     batchId: string;
   }
-): ValidationResult {
-  const branches = dbQueries.getBranches();
+): Promise<ValidationResult> {
+  const branches = await dbQueries.getBranches();
   const branchByCode = new Map(branches.map(b => [b.code.toUpperCase().trim(), b]));
   const branchByName = new Map(branches.map(b => [b.name.toLowerCase().trim(), b]));
 
-  const departments = dbQueries.getDepartments();
+  const departments = await dbQueries.getDepartments();
   const deptByCode = new Map(departments.map(d => [d.code.toUpperCase().trim(), d]));
 
-  const allIndicators = dbQueries.getIndicators();
+  const allIndicators = await dbQueries.getIndicators();
   const indByCode = new Map(allIndicators.map(i => [i.code.toUpperCase().trim(), i]));
 
   const errors: ValidationErrorItem[] = [];

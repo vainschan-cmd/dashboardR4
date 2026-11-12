@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const templates = dbQueries.getTemplates();
+    const templates = await dbQueries.getTemplates();
     return NextResponse.json({ success: true, templates });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Data template tidak lengkap.' }, { status: 400 });
     }
 
-    dbQueries.saveTemplate(template as TemplateConfig);
+    await dbQueries.saveTemplate(template as TemplateConfig);
 
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

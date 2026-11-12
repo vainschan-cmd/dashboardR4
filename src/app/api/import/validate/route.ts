@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     }
 
     const batchId = `batch_${Date.now()}`;
-    const validation = validateSpreadsheetRows(rows, {
+    const validation = await validateSpreadsheetRows(rows, {
       departmentId,
       targetMonth,
       targetYear,

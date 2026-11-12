@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const branchId = firstRec.branch_id || null;
 
     // 1. Insert records to database
-    dbQueries.insertMonthlyRecords(sanitizedRecords);
+    await dbQueries.insertMonthlyRecords(sanitizedRecords);
 
     // 2. Log batch
     const resolvedSourceType: ImportBatch['source_type'] =
@@ -85,10 +85,10 @@ export async function POST(req: NextRequest) {
       uploaded_at: new Date().toISOString(),
       error_log: null,
     };
-    dbQueries.createImportBatch(importBatch);
+    await dbQueries.createImportBatch(importBatch);
 
     // 3. Log Audit Trail using verified JWT identity
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

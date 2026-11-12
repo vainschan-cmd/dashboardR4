@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       }, { status: 404 });
     }
 
-    const stats = ingestInputData(targetFile);
+    const stats = await ingestInputData(targetFile);
 
     return NextResponse.json({
       success: true,

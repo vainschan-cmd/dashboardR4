@@ -331,7 +331,7 @@ export interface ImportUserResult {
 /**
  * Read and import users from spreadsheet into database (Pull from My Drive)
  */
-export function importUsersFromSpreadsheet(customInput?: string | Buffer): ImportUserResult {
+export async function importUsersFromSpreadsheet(customInput?: string | Buffer): Promise<ImportUserResult> {
   let wb: xlsx.WorkBook;
   let sourcePath = '';
   let sourceType: 'downloads' | 'data' | 'buffer' | 'fallback' = 'data';
@@ -372,7 +372,7 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
     throw new Error('Spreadsheet kosong atau tidak memiliki data pengguna pada sheet pertama.');
   }
 
-  const { dbQueries } = require('./db');
+  const { dbQueries } = await import('./db');
   let createdCount = 0;
   let updatedCount = 0;
 
@@ -405,9 +405,9 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
       }
     }
 
-    const existing = dbQueries.getUserByNipp(nipp);
+    const existing = await dbQueries.getUserByNipp(nipp);
     if (existing) {
-      dbQueries.updateUser(existing.id, {
+      await dbQueries.updateUser(existing.id, {
         name,
         nipp,
         divisi,
@@ -419,7 +419,7 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
       });
       updatedCount++;
     } else {
-      dbQueries.createUser({
+      await dbQueries.createUser({
         nipp,
         name,
         divisi,
@@ -433,7 +433,7 @@ export function importUsersFromSpreadsheet(customInput?: string | Buffer): Impor
     }
   }
 
-  const allUsers: User[] = dbQueries.getUsers();
+  const allUsers: User[] = await dbQueries.getUsers();
   exportUsersToSpreadsheet(allUsers);
 
   return {

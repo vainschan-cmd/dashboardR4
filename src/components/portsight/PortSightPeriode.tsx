@@ -27,24 +27,22 @@ import {
 } from 'recharts';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
 import { formatRupiahFull } from '@/lib/formatters';
-import { User, UserRole } from '@/lib/types';
+import {
+  aggregateFinansialByRekening,
+  canonicalRekening,
+  formatPercentOrDash,
+  parseMetricPercent,
+  parseRealisasi,
+} from '@/lib/finansialHelpers';
+import {
+  aggregatePeralatanKpis,
+  displayNullableText,
+  formatTanggalID,
+  normalizeKondisi,
+} from '@/lib/peralatanHelpers';
+import { FinansialRecord, PeralatanRecord, User, UserRole } from '@/lib/types';
 
-interface FinRecord {
-  year: number;
-  month: number;
-  branchCode: string;
-  branchName: string;
-  rekening: string;
-  cabangRp: number;
-  pmtRp: number;
-  ptpRp: number;
-  pslRp: number;
-  pjmRp: number;
-  eliminasiRp: number;
-  konsolidasiRp: number;
-  yoy: number;
-  rka: number;
-}
+type FinRecord = FinansialRecord;
 
 interface OpkomRecord {
   year: number;
@@ -79,19 +77,6 @@ interface UtilisasiRecord {
   bor: number;
   yor: number;
   sor: number;
-}
-
-interface PeralatanRecord {
-  year: number;
-  month: number;
-  branchCode: string;
-  branchName: string;
-  kdAlat: string;
-  nmAlat: string;
-  singkatan: string;
-  jnsAlat: string;
-  jumlah: number;
-  utilisasi: number;
 }
 
 interface FasilitasRecord {
@@ -238,32 +223,20 @@ export default function PortSightPeriode({
     // Total records across loaded modules
     const totalRecords = finansial.length + opkom.length + kinerja.length + utilisasi.length + peralatan.length + fasilitas.length;
     
-    // Revenue, Cost, Laba from Finansial
-    const revRows = finansial.filter(f => {
-      const r = (f.rekening || '').toLowerCase();
-      return r.includes('pendapatan') || r.includes('revenue');
-    });
-    const costRows = finansial.filter(f => {
-      const r = (f.rekening || '').toLowerCase();
-      return r.includes('beban') || r.includes('biaya') || r.includes('expense');
-    });
-    const labaUsahaRows = finansial.filter(f => (f.rekening || '').toLowerCase() === 'laba usaha');
-    const labaBersihRows = finansial.filter(f => (f.rekening || '').toLowerCase().includes('bersih'));
-    const allLabaRows = finansial.filter(f => (f.rekening || '').toLowerCase().includes('laba'));
+    // Revenue, Cost, Laba from Finansial (agregasi seluruh entitas termasuk ELIMINASI)
+    const finAgg = aggregateFinansialByRekening(finansial);
+    const revRows = finansial.filter(f => canonicalRekening(f.REKENING) === 'Pendapatan');
+    const costRows = finansial.filter(f => canonicalRekening(f.REKENING) === 'Beban');
+    const allLabaRows = finansial.filter(
+      f => canonicalRekening(f.REKENING) === 'Laba Usaha' || canonicalRekening(f.REKENING) === 'Laba Bersih'
+    );
 
-    const totalRevRp = revRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    const rawCost = costRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    // Nilai beban usaha adalah minus / pengeluaran (format: Rp -xxx)
-    const totalBebanRp = rawCost === 0 ? 0 : (rawCost < 0 ? rawCost : -rawCost);
-
-    let totalLabaRp = 0;
-    if (labaUsahaRows.length > 0) {
-      totalLabaRp = labaUsahaRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    } else if (labaBersihRows.length > 0) {
-      totalLabaRp = labaBersihRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    } else if (allLabaRows.length > 0) {
-      totalLabaRp = allLabaRows.reduce((a, b) => a + (b.konsolidasiRp || 0), 0);
-    } else if (totalRevRp !== 0 || totalBebanRp !== 0) {
+    const totalRevRp = finAgg.Pendapatan.realisasi;
+    const totalBebanRp = finAgg.Beban.realisasi;
+    let totalLabaRp = finAgg['Laba Usaha'].realisasi;
+    if (finAgg['Laba Usaha'].rowCount === 0 && finAgg['Laba Bersih'].rowCount > 0) {
+      totalLabaRp = finAgg['Laba Bersih'].realisasi;
+    } else if (finAgg['Laba Usaha'].rowCount === 0 && (totalRevRp !== 0 || totalBebanRp !== 0)) {
       totalLabaRp = totalRevRp + totalBebanRp;
     }
 
@@ -275,10 +248,13 @@ export default function PortSightPeriode({
       ? Number((utilisasi.reduce((a, b) => a + (b.bor || 0), 0) / utilisasi.length).toFixed(1))
       : 0;
 
-    // Avg Alat Utilisasi
-    const avgAlat = peralatan.length > 0
-      ? Number((peralatan.reduce((a, b) => a + (b.utilisasi || 0), 0) / peralatan.length).toFixed(1))
-      : 0;
+    // Kesiapan Alat (RFU) snapshot terbaru dari 9 kolom standar Peralatan
+    const alatLatestDate =
+      peralatan.length > 0 ? peralatan.map(p => p.tanggal).sort().reverse()[0] : '';
+    const alatSnapshot = alatLatestDate
+      ? peralatan.filter(p => p.tanggal === alatLatestDate)
+      : [];
+    const avgAlat = aggregatePeralatanKpis(alatSnapshot).rfuPct;
 
     // Total Fasilitas Aset
     const totalAsetFasilitas = fasilitas.reduce((a, b) => a + (b.nilai || 0), 0);
@@ -317,11 +293,11 @@ export default function PortSightPeriode({
     }
 
     finansial.forEach(f => {
-      if (f.month >= 1 && f.month <= 12) {
-        if (f.rekening && (f.rekening.includes('Pendapatan') || f.rekening.includes('REVENUE'))) {
-          monthMap[f.month].pendapatanJt += Math.round((f.konsolidasiRp || 0) / 1000000);
+      if (f.BULAN >= 1 && f.BULAN <= 12) {
+        if (canonicalRekening(f.REKENING) === 'Pendapatan') {
+          monthMap[f.BULAN].pendapatanJt += Math.round(parseRealisasi(f.REALISASI) / 1000000);
         }
-        monthMap[f.month].dataPoints += 1;
+        monthMap[f.BULAN].dataPoints += 1;
       }
     });
 
@@ -919,46 +895,51 @@ export default function PortSightPeriode({
                 <table className="dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode</th>
-                      <th>Cabang Pelabuhan</th>
-                      <th>Pos Rekening</th>
-                      <th style={{ textAlign: 'right' }}>Cabang (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PMT (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PTP (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PSL (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>PJM (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>Eliminasi (Rp)</th>
-                      <th style={{ textAlign: 'right' }}>Konsolidasi (Rp)</th>
-                      <th style={{ textAlign: 'center' }}>% YoY</th>
-                      <th style={{ textAlign: 'center' }}>% RKA</th>
+                      <th>TAHUN</th>
+                      <th>BULAN</th>
+                      <th>KODE_CBG</th>
+                      <th>NM_CBG</th>
+                      <th>REKENING</th>
+                      <th>ENTITAS</th>
+                      <th style={{ textAlign: 'right' }}>REALISASI (Rp)</th>
+                      <th style={{ textAlign: 'center' }}>RKA</th>
+                      <th style={{ textAlign: 'center' }}>YOY</th>
                     </tr>
                   </thead>
                   <tbody>
                     {finansial
-                      .filter(f => !searchQuery || `${f.branchCode} ${f.branchName} ${f.rekening}`.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .slice(0, activeModule === 'all' ? 10 : 100)
-                      .map((f, i) => (
-                        <tr key={i}>
-                          <td>{f.year}</td>
-                          <td>{f.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{f.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{f.branchName}</td>
-                          <td style={{ fontWeight: 600, color: (f.rekening || '').includes('Beban') ? '#f87171' : (f.rekening || '').includes('Laba') ? '#34d399' : '#38bdf8' }}>
-                            {f.rekening || '-'}
-                          </td>
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatRupiahFull(f.cabangRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.pmtRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.ptpRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.pslRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.pjmRp)}</td>
-                          <td style={{ textAlign: 'right' }}>{formatRupiahFull(f.eliminasiRp)}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#ffffff' }}>{formatRupiahFull(f.konsolidasiRp)}</td>
-                          <td style={{ textAlign: 'center', color: f.yoy >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{f.yoy}%</td>
-                          <td style={{ textAlign: 'center', color: f.rka >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>{f.rka}%</td>
-                        </tr>
-                      ))}
+                      .filter(f => !searchQuery || `${f.KODE_CBG} ${f.NM_CBG} ${f.REKENING} ${f.ENTITAS}`.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .slice(0, activeModule === 'all' ? 20 : 120)
+                      .map((f, i) => {
+                        const rkaNum = parseMetricPercent(f.RKA);
+                        const yoyNum = parseMetricPercent(f.YOY);
+                        const realVal = parseRealisasi(f.REALISASI);
+                        return (
+                          <tr key={f.id || i}>
+                            <td>{f.TAHUN}</td>
+                            <td>{f.BULAN}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8' }}>{f.KODE_CBG}</td>
+                            <td style={{ fontWeight: 600 }}>{f.NM_CBG}</td>
+                            <td style={{ fontWeight: 600, color: (f.REKENING || '').includes('Beban') ? '#f87171' : (f.REKENING || '').includes('Laba') ? '#34d399' : '#38bdf8' }}>
+                              {f.REKENING || '-'}
+                            </td>
+                            <td>
+                              <span className={`badge ${f.ENTITAS === 'ELIMINASI' ? 'badge-red' : 'badge-blue'}`}>
+                                {f.ENTITAS}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: realVal < 0 ? '#f87171' : '#ffffff' }}>
+                              {formatRupiahFull(realVal)}
+                            </td>
+                            <td style={{ textAlign: 'center', color: rkaNum === null ? '#94a3b8' : rkaNum >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>
+                              {formatPercentOrDash(f.RKA)}
+                            </td>
+                            <td style={{ textAlign: 'center', color: yoyNum === null ? '#94a3b8' : yoyNum >= 100 ? '#10b981' : '#f87171', fontWeight: 600 }}>
+                              {formatPercentOrDash(f.YOY)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -1119,38 +1100,58 @@ export default function PortSightPeriode({
                 <table className="dark-table">
                   <thead>
                     <tr>
-                      <th>Thn</th>
-                      <th>Bln</th>
-                      <th>Kode</th>
-                      <th>Cabang</th>
-                      <th>Kode Alat</th>
+                      <th>Tanggal</th>
+                      <th>Grup / Entitas</th>
+                      <th>Nama Cabang</th>
                       <th>Nama Alat</th>
-                      <th>Singkatan</th>
                       <th>Jenis Alat</th>
-                      <th style={{ textAlign: 'center' }}>Jumlah Unit</th>
-                      <th style={{ textAlign: 'center' }}>Utilisasi (%)</th>
+                      <th>Kategori Alat</th>
+                      <th style={{ textAlign: 'center' }}>Kondisi</th>
+                      <th>Kerusakan</th>
+                      <th>Tindak Lanjut</th>
                     </tr>
                   </thead>
                   <tbody>
                     {peralatan
-                      .filter(p => !searchQuery || `${p.branchCode} ${p.branchName} ${p.nmAlat} ${p.jnsAlat}`.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(p =>
+                        !searchQuery ||
+                        `${p.tanggal} ${p.grup_entitas} ${p.nama_cabang} ${p.nama_alat} ${p.jenis_alat} ${p.kategori_alat} ${p.kondisi} ${p.kerusakan || ''} ${p.tindak_lanjut || ''}`
+                          .toLowerCase()
+                          .includes(searchQuery.toLowerCase())
+                      )
                       .slice(0, activeModule === 'all' ? 10 : 100)
-                      .map((p, i) => (
-                        <tr key={i}>
-                          <td>{p.year}</td>
-                          <td>{p.month}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#a855f7' }}>{p.branchCode}</td>
-                          <td style={{ fontWeight: 600 }}>{p.branchName}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>{p.kdAlat}</td>
-                          <td style={{ fontWeight: 600, color: '#ffffff' }}>{p.nmAlat}</td>
-                          <td><span className="badge-category">{p.singkatan}</span></td>
-                          <td>{p.jnsAlat}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700 }}>{p.jumlah}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: p.utilisasi >= 60 ? '#10b981' : '#f59e0b' }}>
-                            {p.utilisasi}%
-                          </td>
-                        </tr>
-                      ))}
+                      .map((p, i) => {
+                        const kon = normalizeKondisi(p.kondisi);
+                        const badgeClass =
+                          kon === 'READY'
+                            ? 'badge-green'
+                            : kon === 'READY DENGAN CATATAN'
+                              ? 'badge-yellow'
+                              : kon === 'BREAKDOWN'
+                                ? 'badge-red'
+                                : 'badge-purple';
+                        return (
+                          <tr key={p.id || i}>
+                            <td style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                              {formatTanggalID(p.tanggal)}
+                            </td>
+                            <td style={{ fontWeight: 700 }}>{p.grup_entitas}</td>
+                            <td style={{ fontWeight: 600 }}>{p.nama_cabang}</td>
+                            <td style={{ fontWeight: 600, color: 'var(--text-title)' }}>{p.nama_alat}</td>
+                            <td>{p.jenis_alat}</td>
+                            <td>{p.kategori_alat}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`badge ${badgeClass}`}>{kon}</span>
+                            </td>
+                            <td style={{ maxWidth: '220px', whiteSpace: 'pre-line' }}>
+                              {displayNullableText(p.kerusakan)}
+                            </td>
+                            <td style={{ maxWidth: '220px', whiteSpace: 'pre-line' }}>
+                              {displayNullableText(p.tindak_lanjut)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>

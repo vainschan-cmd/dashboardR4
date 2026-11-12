@@ -16,27 +16,27 @@ export async function GET(req: NextRequest) {
     const branch_id = enforceBranchFilterForRead(auth.session, rawBranch);
 
     // Fetch records needing attention (scoped by branch for pic_cabang)
-    const pendingRecords = dbQueries.getMonthlyRecords({
-      branch_id,
-      month,
-      year,
-      verification_status: 'pending_verification',
-    });
+    const [pendingRecords, revisionRecords, allBranches, departments, allRecords] = await Promise.all([
+      dbQueries.getMonthlyRecords({
+        branch_id,
+        month,
+        year,
+        verification_status: 'pending_verification',
+      }),
+      dbQueries.getMonthlyRecords({
+        branch_id,
+        month,
+        year,
+        verification_status: 'revision_needed',
+      }),
+      dbQueries.getBranches(),
+      dbQueries.getDepartments(),
+      dbQueries.getMonthlyRecords({ branch_id, month, year }),
+    ]);
 
-    const revisionRecords = dbQueries.getMonthlyRecords({
-      branch_id,
-      month,
-      year,
-      verification_status: 'revision_needed',
-    });
-
-    // Generate completeness summary matrix for the selected period
-    const allBranches = dbQueries.getBranches();
     const branches = branch_id
       ? allBranches.filter(b => b.id === branch_id || b.code.toUpperCase() === branch_id.toUpperCase())
       : allBranches;
-    const departments = dbQueries.getDepartments();
-    const allRecords = dbQueries.getMonthlyRecords({ branch_id, month, year });
 
     const matrix = branches.map(b => {
       const deptStatuses = departments.map(d => {
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     const { recordIds, status, revisionNotes } = parsed.data;
 
     // Four-Eyes Principle: Prevent self-approval of records uploaded by the same user
-    const targetRecords = dbQueries.getMonthlyRecordsByIds(recordIds);
+    const targetRecords = await dbQueries.getMonthlyRecordsByIds(recordIds);
     const sessionNipp = auth.session.nipp.toLowerCase();
     const sessionName = auth.session.name.toLowerCase();
 
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    dbQueries.updateRecordVerification(
+    await dbQueries.updateRecordVerification(
       recordIds,
       status,
       auth.session.nipp,
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     const action = status === 'verified' ? 'APPROVE' : 'REVISE';
     const statusLabel = status === 'verified' ? 'Terverifikasi (Disetujui Resmi)' : 'Perlu Revisi';
 
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const users = dbQueries.getUsers().map(toSafeUser);
+    const users = (await dbQueries.getUsers()).map(toSafeUser);
     const filePath = getMasterUserSpreadsheetPath();
     const exists = fs.existsSync(filePath);
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     const cleanNipp = String(nipp).trim();
 
     // Check if NIPP already exists
-    const existing = dbQueries.getUserByNipp(cleanNipp);
+    const existing = await dbQueries.getUserByNipp(cleanNipp);
     if (existing) {
       return NextResponse.json(
         { success: false, error: `NIPP ${cleanNipp} sudah terdaftar. Silakan gunakan NIPP lain atau masuk menggunakan akun yang sudah ada.` },
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
         ? role
         : 'pic_cabang';
 
-    const newUser = dbQueries.createUser({
+    const newUser = await dbQueries.createUser({
       name: String(name).trim(),
       nipp: cleanNipp,
       divisi: String(divisi).trim(),
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     const clientIp = getClientIp(req);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: session?.sub || safeUser.id,
         user_name: session?.name || safeUser.name,
         user_role: session?.role || safeUser.role,
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
 
     // If self-registering (not logged in as admin), issue JWT session cookies for the new user
     if (!session) {
-      const systemParams = dbQueries.getSystemParameters();
+      const systemParams = await dbQueries.getSystemParameters();
       await issueSessionCookies(response, safeUser, systemParams.session_timeout_minutes || 30);
     }
 
@@ -162,7 +162,7 @@ export async function PUT(req: NextRequest) {
     // If NIPP is changed, verify it doesn't conflict with another user
     if (nipp) {
       const cleanNipp = String(nipp).trim();
-      const existing = dbQueries.getUserByNipp(cleanNipp);
+      const existing = await dbQueries.getUserByNipp(cleanNipp);
       if (existing && existing.id !== id) {
         return NextResponse.json(
           { success: false, error: `NIPP ${cleanNipp} sudah digunakan oleh ${existing.name}.` },
@@ -171,7 +171,7 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const updated = dbQueries.updateUser(id, {
+    const updated = await dbQueries.updateUser(id, {
       name: String(name).trim(),
       nipp: nipp ? String(nipp).trim() : undefined,
       divisi: String(divisi).trim(),
@@ -194,7 +194,7 @@ export async function PUT(req: NextRequest) {
     const safeUpdated = toSafeUser(updated);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: auth.session.sub,
         user_name: auth.session.name,
         user_role: auth.session.role,
@@ -241,7 +241,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const targetUser = dbQueries.getUserById(id);
+    const targetUser = await dbQueries.getUserById(id);
     if (targetUser?.role === 'super_admin' && auth.session.role !== 'super_admin') {
       return NextResponse.json(
         { success: false, error: 'Hanya Super Admin yang dapat menghapus akun Super Admin.' },
@@ -249,10 +249,10 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    dbQueries.deleteUser(id);
+    await dbQueries.deleteUser(id);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: auth.session.sub,
         user_name: auth.session.name,
         user_role: auth.session.role,

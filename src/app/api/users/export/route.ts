@@ -5,7 +5,7 @@ import fs from 'fs';
 
 export async function GET() {
   try {
-    const users = dbQueries.getUsers();
+    const users = await dbQueries.getUsers();
     const filePath = exportUsersToSpreadsheet(users);
 
     const fileBuffer = fs.readFileSync(filePath);

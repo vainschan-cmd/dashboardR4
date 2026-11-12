@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from '@/lib/constants';
-import { getDb } from '@/lib/db';
+import { query } from '@/lib/db';
 import { ingestInputData } from '@/lib/ingestInputData';
 import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
-
-function canonicalRekeningCategory(rekening: string): string {
-  const lower = String(rekening || '').trim().toLowerCase();
-  if (lower.includes('beban')) return 'beban';
-  if (lower.includes('bersih')) return 'laba_bersih';
-  if (lower.includes('laba')) return 'laba_usaha';
-  if (lower.includes('ebitda')) return 'ebitda';
-  return 'pendapatan';
-}
+import { canonicalRekening, parseMetricPercent, parseRealisasi } from '@/lib/finansialHelpers';
+import {
+  normalizeGrupEntitas,
+  normalizeKondisi,
+  normalizeNullableText,
+  normalizeTanggalISO,
+  resolvePeralatanBranchCode,
+} from '@/lib/peralatanHelpers';
+import type { FinansialRecord, PeralatanRecord } from '@/lib/types';
 
 function matchesPeriod(
   rowYear: number,
@@ -43,11 +43,11 @@ function matchesPeriod(
   return true;
 }
 
-function ensureModuleTablesPopulated() {
-  const db = getDb();
-  const countRow = db.prepare('SELECT COUNT(*) as count FROM module_finansial').get() as { count: number };
-  if (!countRow || countRow.count === 0) {
-    ingestInputData();
+async function ensureModuleTablesPopulated() {
+  const res = await query<{ count: number }>('SELECT COUNT(*) as count FROM module_finansial');
+  const count = Number(res.rows[0]?.count || 0);
+  if (count === 0) {
+    await ingestInputData();
   }
 }
 
@@ -81,7 +81,10 @@ function resolveVerificationRow<T extends Record<string, any>>(
   // restore its last verified snapshot so BOD sees verified numbers while knowing an update is pending.
   if (rawRow.verified_snapshot_json) {
     try {
-      const snapshot = JSON.parse(String(rawRow.verified_snapshot_json));
+      const snapshot =
+        typeof rawRow.verified_snapshot_json === 'string'
+          ? JSON.parse(rawRow.verified_snapshot_json)
+          : rawRow.verified_snapshot_json;
       return {
         ...rawRow,
         ...snapshot,
@@ -101,8 +104,7 @@ export async function GET(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    ensureModuleTablesPopulated();
-    const db = getDb();
+    await ensureModuleTablesPopulated();
 
     const { searchParams } = new URL(req.url);
     const requestedBranch =
@@ -187,40 +189,37 @@ export async function GET(req: NextRequest) {
 
     const counters = { verified: 0, pending: 0, revision: 0 };
 
-    // 1. Finansial from SQLite module_finansial
-    const rawFinRows = db
-      .prepare('SELECT * FROM module_finansial ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+    // 1. Finansial from PostgreSQL module_finansial (9 field standar)
+    const includeAllFinansial = searchParams.get('includeAllFinansial') === 'true';
+    const entitasParam = searchParams.get('entitas')?.trim().toUpperCase();
+    const nmCbgParam = searchParams.get('nmCbg')?.trim().toLowerCase();
 
-    const allFinMapped = rawFinRows
+    const rawFinRows = (
+      await query(
+        'SELECT * FROM module_finansial ORDER BY year DESC, month DESC, branch_code ASC, rekening ASC, entitas ASC'
+      )
+    ).rows as any[];
+
+    const allFinMapped: FinansialRecord[] = rawFinRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
         const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
-        const cabang = Number(r.cabang_rp || 0);
-        const konsolidasi = Number(r.konsolidasi_rp || 0);
-        const yoy = Number(r.yoy || 0);
-        const rka = Number(r.rka || 0);
+        const branchName = getBranchNameByCode(code) || String(r.branch_name || code).trim();
+        const rkaParsed = parseMetricPercent(r.rka);
+        const yoyParsed = parseMetricPercent(r.yoy);
         return {
           id: r.id,
           monthlyRecordId: r.monthly_record_id,
-          year: Number(r.year),
-          month: Number(r.month),
-          branchCode: code,
-          branchName,
-          rekening: String(r.rekening || '').trim(),
-          cabangRp: cabang,
-          cabangM: Number((cabang / 1_000_000_000).toFixed(2)),
-          pmtRp: Number(r.pmt_rp || 0),
-          ptpRp: Number(r.ptp_rp || 0),
-          pslRp: Number(r.psl_rp || 0),
-          pjmRp: Number(r.pjm_rp || 0),
-          eliminasiRp: Number(r.eliminasi_rp || 0),
-          konsolidasiRp: konsolidasi,
-          konsolidasiM: Number((konsolidasi / 1_000_000_000).toFixed(2)),
-          yoy: Number(yoy.toFixed(1)),
-          rka: Number(rka.toFixed(1)),
+          TAHUN: Number(r.year),
+          BULAN: Number(r.month),
+          KODE_CBG: code,
+          NM_CBG: branchName,
+          REKENING: canonicalRekening(r.rekening),
+          ENTITAS: String(r.entitas || 'CABANG').trim().toUpperCase(),
+          REALISASI: parseRealisasi(r.realisasi),
+          RKA: rkaParsed === null ? '-' : rkaParsed,
+          YOY: yoyParsed === null ? '-' : yoyParsed,
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
           uploadedBy: r.uploaded_by,
@@ -228,41 +227,57 @@ export async function GET(req: NextRequest) {
         };
       });
 
-    // Group by (branchCode, canonicalRekeningCategory) so updating one account in 2026
-    // never drops the other 3 accounts (Beban, Laba Usaha, Laba Bersih) for that branch.
-    const finByBranchAndAccount = new Map<string, typeof allFinMapped>();
-    for (const r of allFinMapped) {
-      if (!matchesBranch(r.branchCode)) continue;
-      const key = `${r.branchCode}__${canonicalRekeningCategory(r.rekening)}`;
-      if (!finByBranchAndAccount.has(key)) finByBranchAndAccount.set(key, []);
-      finByBranchAndAccount.get(key)!.push(r);
+    const matchesFinFilters = (r: FinansialRecord) => {
+      if (!matchesBranch(r.KODE_CBG)) return false;
+      if (entitasParam && entitasParam !== 'ALL' && entitasParam !== 'SEMUA' && r.ENTITAS !== entitasParam) {
+        return false;
+      }
+      if (nmCbgParam && nmCbgParam !== 'all' && nmCbgParam !== 'semua' && r.NM_CBG.toLowerCase() !== nmCbgParam) {
+        return false;
+      }
+      return true;
+    };
+
+    let finansial: FinansialRecord[] = [];
+    if (includeAllFinansial && !periodName && !startYear && !endYear) {
+      finansial = allFinMapped.filter(r => {
+        if (!matchesFinFilters(r)) return false;
+        if (exactYearParam && r.TAHUN !== exactYearParam) return false;
+        if (exactMonthParam && r.BULAN !== exactMonthParam) return false;
+        return true;
+      });
+    } else {
+      // Kelompokkan per (KODE_CBG, REKENING, ENTITAS) agar seluruh entitas termasuk ELIMINASI selalu terjaga
+      const finByBranchAccountEntity = new Map<string, FinansialRecord[]>();
+      for (const r of allFinMapped) {
+        if (!matchesFinFilters(r)) continue;
+        const key = `${r.KODE_CBG}__${canonicalRekening(r.REKENING)}__${r.ENTITAS}`;
+        if (!finByBranchAccountEntity.has(key)) finByBranchAccountEntity.set(key, []);
+        finByBranchAccountEntity.get(key)!.push(r);
+      }
+
+      finByBranchAccountEntity.forEach(rows => {
+        const matchingRows = rows.filter(r =>
+          matchesPeriod(r.TAHUN, r.BULAN, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth)
+        );
+        if (exactYearParam && !startYear) {
+          finansial.push(...matchingRows);
+        } else if (matchingRows.length > 0) {
+          // Ambil snapshot periode terbaru dalam rentang filter agar kumulatif YTD tidak terjumlah ganda
+          finansial.push(matchingRows[0]);
+        } else {
+          const baseline = rows.filter(r => r.TAHUN === 2025);
+          if (baseline.length > 0) {
+            finansial.push(baseline[0]);
+          }
+        }
+      });
     }
 
-    const finansial: typeof allFinMapped = [];
-    finByBranchAndAccount.forEach(rows => {
-      const matchingRows = rows.filter(r =>
-        matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth)
-      );
-      if (exactYearParam && !startYear) {
-        // Explicit single period filter
-        finansial.push(...matchingRows);
-      } else if (matchingRows.length > 0 && matchingRows.some(r => r.konsolidasiRp !== 0)) {
-        // Take the most recent matching row for this (branch, account)
-        finansial.push(matchingRows[0]);
-      } else {
-        const baseline = rows.filter(r => r.year === 2025 && r.konsolidasiRp !== 0);
-        if (baseline.length > 0) {
-          finansial.push(baseline[0]);
-        } else if (matchingRows.length > 0) {
-          finansial.push(matchingRows[0]);
-        }
-      }
-    });
-
-    // 2. Opkom from SQLite module_opkom
-    const rawOpkomRows = db
-      .prepare('SELECT * FROM module_opkom ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+    // 2. Opkom from PostgreSQL module_opkom
+    const rawOpkomRows = (
+      await query('SELECT * FROM module_opkom ORDER BY year DESC, month DESC, branch_code ASC')
+    ).rows as any[];
 
     const opkom = rawOpkomRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -297,10 +312,10 @@ export async function GET(req: NextRequest) {
         return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
       });
 
-    // 3. Kinerja from SQLite module_kinerja
-    const rawKinerjaRows = db
-      .prepare('SELECT * FROM module_kinerja ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+    // 3. Kinerja from PostgreSQL module_kinerja
+    const rawKinerjaRows = (
+      await query('SELECT * FROM module_kinerja ORDER BY year DESC, month DESC, branch_code ASC')
+    ).rows as any[];
 
     const kinerja = rawKinerjaRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -330,10 +345,10 @@ export async function GET(req: NextRequest) {
         return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
       });
 
-    // 4. Utilisasi from SQLite module_utilisasi
-    const rawUtilRows = db
-      .prepare('SELECT * FROM module_utilisasi ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+    // 4. Utilisasi from PostgreSQL module_utilisasi
+    const rawUtilRows = (
+      await query('SELECT * FROM module_utilisasi ORDER BY year DESC, month DESC, branch_code ASC')
+    ).rows as any[];
 
     const utilisasi = rawUtilRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -364,46 +379,100 @@ export async function GET(req: NextRequest) {
         return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
       });
 
-    // 5. Peralatan from SQLite module_peralatan
-    const rawAlatRows = db
-      .prepare('SELECT * FROM module_peralatan ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+    // 5. Peralatan from PostgreSQL module_peralatan (9 Kolom Standar)
+    const includeAllPeralatan = searchParams.get('includeAllPeralatan') === 'true';
+    const tanggalParam = searchParams.get('tanggal')?.trim();
+    const grupEntitasParam = searchParams.get('grupEntitas')?.trim().toUpperCase();
+    const namaCabangParam = searchParams.get('namaCabang')?.trim().toLowerCase();
+    const kategoriAlatParam = searchParams.get('kategoriAlat')?.trim().toLowerCase();
+    const kondisiParam = searchParams.get('kondisi')?.trim();
 
-    const peralatan = rawAlatRows
+    const rawAlatRows = (
+      await query(
+        `SELECT *, TO_CHAR(tanggal, 'YYYY-MM-DD') AS tanggal_iso
+         FROM module_peralatan
+         ORDER BY tanggal DESC, grup_entitas ASC, nama_cabang ASC, nama_alat ASC`
+      )
+    ).rows as any[];
+
+    const allAlatMapped: PeralatanRecord[] = rawAlatRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
-        const code = getCanonicalBranchCode(r.branch_code, r.branch_name);
-        const branchName = getBranchNameByCode(code) || r.branch_name;
+        const tanggal = String(r.tanggal_iso || normalizeTanggalISO(r.tanggal) || '').trim();
+        const namaCabang = String(r.nama_cabang || '').trim();
+        const branchCode = resolvePeralatanBranchCode(namaCabang, r.branch_code);
         return {
           id: r.id,
-          monthlyRecordId: r.monthly_record_id,
-          year: Number(r.year),
-          month: Number(r.month),
-          branchCode: code,
-          branchName,
-          kdAlat: String(r.kd_alat || '').trim(),
-          nmAlat: String(r.nm_alat || '').trim(),
-          singkatan: String(r.singkatan || '').trim(),
-          jnsAlat: String(r.jns_alat || '').trim(),
-          jumlah: Number(r.jumlah || 0),
-          availability: Number(r.availability || 0),
-          utilisasi: Number(r.utilisasi || 0),
+          monthlyRecordId: r.monthly_record_id || null,
+          branchCode,
+          tanggal,
+          grup_entitas: normalizeGrupEntitas(r.grup_entitas),
+          nama_cabang: namaCabang,
+          nama_alat: String(r.nama_alat || '').trim(),
+          jenis_alat: String(r.jenis_alat || '').trim(),
+          kategori_alat: String(r.kategori_alat || '').trim(),
+          kondisi: normalizeKondisi(r.kondisi),
+          kerusakan: normalizeNullableText(r.kerusakan),
+          tindak_lanjut: normalizeNullableText(r.tindak_lanjut),
           verificationStatus: r.verificationStatus,
           hasPendingUpdate: r.hasPendingUpdate,
           uploadedBy: r.uploaded_by,
           uploadedAt: r.uploaded_at,
         };
-      })
-      .filter(r => {
-        if (!matchesBranch(r.branchCode)) return false;
-        return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
       });
 
-    // 6. Fasilitas from SQLite module_fasilitas
-    const rawFasRows = db
-      .prepare('SELECT * FROM module_fasilitas ORDER BY year DESC, month DESC, branch_code ASC')
-      .all() as any[];
+    const branchScopedAlat = allAlatMapped.filter(r => {
+      if (!matchesBranch(r.branchCode || 'R99')) return false;
+      if (grupEntitasParam && grupEntitasParam !== 'ALL' && r.grup_entitas !== grupEntitasParam) return false;
+      if (namaCabangParam && namaCabangParam !== 'all' && r.nama_cabang.toLowerCase() !== namaCabangParam) return false;
+      if (kategoriAlatParam && kategoriAlatParam !== 'all' && r.kategori_alat.toLowerCase() !== kategoriAlatParam) {
+        return false;
+      }
+      if (kondisiParam && kondisiParam !== 'ALL' && r.kondisi !== normalizeKondisi(kondisiParam)) return false;
+      if (tanggalParam && tanggalParam !== 'ALL' && r.tanggal !== tanggalParam) return false;
+      return true;
+    });
+
+    let peralatan: PeralatanRecord[];
+    if (includeAllPeralatan || tanggalParam) {
+      peralatan = branchScopedAlat;
+    } else if (startDate || endDate) {
+      peralatan = branchScopedAlat.filter(r => {
+        if (startDate && r.tanggal < startDate) return false;
+        if (endDate && r.tanggal > endDate) return false;
+        return true;
+      });
+    } else if (periodName || exactYearParam || exactMonthParam || startYear || endYear) {
+      const periodMatched = branchScopedAlat.filter(r => {
+        const [yr, mo] = r.tanggal.split('-').map(Number);
+        if (!yr || !mo) return false;
+        return matchesPeriod(yr, mo, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
+      });
+
+      if (periodMatched.length > 0) {
+        peralatan = periodMatched;
+      } else if (periodName && branchScopedAlat.length > 0) {
+        // Fallback snapshot terbaru di tahun bersangkutan ketika dataset peralatan mulai tersedia di Q4
+        const targetYr = periodName.includes('2025') ? 2025 : 2026;
+        const inYear = branchScopedAlat.filter(r => Number(r.tanggal.slice(0, 4)) === targetYr);
+        if (inYear.length > 0) {
+          const latestSnapshotDate = inYear.map(r => r.tanggal).sort().reverse()[0];
+          peralatan = inYear.filter(r => r.tanggal === latestSnapshotDate);
+        } else {
+          peralatan = [];
+        }
+      } else {
+        peralatan = [];
+      }
+    } else {
+      peralatan = branchScopedAlat;
+    }
+
+    // 6. Fasilitas from PostgreSQL module_fasilitas
+    const rawFasRows = (
+      await query('SELECT * FROM module_fasilitas ORDER BY year DESC, month DESC, branch_code ASC')
+    ).rows as any[];
 
     const fasilitas = rawFasRows
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
@@ -438,9 +507,9 @@ export async function GET(req: NextRequest) {
         return matchesPeriod(r.year, r.month, exactYearParam, exactMonthParam, startYear, startMonth, endYear, endMonth);
       });
 
-    // 7. Equipment Catalog from SQLite equipment_catalog
+    // 7. Equipment Catalog from PostgreSQL equipment_catalog
     const equipmentCatalog = (
-      db.prepare('SELECT code, name, acronym, category FROM equipment_catalog WHERE active = 1 ORDER BY code ASC').all() as any[]
+      (await query('SELECT code, name, acronym, category FROM equipment_catalog WHERE active = TRUE ORDER BY code ASC')).rows as any[]
     ).map(r => ({
       code: String(r.code).trim(),
       name: String(r.name).trim(),
@@ -448,16 +517,16 @@ export async function GET(req: NextRequest) {
       category: String(r.category || 'OPERASIONAL').trim(),
     }));
 
-    // 8. Additional KPI Records from SQLite monthly_records (e.g. kpi_rfu, kpi_sla, kpi_csat)
-    const rawKpiRecords = db
-      .prepare(`
+    // 8. Additional KPI Records from PostgreSQL monthly_records (e.g. kpi_rfu, kpi_sla, kpi_csat)
+    const rawKpiRecords = (
+      await query(`
         SELECT r.id, r.indicator_id, r.year, r.month, r.target, r.realization, r.unit,
                r.achievement_pct, r.verification_status, b.code as branch_code, b.name as branch_name
         FROM monthly_records r
         JOIN branches b ON r.branch_id = b.id
         WHERE r.indicator_id IN ('kpi_rfu', 'kpi_sla', 'kpi_csat')
       `)
-      .all() as any[];
+    ).rows as any[];
 
     const kpiRecords = rawKpiRecords
       .filter(r => {
@@ -482,7 +551,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      source: 'sqlite',
+      source: 'postgresql',
       verifiedOnly,
       verificationSummary: {
         verifiedCount: counters.verified,
