@@ -11,7 +11,7 @@ import {
   parseRealisasi,
 } from '@/lib/finansialHelpers';
 import { formatBerandaSummaryRupiah, formatIdPercent2 } from '@/lib/berandaSummary';
-import { formatRupiahFull } from '@/lib/formatters';
+import { formatBebanTriliun, formatRupiahFull } from '@/lib/formatters';
 import type { FinansialRecord, FinansialRekening } from '@/lib/types';
 import type {
   FinansialConsolidatedKpis,
@@ -230,7 +230,7 @@ export async function queryFinansialConsolidatedKpis(
     },
     beban: {
       realisasi: bebanVal,
-      formatted: formatBerandaSummaryRupiah(bebanVal),
+      formatted: formatBebanTriliun(bebanVal),
       formattedFull: formatRupiahFull(bebanVal),
       rka: toNullableNumber(row?.beban_rka),
       yoy: toNullableNumber(row?.beban_yoy),

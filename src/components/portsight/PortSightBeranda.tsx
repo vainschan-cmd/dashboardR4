@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import type { User, UserRole } from '@/lib/types';
 import { getMonthNameId } from '@/lib/finansialHelpers';
+import { formatBebanTriliun, formatRupiahFull } from '@/lib/formatters';
 import {
   BERANDA_ENTITAS_COLORS,
   BERANDA_ENTITAS_ORDER,
@@ -301,8 +302,11 @@ function BopoTooltip({ active, payload }: CustomTooltipProps<BerandaBopoBranchRo
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11 }}>
         <span style={{ color: 'var(--text-muted)' }}>Beban</span>
-        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
-          {formatBerandaSummaryRupiah(row.beban)}
+        <span
+          style={{ fontWeight: 600, color: 'var(--text-secondary)' }}
+          title={formatRupiahFull(row.beban)}
+        >
+          {formatBebanTriliun(row.beban)}
         </span>
       </div>
     </div>
@@ -966,8 +970,13 @@ export default function PortSightBeranda({
                     fontVariantNumeric: 'tabular-nums',
                     marginTop: 2,
                   }}
+                  title={
+                    kpis
+                      ? `${formatBebanTriliun(kpis.beban.value, { includeCurrency: false })} (${formatRupiahFull(kpis.beban.value)})`
+                      : 'Rp 0,00 T'
+                  }
                 >
-                  {loading && !kpis ? '...' : kpis?.beban.formatted ?? 'Rp 0'}
+                  {loading && !kpis ? '...' : kpis?.beban.formatted ?? 'Rp 0,00 T'}
                 </div>
                 <KpiSubMetrics
                   yoy={kpis?.beban.yoy ?? null}

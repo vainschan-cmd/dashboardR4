@@ -1,3 +1,5 @@
+export { formatBebanTriliun } from '@/lib/formatters';
+
 export const BERANDA_ENTITAS_ORDER = ['CABANG', 'PJM', 'PMT', 'PSL', 'PTP'] as const;
 
 export type BerandaEntityKey = (typeof BERANDA_ENTITAS_ORDER)[number];

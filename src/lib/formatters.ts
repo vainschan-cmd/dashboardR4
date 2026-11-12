@@ -41,6 +41,42 @@ export function formatRupiahCompact(val: number | null | undefined): string {
   return formatRupiahFull(safe);
 }
 
+/**
+ * Format khusus metrik Beban agar selalu ditampilkan dalam satuan Triliun (T)
+ * dengan pembulatan besaran ke atas (ROUNDUP 2 desimal menjauhi 0),
+ * meskipun nominal berada di bawah 1 Triliun (contoh: -293.827.270.311 -> - Rp 0,30 T / -0,30 T).
+ */
+export function formatBebanTriliun(
+  nominal: number | null | undefined,
+  options?: { includeCurrency?: boolean }
+): string {
+  const includeCurrency = options?.includeCurrency ?? true;
+  if (
+    nominal === null ||
+    nominal === undefined ||
+    !Number.isFinite(nominal) ||
+    Math.abs(nominal) < 0.5
+  ) {
+    return includeCurrency ? 'Rp 0,00 T' : '0,00 T';
+  }
+
+  // Pembulatan besaran ke atas pada kelipatan 0,01 T (10 Miliar) menghindari noise IEEE 754
+  const scaled = Math.abs(nominal) / 10_000_000_000;
+  const floored = Math.floor(scaled);
+  const absUnits = scaled - floored <= 1e-11 ? floored : Math.ceil(scaled);
+  const absRounded = absUnits / 100;
+  const isNegative = nominal < 0 && absRounded > 0;
+  const formattedNumber = absRounded.toLocaleString('id-ID', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  if (includeCurrency) {
+    return isNegative ? `- Rp ${formattedNumber} T` : `Rp ${formattedNumber} T`;
+  }
+  return isNegative ? `-${formattedNumber} T` : `${formattedNumber} T`;
+}
+
 export function formatNominalFull(val: number | null | undefined): string {
   if (val === null || val === undefined || isNaN(val)) return '0';
   const isNegative = val < 0;
