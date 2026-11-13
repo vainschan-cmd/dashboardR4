@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
   }
 
-  const target = dbQueries.getUserById(parsed.data.userId);
+  const target = await dbQueries.getUserById(parsed.data.userId);
   if (!target) {
     return NextResponse.json(
       { success: false, error: 'Akun pengguna tidak ditemukan.' },
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,
@@ -136,7 +136,7 @@ async function handleSelfChange(
     return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
   }
 
-  const user = dbQueries.getUserById(session.sub);
+  const user = await dbQueries.getUserById(session.sub);
   if (!user) {
     return NextResponse.json(
       { success: false, error: 'Akun tidak ditemukan.' },
@@ -173,14 +173,14 @@ async function handleSelfChange(
   }
 
   // Refresh the caller's own session (all previous tokens were just revoked).
-  const updated = dbQueries.getUserById(user.id);
+  const updated = await dbQueries.getUserById(user.id);
   const response = NextResponse.json({
     success: true,
     message: 'Kata sandi berhasil diperbarui. Sesi lain Anda telah diakhiri.',
   });
 
   if (updated) {
-    const systemParams = dbQueries.getSystemParameters();
+    const systemParams = await dbQueries.getSystemParameters();
     await issueSessionCookies(
       response,
       updated,
@@ -192,7 +192,7 @@ async function handleSelfChange(
   }
 
   try {
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: user.id,
       user_name: user.name,
       user_role: user.role,

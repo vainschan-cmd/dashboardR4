@@ -32,14 +32,14 @@ export interface CommitImportError {
  * Enforces ABAC (branch & department scope), master indicator integrity, server-side
  * achievement calculation, and atomic SQLite transaction across records + batch + audit log.
  */
-export function commitValidatedImportRecords(params: {
+export async function commitValidatedImportRecords(params: {
   session: JwtSessionPayload;
   clientIp: string;
   batchId?: string;
   filename?: string;
   sourceType?: 'upload_xlsx' | 'upload_csv' | 'google_sheets' | 'manual_input';
   records: ValidatedImportCommitRecord[];
-}): CommitImportResult | CommitImportError {
+}): Promise<CommitImportResult | CommitImportError> {
   const { session, clientIp, batchId, filename, sourceType, records } = params;
 
   if (!records || records.length === 0) {
@@ -196,7 +196,7 @@ export function commitValidatedImportRecords(params: {
   // that already exist are exactly the ones this import would overwrite. Rows
   // whose values did not change are dropped from the write set: re-uploading an
   // approved file must not push it back to "menunggu verifikasi".
-  const existingRows = dbQueries.getMonthlyRecordsByIds(sanitizedRecords.map((r) => r.id));
+  const existingRows = await dbQueries.getMonthlyRecordsByIds(sanitizedRecords.map((r) => r.id));
   const existingById = new Map(existingRows.map((row) => [row.id, row]));
 
   const rowsToWrite: typeof sanitizedRecords = [];
@@ -274,7 +274,7 @@ export function commitValidatedImportRecords(params: {
   if (unchangedCount > 0) detailParts.push(`${unchangedCount} tidak berubah`);
 
   // Atomic commit: records + batch metadata + audit log in a single transaction
-  dbQueries.commitImportTransaction({
+  await dbQueries.commitImportTransaction({
     records: rowsToWrite,
     batch: importBatch,
     auditLog: {

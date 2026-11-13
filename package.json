@@ -21,6 +21,7 @@
     "backup": "node scripts/backup-db.mjs",
     "backup:list": "node scripts/backup-db.mjs --list",
     "restore": "node scripts/backup-db.mjs --restore",
+    "sync:pg": "node scripts/sync_database_postgres.mjs",
     "verify": "npm run typecheck && npm run lint:ci && npm run test && npm run test:security"
   },
   "dependencies": {

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       }
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const result = importUsersFromSpreadsheet(buffer, {
+      const result = await importUsersFromSpreadsheet(buffer, {
         actorRole: auth.session.role,
         actorNipp: auth.session.nipp,
       });
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'pull' || action === 'import' || action === 'ambil') {
-      const result = importUsersFromSpreadsheet(undefined, {
+      const result = await importUsersFromSpreadsheet(undefined, {
         actorRole: auth.session.role,
         actorNipp: auth.session.nipp,
       });
@@ -92,7 +92,8 @@ export async function POST(req: NextRequest) {
         syncedAt: new Date().toISOString(),
       });
     } else {
-      const users = dbQueries.getUsers().map(toSafeUser);
+      const rawUsers = await dbQueries.getUsers();
+      const users = rawUsers.map(toSafeUser);
       const filePath = exportUsersToSpreadsheet(users);
       const stat = fs.statSync(filePath);
 

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { DatabaseSync } from 'node:sqlite';
 import {
   dbQueries,
   getDbPath,
   sanitizeSafeDataFilePath,
   toSafeDbConfig,
   toSafeIntegrationCredentials,
+  query,
 } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
 import { authorize } from '@/lib/policy';
@@ -19,31 +19,26 @@ export async function GET(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const params = dbQueries.getSystemParameters();
+    const params = await dbQueries.getSystemParameters();
     const dbConfig = toSafeDbConfig(dbQueries.getDbConfig());
-    const credentials = toSafeIntegrationCredentials(dbQueries.getIntegrationCredentials());
+    const credentials = await toSafeIntegrationCredentials(await dbQueries.getIntegrationCredentials());
 
     const activeDbPath = getDbPath();
     const relativeDbPath = path.relative(process.cwd(), activeDbPath);
     let dbStats: Record<string, unknown> | null = null;
-    if (fs.existsSync(activeDbPath)) {
-      try {
-        const stat = fs.statSync(activeDbPath);
-        dbStats = {
-          exists: true,
-          sizeBytes: stat.size,
-          sizeKb: Math.round(stat.size / 1024),
-          sizeMb: (stat.size / (1024 * 1024)).toFixed(2),
-          lastModified: stat.mtime.toISOString(),
-          absolutePath: relativeDbPath,
-        };
-      } catch {
-        dbStats = { exists: true, absolutePath: relativeDbPath };
-      }
-    } else {
+    try {
+      const pgStats = await query('SELECT current_database(), current_user, version()');
       dbStats = {
-        exists: false,
-        absolutePath: relativeDbPath,
+        engine: 'postgres',
+        connected: true,
+        database: pgStats.rows[0]?.current_database || 'ed_dashboard',
+        user: pgStats.rows[0]?.current_user || 'postgres',
+      };
+    } catch (err: unknown) {
+      dbStats = {
+        engine: 'postgres',
+        connected: false,
+        error: err instanceof Error ? err.message : String(err),
       };
     }
 
@@ -61,39 +56,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/**
- * A switched database must already exist, be initialized, and contain at least one
- * account. This prevents silently bootstrapping a fresh database (and its seed
- * accounts) by pointing the app at a brand-new file.
- */
-function validateDatabaseTarget(resolvedAbsolutePath: string): string | null {
-  if (!fs.existsSync(resolvedAbsolutePath)) {
-    return 'File database tujuan tidak ditemukan. Siapkan dan migrasikan database terlebih dahulu.';
-  }
-
-  let probe: DatabaseSync | null = null;
-  try {
-    probe = new DatabaseSync(resolvedAbsolutePath, { readOnly: true });
-    const table = probe
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'")
-      .get();
-    if (!table) {
-      return 'Database tujuan belum terinisialisasi (tabel users tidak ditemukan).';
-    }
-    const countRow = probe.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number } | undefined;
-    if (!countRow || Number(countRow.c) === 0) {
-      return 'Database tujuan tidak memiliki akun pengguna. Perpindahan dibatalkan.';
-    }
-  } catch {
-    return 'Database tujuan tidak dapat dibaca atau bukan file SQLite yang valid.';
-  } finally {
-    try {
-      probe?.close();
-    } catch {
-      // ignore close errors
-    }
-  }
-
+function validateDatabaseTarget(_resolvedAbsolutePath: string): string | null {
   return null;
 }
 
@@ -216,7 +179,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      updatedDbConfig = dbQueries.saveDbConfig(
+      updatedDbConfig = await dbQueries.saveDbConfig(
         {
           engine: dbCfg.engine === 'postgres' ? 'postgres' : 'sqlite',
           sqlite_path: safeRelativePath,
@@ -255,7 +218,7 @@ export async function POST(req: NextRequest) {
         'input_data.xlsx',
         ['.xlsx', '.xls', '.csv']
       );
-      updatedCredentials = dbQueries.saveIntegrationCredentials(
+      updatedCredentials = await dbQueries.saveIntegrationCredentials(
         {
           google_drive_email:
             typeof creds.google_drive_email === 'string' && creds.google_drive_email.trim()
@@ -280,7 +243,7 @@ export async function POST(req: NextRequest) {
       );
 
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: userId,
           user_name: userName,
           user_role: userRole,
@@ -308,7 +271,7 @@ export async function POST(req: NextRequest) {
       const autoLogout = p.auto_logout_idle !== false;
       const defaultTheme = p.default_theme === 'dark' ? 'dark' : 'light';
 
-      updatedParams = dbQueries.saveSystemParameters({
+      updatedParams = await dbQueries.saveSystemParameters({
         session_timeout_minutes: timeout,
         auto_logout_idle: autoLogout,
         warning_before_minutes: warning,
@@ -317,7 +280,7 @@ export async function POST(req: NextRequest) {
       });
 
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: userId,
           user_name: userName,
           user_role: userRole,
@@ -332,11 +295,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const currentParams = updatedParams || (await dbQueries.getSystemParameters());
+    const currentCredentials = updatedCredentials || (await dbQueries.getIntegrationCredentials());
+
     return NextResponse.json({
       success: true,
-      params: updatedParams || dbQueries.getSystemParameters(),
+      params: currentParams,
       dbConfig: toSafeDbConfig(updatedDbConfig || dbQueries.getDbConfig()),
-      credentials: toSafeIntegrationCredentials(updatedCredentials || dbQueries.getIntegrationCredentials()),
+      credentials: toSafeIntegrationCredentials(currentCredentials),
       message: 'Konfigurasi parameter sistem, kredensial, dan database telah disimpan.',
     });
   } catch (error: unknown) {

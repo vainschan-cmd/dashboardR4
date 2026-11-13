@@ -20,8 +20,9 @@ export function scheduleUsersSpreadsheetSync(): void {
     // Dynamic import: a static `import { exportUsersToSpreadsheet }` would
     // re-introduce the `db.ts` ↔ `userPicSync.ts` cycle (`CODE-04`).
     void Promise.all([import('../userPicSync'), import('../repositories/users')])
-      .then(([{ exportUsersToSpreadsheet }, { usersRepository }]) => {
-        exportUsersToSpreadsheet(usersRepository.getUsers());
+      .then(async ([{ exportUsersToSpreadsheet }, { usersRepository }]) => {
+        const users = await usersRepository.getUsers();
+        exportUsersToSpreadsheet(users);
       })
       .catch((e) => {
         console.warn('[DB] Gagal menyinkronkan spreadsheet pengguna di latar belakang:', e);
@@ -64,14 +65,16 @@ export function maybeRunAuthHousekeeping(): void {
   if (now - last < AUTH_HOUSEKEEPING_INTERVAL_MS) return;
   globalForHousekeeping.__portsightLastAuthHousekeeping = now;
 
-  try {
-    const result = authSessionsRepository.purgeStaleAuthData();
-    if (result.sessions > 0 || result.rateLimits > 0) {
-      console.log(
-        `[DB Housekeeping] ${result.sessions} sesi kedaluwarsa dan ${result.rateLimits} entri rate limit dibersihkan.`
-      );
-    }
-  } catch (e) {
-    console.warn('[DB Housekeeping] Pembersihan tabel autentikasi gagal:', e);
-  }
+  authSessionsRepository
+    .purgeStaleAuthData()
+    .then((result) => {
+      if (result.sessions > 0 || result.rateLimits > 0) {
+        console.log(
+          `[DB Housekeeping] ${result.sessions} sesi kedaluwarsa dan ${result.rateLimits} entri rate limit dibersihkan.`
+        );
+      }
+    })
+    .catch((e) => {
+      console.warn('[DB Housekeeping] Pembersihan tabel autentikasi gagal:', e);
+    });
 }

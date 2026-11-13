@@ -1,13 +1,13 @@
 {
-  "engine": "sqlite",
+  "engine": "postgres",
   "sqlite_path": "data/ed_dashboard.db",
   "pg_host": "localhost",
   "pg_port": 5432,
   "pg_database": "ed_dashboard",
   "pg_user": "postgres",
-  "pg_password": "",
+  "pg_password": "enc:v1:0TcEvVKQv0mwhUwc:76AOy5WWGLnxu+8nqOAlXQ==:Sqfr2+Z/",
   "pg_ssl": false,
   "max_connections": 10,
-  "updated_at": "2026-11-11T15:14:41.125Z",
-  "updated_by": "M Mansyur"
+  "updated_at": "2026-11-13T09:40:00.000Z",
+  "updated_by": "Chandra"
 }

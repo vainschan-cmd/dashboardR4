@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     dbQueries.saveTemplate(template);
 
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

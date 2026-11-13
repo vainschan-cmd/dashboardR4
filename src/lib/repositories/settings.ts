@@ -4,23 +4,32 @@ import type {
   DatabaseConfig,
   IntegrationCredentials,
 } from '../types';
-import { getDb } from '../db/connection';
+import { getPool } from '../db/connection';
 import { encryptSecret, decryptSecret } from '../secrets';
-import { SECRET_MASK, sanitizeSafeDataFilePath } from '../db/helpers';
 import { getDbConfig, saveDbConfig } from '../db/connection';
 
-/**
- * Settings and configuration (`CODE-03`): Google Sheets target, system
- * parameters, database configuration, and encrypted integration credentials.
- *
- * Credentials are decrypted on read and encrypted on write here and nowhere
- * else, so there is exactly one place to audit for plaintext leakage.
- */
 export const settingsRepository = {
   // Google Sheets Config
-  getGoogleSheetsConfig: (): GoogleSheetsConfig => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'google_sheets'").get();
-    if (!row) {
+  getGoogleSheetsConfig: async (): Promise<GoogleSheetsConfig> => {
+    try {
+      const pool = getPool();
+      const res = await pool.query("SELECT config_json FROM integration_settings WHERE service_name = 'google_sheets'");
+      if (!res.rows[0]) {
+        return {
+          id: 'cfg_gsheet',
+          spreadsheet_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
+          sheet_name: 'Input_Kinerja_Bulanan',
+          range: 'A2:L200',
+          service_account_email: 'regdashr@gmail.com',
+          api_key_configured: false,
+          status: 'ready_for_credentials',
+          last_sync_at: null,
+          auto_sync_enabled: false,
+        };
+      }
+      const raw = res.rows[0].config_json;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
       return {
         id: 'cfg_gsheet',
         spreadsheet_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
@@ -30,51 +39,62 @@ export const settingsRepository = {
         api_key_configured: false,
         status: 'ready_for_credentials',
         last_sync_at: null,
-        auto_sync_enabled: false
+        auto_sync_enabled: false,
       };
     }
-    return JSON.parse(String(row.config_json));
   },
-  saveGoogleSheetsConfig: (cfg: GoogleSheetsConfig) => {
-    const db = getDb();
+
+  saveGoogleSheetsConfig: async (cfg: GoogleSheetsConfig): Promise<void> => {
+    const pool = getPool();
     const now = new Date().toISOString();
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES (?, 'google_sheets', ?, ?)
-    `).run('cfg_gsheet', JSON.stringify(cfg), now);
+    await pool.query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ('cfg_gsheet', 'google_sheets', $1::jsonb, $2::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(cfg), now]
+    );
   },
 
   // System & Session Parameters
-  getSystemParameters: (): SystemParameters => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'system_parameters'").get();
-    if (!row) {
-      return {
-        session_timeout_minutes: 30,
-        auto_logout_idle: true,
-        warning_before_minutes: 2,
-        default_theme: 'light',
-      };
-    }
-    return {
+  getSystemParameters: async (): Promise<SystemParameters> => {
+    const defaultParams: SystemParameters = {
       session_timeout_minutes: 30,
       auto_logout_idle: true,
       warning_before_minutes: 2,
       default_theme: 'light',
-      ...JSON.parse(String(row.config_json)),
     };
+    try {
+      const pool = getPool();
+      const res = await pool.query(
+        "SELECT config_json FROM integration_settings WHERE service_name = 'system_parameters'"
+      );
+      if (!res.rows[0]) return defaultParams;
+      const raw = res.rows[0].config_json;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return { ...defaultParams, ...parsed };
+    } catch {
+      return defaultParams;
+    }
   },
-  saveSystemParameters: (params: Partial<SystemParameters>): SystemParameters => {
-    const db = getDb();
-    const current = settingsRepository.getSystemParameters();
+
+  saveSystemParameters: async (params: Partial<SystemParameters>): Promise<SystemParameters> => {
+    const current = await settingsRepository.getSystemParameters();
     const updated: SystemParameters = {
       ...current,
       ...params,
       updated_at: new Date().toISOString(),
     };
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES ('cfg_system_params', 'system_parameters', ?, ?)
-    `).run(JSON.stringify(updated), updated.updated_at!);
+    const pool = getPool();
+    await pool.query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ('cfg_system_params', 'system_parameters', $1::jsonb, $2::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(updated), updated.updated_at!]
+    );
     return updated;
   },
 
@@ -82,109 +102,120 @@ export const settingsRepository = {
   getDbConfig: (): DatabaseConfig => {
     return getDbConfig();
   },
-  saveDbConfig: (cfg: Partial<DatabaseConfig>, updatedBy?: string): DatabaseConfig => {
+
+  saveDbConfig: async (cfg: Partial<DatabaseConfig>, updatedBy?: string): Promise<DatabaseConfig> => {
     return saveDbConfig(cfg, updatedBy);
   },
 
-  // External Integration Credentials (Google Drive, Sheets, Gateway)
-  getIntegrationCredentials: (): IntegrationCredentials => {
-    const row = getDb().prepare("SELECT config_json FROM integration_settings WHERE service_name = 'integration_credentials'").get();
-    if (!row) {
-      return {
-        google_drive_email: 'regdashr@gmail.com',
-        google_drive_file_path: 'data/input_data.xlsx',
-        google_sheets_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
-        google_sheets_name: 'Input_Kinerja_Bulanan',
-        google_api_key: '',
-        api_gateway_url: 'https://api.pelindo.co.id/v1/r4',
-        api_gateway_token: '',
-      };
-    }
-    const stored = JSON.parse(String(row.config_json)) as Record<string, unknown>;
-    return {
+  // Encrypted Integration Credentials
+  getIntegrationCredentials: async (): Promise<IntegrationCredentials> => {
+    const defaultCreds: IntegrationCredentials = {
       google_drive_email: 'regdashr@gmail.com',
       google_drive_file_path: 'data/input_data.xlsx',
-      google_sheets_id: '1A2b3C4d5E6F7g8H9i0J_Demo_Spreadsheet_Port_Data',
+      google_sheets_id: '',
       google_sheets_name: 'Input_Kinerja_Bulanan',
-      ...(stored as Partial<IntegrationCredentials>),
-      // Credentials are stored encrypted; callers always receive plaintext.
-      google_api_key: decryptSecret(stored.google_api_key),
-      api_gateway_token: decryptSecret(stored.api_gateway_token),
+      google_api_key: '',
+      api_gateway_url: 'https://api.pelindo.co.id/v1/r4',
+      api_gateway_token: '',
     };
+    try {
+      const pool = getPool();
+      const res = await pool.query(
+        "SELECT config_json FROM integration_settings WHERE service_name = 'integration_credentials'"
+      );
+      if (!res.rows[0]) return defaultCreds;
+      const raw = res.rows[0].config_json;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return {
+        ...defaultCreds,
+        ...parsed,
+        google_api_key: decryptSecret(parsed.google_api_key),
+        api_gateway_token: decryptSecret(parsed.api_gateway_token),
+      };
+    } catch {
+      return defaultCreds;
+    }
   },
-  saveIntegrationCredentials: (creds: Partial<IntegrationCredentials>, updatedBy?: string): IntegrationCredentials => {
-    const db = getDb();
-    const current = settingsRepository.getIntegrationCredentials();
-    const safeDrivePath = creds.google_drive_file_path
-      ? sanitizeSafeDataFilePath(creds.google_drive_file_path, 'input_data.xlsx', ['.xlsx', '.xls', '.csv']).safeRelativePath
-      : current.google_drive_file_path || 'data/input_data.xlsx';
-    const resolvedApiKey =
-      creds.google_api_key === SECRET_MASK || creds.google_api_key === undefined
-        ? current.google_api_key || ''
-        : creds.google_api_key;
-    const resolvedGatewayToken =
-      creds.api_gateway_token === SECRET_MASK || creds.api_gateway_token === undefined
-        ? current.api_gateway_token || ''
-        : creds.api_gateway_token;
 
+  saveIntegrationCredentials: async (
+    creds: Partial<IntegrationCredentials>,
+    updatedBy?: string
+  ): Promise<IntegrationCredentials> => {
+    const current = await settingsRepository.getIntegrationCredentials();
     const updated: IntegrationCredentials = {
       ...current,
       ...creds,
-      google_drive_file_path: safeDrivePath,
-      google_api_key: resolvedApiKey,
-      api_gateway_token: resolvedGatewayToken,
       updated_at: new Date().toISOString(),
       updated_by: updatedBy || 'Administrator',
     };
-    // Encrypt before persisting; the returned object stays plaintext for callers.
-    const persistedCredentials = {
+    const encryptedForStorage = {
       ...updated,
       google_api_key: updated.google_api_key ? encryptSecret(updated.google_api_key) : '',
       api_gateway_token: updated.api_gateway_token ? encryptSecret(updated.api_gateway_token) : '',
     };
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES ('cfg_credentials', 'integration_credentials', ?, ?)
-    `).run(JSON.stringify(persistedCredentials), updated.updated_at!);
-
-    try {
-      const currentGSheet = settingsRepository.getGoogleSheetsConfig();
-      settingsRepository.saveGoogleSheetsConfig({
-        ...currentGSheet,
-        spreadsheet_id: updated.google_sheets_id || currentGSheet.spreadsheet_id,
-        sheet_name: updated.google_sheets_name || currentGSheet.sheet_name,
-        service_account_email: updated.google_drive_email || currentGSheet.service_account_email,
-      });
-    } catch (e) {
-      console.warn('[DB] Gagal menyinkronkan konfigurasi Google Sheets:', e);
-    }
-
+    const pool = getPool();
+    await pool.query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ('cfg_credentials', 'integration_credentials', $1::jsonb, $2::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(encryptedForStorage), updated.updated_at!]
+    );
     return updated;
   },
 
-  // Persistent Shared Login Rate Limit Storage (SQLite WAL for multi-instance & restart resilience)
-  getRateLimitEntry: (rateKey: string): { attempt_count: number; first_failed_at: number; locked_until: number } | null => {
-    const db = getDb();
-    const row = db
-      .prepare('SELECT attempt_count, first_failed_at, locked_until FROM auth_rate_limits WHERE rate_key = ?')
-      .get(rateKey) as { attempt_count: number; first_failed_at: number; locked_until: number } | undefined;
-    return row || null;
+  // Rate Limiting in PostgreSQL
+  getRateLimitEntry: async (
+    rateKey: string
+  ): Promise<{ attempt_count: number; first_failed_at: number; locked_until: number } | null> => {
+    try {
+      const pool = getPool();
+      const res = await pool.query(
+        'SELECT attempt_count, first_failed_at, locked_until FROM auth_rate_limits WHERE rate_key = $1',
+        [rateKey]
+      );
+      if (!res.rows[0]) return null;
+      return {
+        attempt_count: Number(res.rows[0].attempt_count || 0),
+        first_failed_at: Number(res.rows[0].first_failed_at || 0),
+        locked_until: Number(res.rows[0].locked_until || 0),
+      };
+    } catch {
+      return null;
+    }
   },
-  upsertRateLimitEntry: (rateKey: string, attemptCount: number, firstFailedAt: number, lockedUntil: number): void => {
-    const db = getDb();
-    const nowIso = new Date().toISOString();
-    db.prepare(`
-      INSERT INTO auth_rate_limits (rate_key, attempt_count, first_failed_at, locked_until, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(rate_key) DO UPDATE SET
-        attempt_count = excluded.attempt_count,
-        first_failed_at = excluded.first_failed_at,
-        locked_until = excluded.locked_until,
-        updated_at = excluded.updated_at
-    `).run(rateKey, attemptCount, firstFailedAt, lockedUntil, nowIso);
+
+  upsertRateLimitEntry: async (
+    rateKey: string,
+    attemptCount: number,
+    firstFailedAt: number,
+    lockedUntil: number
+  ): Promise<void> => {
+    try {
+      const pool = getPool();
+      const now = Date.now();
+      await pool.query(
+        `INSERT INTO auth_rate_limits (rate_key, attempt_count, first_failed_at, locked_until, updated_at)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (rate_key) DO UPDATE SET
+           attempt_count = EXCLUDED.attempt_count,
+           first_failed_at = EXCLUDED.first_failed_at,
+           locked_until = EXCLUDED.locked_until,
+           updated_at = EXCLUDED.updated_at`,
+        [rateKey, attemptCount, firstFailedAt, lockedUntil, now]
+      );
+    } catch (e) {
+      console.warn('[PG] Gagal mengupdate rate limit entry:', e);
+    }
   },
-  deleteRateLimitEntry: (rateKey: string): void => {
-    const db = getDb();
-    db.prepare('DELETE FROM auth_rate_limits WHERE rate_key = ?').run(rateKey);
+
+  deleteRateLimitEntry: async (rateKey: string): Promise<void> => {
+    try {
+      const pool = getPool();
+      await pool.query('DELETE FROM auth_rate_limits WHERE rate_key = $1', [rateKey]);
+    } catch (e) {
+      console.warn('[PG] Gagal menghapus rate limit entry:', e);
+    }
   },
 };

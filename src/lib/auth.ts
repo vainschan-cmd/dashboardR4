@@ -222,7 +222,7 @@ export async function resolveSessionToken(
     return null;
   }
 
-  const record = dbQueries.getAuthSession(payload.jti);
+  const record = await dbQueries.getAuthSession(payload.jti);
   if (!record || record.revoked_at !== null) {
     return null;
   }
@@ -235,7 +235,7 @@ export async function resolveSessionToken(
     return null;
   }
 
-  const user = dbQueries.getUserById(payload.sub);
+  const user = await dbQueries.getUserById(payload.sub);
   if (!user || !user.active) {
     return null;
   }
@@ -249,10 +249,10 @@ export async function resolveSessionToken(
   // stolen token would otherwise stay usable until `exp`. Enforce the same idle
   // window here so an abandoned session dies on the server too.
   const lastSeen = Number(record.last_seen_at ?? payload.iat ?? 0);
-  const idleWindowSec = Math.max(60, Math.floor(getIdleTimeoutSeconds()));
+  const idleWindowSec = Math.max(60, Math.floor(await getIdleTimeoutSeconds()));
   if (lastSeen > 0 && nowSec - lastSeen > idleWindowSec) {
     try {
-      dbQueries.revokeAuthSession(payload.jti, 'idle_timeout');
+      await dbQueries.revokeAuthSession(payload.jti, 'idle_timeout');
     } catch {
       // revocation is best-effort; the request is rejected regardless
     }
@@ -262,7 +262,7 @@ export async function resolveSessionToken(
   // Avoid a write on every request: refresh last_seen at most once per minute.
   if (nowSec - lastSeen >= 60) {
     try {
-      dbQueries.touchAuthSession(payload.jti);
+      await dbQueries.touchAuthSession(payload.jti);
     } catch {
       // last_seen update is best-effort only
     }
@@ -275,10 +275,11 @@ export async function resolveSessionToken(
  * Idle window in seconds, taken from the administered session policy so the
  * server and the client countdown agree.
  */
-export function getIdleTimeoutSeconds(): number {
+export async function getIdleTimeoutSeconds(): Promise<number> {
   let timeoutMinutes = 30;
   try {
-    timeoutMinutes = dbQueries.getSystemParameters().session_timeout_minutes || 30;
+    const params = await dbQueries.getSystemParameters();
+    timeoutMinutes = params.session_timeout_minutes || 30;
   } catch {
     // fall back to the default when the settings table is not readable yet
   }
@@ -310,7 +311,7 @@ export async function issueAccessCookie(
   const accessPayload = await verifyJwtToken(accessToken);
 
   if (accessPayload) {
-    dbQueries.createAuthSession({
+    await dbQueries.createAuthSession({
       jti: accessPayload.jti,
       userId: user.id,
       tokenType: 'access',
@@ -353,7 +354,7 @@ export async function issueSessionCookies(
   const refreshPayload = await verifyJwtToken(refreshToken);
 
   if (refreshPayload) {
-    dbQueries.createAuthSession({
+    await dbQueries.createAuthSession({
       jti: refreshPayload.jti,
       userId: user.id,
       tokenType: 'refresh',
@@ -471,10 +472,18 @@ export function getClientIp(req: NextRequest | Request): string {
   return '127.0.0.1';
 }
 
-// --- Brute-Force Protection (Persistent Shared SQLite WAL Rate Limiter) ---
+// --- Brute-Force Protection (In-Memory Rate Limiter) ---
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
 const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 menit
+
+interface RateLimitMemoryEntry {
+  count: number;
+  firstFailedAt: number;
+  lockedUntil: number;
+}
+
+const loginAttemptsMap = new Map<string, RateLimitMemoryEntry>();
 
 function getRateLimitKey(ip: string, nipp: string): string {
   return `${ip.trim().toLowerCase()}::${nipp.trim().toLowerCase()}`;
@@ -487,7 +496,7 @@ function getIpRateLimitKey(ip: string): string {
 
 const LOGIN_IP_MAX_ATTEMPTS = 20;
 
-interface RateLimitResult {
+export interface RateLimitResult {
   allowed: boolean;
   retryAfterSeconds: number;
   remainingAttempts: number;
@@ -495,23 +504,23 @@ interface RateLimitResult {
 
 function evaluateRateLimit(key: string, maxAttempts: number): RateLimitResult {
   const now = Date.now();
-  const entry = dbQueries.getRateLimitEntry(key);
+  const entry = loginAttemptsMap.get(key);
 
   if (!entry) {
     return { allowed: true, retryAfterSeconds: 0, remainingAttempts: maxAttempts };
   }
 
-  if (entry.locked_until > now) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((entry.locked_until - now) / 1000));
+  if (entry.lockedUntil > now) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((entry.lockedUntil - now) / 1000));
     return { allowed: false, retryAfterSeconds, remainingAttempts: 0 };
   }
 
-  if (now - entry.first_failed_at > LOGIN_WINDOW_MS) {
-    dbQueries.deleteRateLimitEntry(key);
+  if (now - entry.firstFailedAt > LOGIN_WINDOW_MS) {
+    loginAttemptsMap.delete(key);
     return { allowed: true, retryAfterSeconds: 0, remainingAttempts: maxAttempts };
   }
 
-  const remaining = Math.max(0, maxAttempts - entry.attempt_count);
+  const remaining = Math.max(0, maxAttempts - entry.count);
   return { allowed: true, retryAfterSeconds: 0, remainingAttempts: remaining };
 }
 
@@ -534,16 +543,16 @@ export function checkLoginRateLimit(ip: string, nipp: string): RateLimitResult {
 
 function bumpRateLimit(key: string, maxAttempts: number): void {
   const now = Date.now();
-  const existing = dbQueries.getRateLimitEntry(key);
+  const existing = loginAttemptsMap.get(key);
 
-  if (!existing || now - existing.first_failed_at > LOGIN_WINDOW_MS) {
-    dbQueries.upsertRateLimitEntry(key, 1, now, 0);
+  if (!existing || now - existing.firstFailedAt > LOGIN_WINDOW_MS) {
+    loginAttemptsMap.set(key, { count: 1, firstFailedAt: now, lockedUntil: 0 });
     return;
   }
 
-  const nextCount = existing.attempt_count + 1;
+  const nextCount = existing.count + 1;
   const lockedUntil = nextCount >= maxAttempts ? now + LOGIN_LOCKOUT_MS : 0;
-  dbQueries.upsertRateLimitEntry(key, nextCount, existing.first_failed_at, lockedUntil);
+  loginAttemptsMap.set(key, { ...existing, count: nextCount, lockedUntil });
 }
 
 export function recordLoginFailure(ip: string, nipp: string): void {
@@ -552,7 +561,7 @@ export function recordLoginFailure(ip: string, nipp: string): void {
 }
 
 export function resetLoginRateLimit(ip: string, nipp: string): void {
-  dbQueries.deleteRateLimitEntry(getRateLimitKey(ip, nipp));
+  loginAttemptsMap.delete(getRateLimitKey(ip, nipp));
   // The IP bucket is intentionally NOT reset on success: it limits spraying across accounts.
 }
 

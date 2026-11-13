@@ -228,10 +228,10 @@ const NIPP_PATTERN = /^[0-9]{4,20}$/;
  * - The importing account itself may not be changed, which would otherwise let an
  *   actor rewrite their own role or NIPP through an upload.
  */
-export function importUsersFromSpreadsheet(
+export async function importUsersFromSpreadsheet(
   customInput?: string | Buffer,
   options: ImportUserOptions = {}
-): ImportUserResult {
+): Promise<ImportUserResult> {
 
   let wb: xlsx.WorkBook;
   let sourcePath = '';
@@ -359,7 +359,7 @@ export function importUsersFromSpreadsheet(
       }
     }
 
-    const existing = dbQueries.getUserByNipp(nipp);
+    const existing = await dbQueries.getUserByNipp(nipp);
     if (existing) {
       // A file must not be able to rewrite a Super Admin account (demote it, rename
       // it, or deactivate it) on behalf of a lesser administrator.
@@ -371,7 +371,7 @@ export function importUsersFromSpreadsheet(
         continue;
       }
 
-      dbQueries.updateUser(existing.id, {
+      await dbQueries.updateUser(existing.id, {
         name,
         nipp,
         divisi,
@@ -383,7 +383,7 @@ export function importUsersFromSpreadsheet(
       });
       updatedCount++;
     } else {
-      dbQueries.createUser({
+      await dbQueries.createUser({
         nipp,
         name,
         divisi,
@@ -399,7 +399,7 @@ export function importUsersFromSpreadsheet(
     }
   }
 
-  const allUsers: User[] = dbQueries.getUsers();
+  const allUsers: User[] = await dbQueries.getUsers();
   exportUsersToSpreadsheet(allUsers);
 
   return {

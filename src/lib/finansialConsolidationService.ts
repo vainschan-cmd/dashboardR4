@@ -1,5 +1,4 @@
 import { query } from '@/lib/db/sqliteQuery';
-import { ingestInputData } from '@/lib/ingestInputData';
 import { getCanonicalBranchCode } from '@/lib/constants';
 import {
   ENTITAS_SEMUA,
@@ -101,7 +100,7 @@ export const FINANSIAL_CONSOLIDATION_CTE_SQL = `
 export async function ensureModuleFinansialPopulated(): Promise<void> {
   const res = await query<{ count: number }>('SELECT COUNT(*)::int AS count FROM v_module_finansial_entitas');
   if (Number(res.rows[0]?.count || 0) === 0) {
-    await ingestInputData();
+    console.warn('[finansialConsolidation] v_module_finansial_entitas kosong di database PostgreSQL ed_dashboard.');
   }
 }
 

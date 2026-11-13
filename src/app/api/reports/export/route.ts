@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const records = dbQueries.getMonthlyRecords({
+    const records = await dbQueries.getMonthlyRecords({
       branch_id,
       department_id,
       month,
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     const periodStr = month && year ? `_${year}_${month}` : year ? `_${year}` : '';
     const filename = `Laporan_Eksekutif_Kinerja_Pelabuhan${periodStr}.xlsx`;
 
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

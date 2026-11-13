@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const branch_id = enforceBranchFilterForRead(auth.session, rawBranch);
     const department_id = enforceDepartmentFilterForRead(auth.session, rawDept);
 
-    const pendingRecords = dbQueries.getMonthlyRecords({
+    const pendingRecords = await dbQueries.getMonthlyRecords({
       branch_id,
       department_id,
       month,
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       verification_status: 'pending_verification',
     });
 
-    const revisionRecords = dbQueries.getMonthlyRecords({
+    const revisionRecords = await dbQueries.getMonthlyRecords({
       branch_id,
       department_id,
       month,
@@ -39,15 +39,15 @@ export async function GET(req: NextRequest) {
       verification_status: 'revision_needed',
     });
 
-    const allBranches = dbQueries.getBranches();
+    const allBranches = await dbQueries.getBranches();
     const branches = branch_id
       ? allBranches.filter(b => b.id === branch_id || b.code.toUpperCase() === branch_id.toUpperCase())
       : allBranches;
-    const allDepartments = dbQueries.getDepartments();
+    const allDepartments = await dbQueries.getDepartments();
     const departments = department_id
       ? allDepartments.filter(d => d.id === department_id)
       : allDepartments;
-    const allRecords = dbQueries.getMonthlyRecords({ branch_id, department_id, month, year });
+    const allRecords = await dbQueries.getMonthlyRecords({ branch_id, department_id, month, year });
 
     const matrix = branches.map(b => {
       const deptStatuses = departments.map(d => {
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
     const { recordIds, status, revisionNotes } = parsed.data;
 
     // Four-Eyes Principle: Prevent self-approval of records uploaded by the same user
-    const targetRecords = dbQueries.getMonthlyRecordsByIds(recordIds);
+    const targetRecords = await dbQueries.getMonthlyRecordsByIds(recordIds);
 
     // Every requested ID must exist: reject partially-valid batches atomically.
     if (targetRecords.length !== new Set(recordIds).size) {
@@ -197,10 +197,10 @@ export async function POST(req: NextRequest) {
     // the uploader on the monthly record *or* on any of the module rows that
     // belong to it. Checking only the parent record let a manual-input user
     // approve module rows they had written themselves.
-    const moduleUploaders = dbQueries.getModuleUploadersByRecordIds(recordIds);
+    const moduleUploaders = await dbQueries.getModuleUploadersByRecordIds(recordIds);
     const uploaderValues = [
       ...targetRecords.map((record) => record.uploaded_by),
-      ...moduleUploaders,
+      ...Object.values(moduleUploaders),
     ];
     const separation = checkSeparationOfDuties(
       { nipp: auth.session.nipp, name: auth.session.name, sub: auth.session.sub },
@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    dbQueries.updateRecordVerification(
+    await dbQueries.updateRecordVerification(
       recordIds,
       status,
       auth.session.nipp,
@@ -231,7 +231,7 @@ export async function POST(req: NextRequest) {
     const action = status === 'verified' ? 'APPROVE' : 'REVISE';
     const statusLabel = status === 'verified' ? 'Terverifikasi (Disetujui Resmi)' : 'Perlu Revisi';
 
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

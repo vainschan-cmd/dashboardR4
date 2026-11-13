@@ -82,7 +82,7 @@ export async function fetchGoogleSheetData(
   }
 
   const { spreadsheetId, sheetName: validSheetName, range: validRange } = targetValidation;
-  const storedCreds = dbQueries.getIntegrationCredentials();
+  const storedCreds = await dbQueries.getIntegrationCredentials();
   const apiKey = process.env.GOOGLE_SHEETS_API_KEY?.trim() || storedCreds.google_api_key?.trim() || '';
 
   // If real API key is configured, perform real Google Sheets API v4 fetch with timeout

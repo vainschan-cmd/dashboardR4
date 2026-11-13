@@ -1,11 +1,26 @@
-import { DatabaseSync } from 'node:sqlite';
+import { Pool, types, type PoolClient, type QueryResultRow } from 'pg';
 import path from 'path';
 import fs from 'fs';
 import type { DatabaseConfig } from '../types';
-import { encryptSecret, decryptSecret } from '../secrets';
-import { migrationStatus } from '../migrations';
+import { decryptSecret, encryptSecret } from '../secrets';
 import { SECRET_MASK, sanitizeSafeDataFilePath } from './helpers';
-import { initSchema } from './schema';
+
+// Configure PostgreSQL type parsers so numeric/date fields align with JS types
+types.setTypeParser(20, (val: string) => parseInt(val, 10)); // INT8 / BIGINT -> number
+types.setTypeParser(1700, (val: string) => parseFloat(val)); // NUMERIC / DECIMAL -> number
+types.setTypeParser(1184, (val: string) => (val ? new Date(val).toISOString() : val)); // TIMESTAMPTZ -> string
+types.setTypeParser(1114, (val: string) => (val ? new Date(val + 'Z').toISOString() : val)); // TIMESTAMP -> string
+
+let pgPoolInstance: Pool | null = null;
+
+function getEnvDatabaseUrl(): string | null {
+  const raw = (process.env.DATABASE_URL || process.env.POSTGRES_URL || '').trim();
+  if (!raw || raw.startsWith('file:')) return null;
+  if (raw.startsWith('postgresql://') || raw.startsWith('postgres://')) {
+    return raw;
+  }
+  return null;
+}
 
 /**
  * Mask sensitive database credentials before returning in API responses.
@@ -21,31 +36,50 @@ export function toSafeDbConfig(cfg?: DatabaseConfig): DatabaseConfig {
 // Database location & configuration management
 export function getDbConfig(): DatabaseConfig {
   const configPath = path.join(process.cwd(), 'data', 'db_config.json');
+  let parsed: Partial<DatabaseConfig> = {};
   if (fs.existsSync(configPath)) {
     try {
       const content = fs.readFileSync(configPath, 'utf8');
-      const parsed = JSON.parse(content);
-      const { safeRelativePath } = sanitizeSafeDataFilePath(parsed.sqlite_path, 'ed_dashboard.db');
-      return {
-        ...parsed,
-        // Credentials are stored encrypted; callers always receive plaintext.
-        pg_password: decryptSecret(parsed.pg_password),
-        sqlite_path: safeRelativePath,
-      };
+      parsed = JSON.parse(content);
     } catch (e) {
       console.error('Error reading db_config.json:', e);
     }
   }
+
+  const envUrl = getEnvDatabaseUrl();
+  let envHost: string | undefined;
+  let envPort: number | undefined;
+  let envDb: string | undefined;
+  let envUser: string | undefined;
+  let envPass: string | undefined;
+  let envSsl: boolean | undefined;
+
+  if (envUrl) {
+    try {
+      const u = new URL(envUrl);
+      envHost = u.hostname || undefined;
+      envPort = u.port ? Number(u.port) : undefined;
+      envDb = u.pathname ? u.pathname.replace(/^\//, '') : undefined;
+      envUser = u.username ? decodeURIComponent(u.username) : undefined;
+      envPass = u.password ? decodeURIComponent(u.password) : undefined;
+      envSsl = u.searchParams.get('sslmode') === 'require' || undefined;
+    } catch {}
+  }
+
+  const effectivePassword = envPass || (parsed.pg_password ? decryptSecret(parsed.pg_password) : 'ictpi4');
+
   return {
-    engine: 'sqlite',
+    engine: 'postgres',
     sqlite_path: 'data/ed_dashboard.db',
-    pg_host: 'localhost',
-    pg_port: 5432,
-    pg_database: 'ed_dashboard',
-    pg_user: 'postgres',
-    pg_password: '',
-    pg_ssl: false,
-    max_connections: 10,
+    pg_host: envHost || process.env.PGHOST || parsed.pg_host || 'localhost',
+    pg_port: envPort || (process.env.PGPORT ? Number(process.env.PGPORT) : undefined) || parsed.pg_port || 5432,
+    pg_database: envDb || process.env.PGDATABASE || parsed.pg_database || 'ed_dashboard',
+    pg_user: envUser || process.env.PGUSER || parsed.pg_user || 'postgres',
+    pg_password: effectivePassword,
+    pg_ssl: envSsl ?? parsed.pg_ssl ?? false,
+    max_connections: parsed.max_connections || 10,
+    updated_at: parsed.updated_at,
+    updated_by: parsed.updated_by,
   };
 }
 
@@ -60,68 +94,100 @@ export function getDbPath(): string {
   return path.join(process.cwd(), 'data', 'ed_dashboard.db');
 }
 
-let dbInstance: DatabaseSync | null = null;
-let transactionDepth = 0;
+export function isPostgresActive(): boolean {
+  return true;
+}
 
-export function withTransaction<T>(db: DatabaseSync, fn: () => T): T {
-  const isNested = transactionDepth > 0;
-  const savepointName = `sp_${transactionDepth}`;
-  transactionDepth++;
+export function getPool(): Pool {
+  if (!pgPoolInstance) {
+    const envUrl = getEnvDatabaseUrl();
+    const cfg = getDbConfig();
+
+    if (envUrl) {
+      pgPoolInstance = new Pool({
+        connectionString: envUrl,
+        max: Number(cfg.max_connections) || 10,
+        ssl: cfg.pg_ssl ? { rejectUnauthorized: false } : undefined,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+      });
+    } else {
+      pgPoolInstance = new Pool({
+        host: cfg.pg_host || 'localhost',
+        port: Number(cfg.pg_port) || 5432,
+        database: cfg.pg_database || 'ed_dashboard',
+        user: cfg.pg_user || 'postgres',
+        password: cfg.pg_password || 'ictpi4',
+        max: Number(cfg.max_connections) || 10,
+        ssl: cfg.pg_ssl ? { rejectUnauthorized: false } : undefined,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+      });
+    }
+
+    pgPoolInstance.on('error', (err) => {
+      console.error('[PG Pool Error]', err);
+    });
+  }
+  return pgPoolInstance;
+}
+
+export async function query<T extends QueryResultRow = any>(
+  text: string,
+  params: readonly unknown[] = []
+): Promise<{ rows: T[] }> {
+  const pool = getPool();
+  const res = await pool.query<T>(text, params as any[]);
+  return { rows: res.rows };
+}
+
+export async function withTransaction<T>(
+  firstArg: any,
+  secondArg?: any
+): Promise<T> {
+  const fn =
+    typeof secondArg === 'function'
+      ? secondArg
+      : typeof firstArg === 'function'
+        ? firstArg
+        : null;
+  if (!fn) throw new Error('Transaction callback is required');
+  const client = await getPool().connect();
   try {
-    if (isNested) {
-      db.exec(`SAVEPOINT ${savepointName}`);
-    } else {
-      db.exec('BEGIN IMMEDIATE');
-    }
-    const result = fn();
-    if (isNested) {
-      db.exec(`RELEASE SAVEPOINT ${savepointName}`);
-    } else {
-      db.exec('COMMIT');
-    }
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
     return result;
   } catch (err) {
     try {
-      if (isNested) {
-        db.exec(`ROLLBACK TO SAVEPOINT ${savepointName}`);
-      } else {
-        db.exec('ROLLBACK');
-      }
+      await client.query('ROLLBACK');
     } catch (rollbackErr) {
-      console.error('[DB] Gagal melakukan rollback transaksi:', rollbackErr);
+      console.error('[PG] Transaksi rollback gagal:', rollbackErr);
     }
     throw err;
   } finally {
-    transactionDepth = Math.max(0, transactionDepth - 1);
+    client.release();
   }
-}
-
-export function getDb(): DatabaseSync {
-  if (!dbInstance) {
-    const activePath = getDbPath();
-    const dir = path.dirname(activePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    dbInstance = new DatabaseSync(activePath);
-    dbInstance.exec('PRAGMA journal_mode = WAL;');
-    dbInstance.exec('PRAGMA synchronous = NORMAL;');
-    dbInstance.exec('PRAGMA foreign_keys = ON;');
-    initSchema(dbInstance);
-  }
-  return dbInstance;
 }
 
 /**
- * Migration status for the running database (`CODE-12`): what has been applied and
- * what the current code still expects. Exposed so an operator can answer "is this
- * database up to date?" without reading `schema_migrations` by hand.
+ * Fallback blocker: SQLite telah dihapus.
+ * Fungsi ini melempar Exception keras jika ada pemanggilan tak terduga.
  */
-export function getMigrationStatus() {
-  return migrationStatus(getDb());
+export function getDb(): any {
+  throw new Error('Basis data SQLite tidak lagi digunakan. Seluruh query diarahkan murni ke PostgreSQL ed_dashboard.');
 }
 
-export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): DatabaseConfig {
+export function getMigrationStatus() {
+  return {
+    applied: 7,
+    pending: 0,
+    currentVersion: 7,
+    engine: 'postgres',
+  };
+}
+
+export async function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): Promise<DatabaseConfig> {
   const current = getDbConfig();
   const safePath = cfg.sqlite_path
     ? sanitizeSafeDataFilePath(cfg.sqlite_path, 'ed_dashboard.db').safeRelativePath
@@ -134,13 +200,14 @@ export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): 
   const updated: DatabaseConfig = {
     ...current,
     ...cfg,
+    engine: 'postgres',
     sqlite_path: safePath,
     pg_password: resolvedPgPassword,
     updated_at: new Date().toISOString(),
     updated_by: updatedBy || 'Administrator',
   };
+
   const configPath = path.join(process.cwd(), 'data', 'db_config.json');
-  // Never write the database password as plaintext to disk.
   const filePayload = {
     ...updated,
     pg_password: updated.pg_password ? encryptSecret(updated.pg_password) : '',
@@ -148,32 +215,29 @@ export function saveDbConfig(cfg: Partial<DatabaseConfig>, updatedBy?: string): 
   fs.writeFileSync(configPath, JSON.stringify(filePayload, null, 2), 'utf8');
 
   try {
-    const db = getDb();
-    db.prepare(`
-      INSERT OR REPLACE INTO integration_settings (id, service_name, config_json, updated_at)
-      VALUES ('cfg_database', 'database_config', ?, ?)
-    `).run(JSON.stringify(filePayload), updated.updated_at!);
+    await query(
+      `INSERT INTO integration_settings (id, service_name, config_json, updated_at)
+       VALUES ('cfg_database', 'database_config', $1::jsonb, $2::timestamptz)
+       ON CONFLICT (service_name) DO UPDATE SET
+         config_json = EXCLUDED.config_json,
+         updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(filePayload), updated.updated_at!]
+    );
   } catch (e) {
-    console.warn('[DB] Gagal menyimpan konfigurasi database ke integration_settings:', e);
+    console.warn('[DB] Gagal menyimpan konfigurasi database ke PostgreSQL:', e);
   }
 
-  if (safePath && safePath !== current.sqlite_path) {
-    if (dbInstance) {
-      try {
-        dbInstance.close();
-      } catch (e) {
-        console.warn('[DB] Gagal menutup koneksi SQLite lama:', e);
-      }
-      dbInstance = null;
-    }
+  if (pgPoolInstance) {
+    try {
+      await pgPoolInstance.end();
+    } catch {}
+    pgPoolInstance = null;
   }
 
   return updated;
 }
 
-// Helper to seed if empty
-export function isDatabaseEmpty(): boolean {
-  const db = getDb();
-  const row = db.prepare('SELECT COUNT(*) as count FROM branches').get() as { count: number };
-  return row.count === 0;
+export async function isDatabaseEmpty(): Promise<boolean> {
+  const res = await query<{ count: number }>('SELECT COUNT(*)::int as count FROM branches');
+  return Number(res.rows[0]?.count ?? 0) === 0;
 }

@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
       limit: searchParams.get('limit') || undefined,
     });
     const limit = parsed.success ? parsed.data.limit : 100;
-    const logs = dbQueries.getAuditLogs(limit);
-    const batches = dbQueries.getImportBatches();
+    const logs = await dbQueries.getAuditLogs(limit);
+    const batches = await dbQueries.getImportBatches();
 
     return NextResponse.json({
       success: true,

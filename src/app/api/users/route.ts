@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const users = dbQueries.getUsers().map(toSafeUser);
+    const users = (await dbQueries.getUsers()).map(toSafeUser);
     const filePath = getMasterUserSpreadsheetPath();
     const exists = fs.existsSync(filePath);
 
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if NIPP already exists
-    const existing = dbQueries.getUserByNipp(cleanNipp);
+    const existing = await dbQueries.getUserByNipp(cleanNipp);
     if (existing) {
       return NextResponse.json(
         {
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       isPublicSelfRegistration: !canManageUsers,
     });
 
-    const newUser = dbQueries.createUser({
+    const newUser = await dbQueries.createUser({
       name: String(name).trim(),
       nipp: cleanNipp,
       divisi: String(divisi).trim(),
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     const clientIp = getClientIp(req);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: session?.sub || safeUser.id,
         user_name: session?.name || safeUser.name,
         user_role: session?.role || safeUser.role,
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!session && allowPublicRegistration) {
-      const systemParams = dbQueries.getSystemParameters();
+      const systemParams = await dbQueries.getSystemParameters();
       await issueSessionCookies(
         response,
         safeUser,
@@ -227,7 +227,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const existingUser = dbQueries.getUserById(id);
+    const existingUser = await dbQueries.getUserById(id);
     if (!existingUser) {
       return NextResponse.json(
         { success: false, error: 'User PIC tidak ditemukan.' },
@@ -248,7 +248,7 @@ export async function PUT(req: NextRequest) {
     // If NIPP is changed, verify it doesn't conflict with another user
     if (nipp) {
       const cleanNipp = String(nipp).trim();
-      const existingByNipp = dbQueries.getUserByNipp(cleanNipp);
+      const existingByNipp = await dbQueries.getUserByNipp(cleanNipp);
       if (existingByNipp && existingByNipp.id !== id) {
         return NextResponse.json(
           { success: false, error: `NIPP ${cleanNipp} sudah digunakan oleh ${existingByNipp.name}.` },
@@ -266,7 +266,7 @@ export async function PUT(req: NextRequest) {
       isPublicSelfRegistration: false,
     });
 
-    const updated = dbQueries.updateUser(id, {
+    const updated = await dbQueries.updateUser(id, {
       name: String(name).trim(),
       nipp: nipp ? String(nipp).trim() : undefined,
       divisi: String(divisi).trim(),
@@ -288,7 +288,7 @@ export async function PUT(req: NextRequest) {
     const safeUpdated = toSafeUser(updated);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: auth.session.sub,
         user_name: auth.session.name,
         user_role: auth.session.role,
@@ -335,7 +335,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const targetUser = dbQueries.getUserById(id);
+    const targetUser = await dbQueries.getUserById(id);
     const deleteDecision = authorize(actorOf(auth.session), 'user:delete', {
       targetUser: targetUser ? { id: targetUser.id, role: targetUser.role } : null,
     });
@@ -346,10 +346,10 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    dbQueries.deleteUser(id);
+    await dbQueries.deleteUser(id);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: auth.session.sub,
         user_name: auth.session.name,
         user_role: auth.session.role,

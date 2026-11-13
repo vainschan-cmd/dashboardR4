@@ -51,12 +51,12 @@ export async function GET(req: NextRequest) {
       verification_status,
     };
 
-    const records = dbQueries.getMonthlyRecords({
+    const records = await dbQueries.getMonthlyRecords({
       ...filters,
       limit: parsed.data.limit,
       offset: parsed.data.offset,
     });
-    const total = dbQueries.countMonthlyRecords(filters);
+    const total = await dbQueries.countMonthlyRecords(filters);
 
     return NextResponse.json({
       success: true,

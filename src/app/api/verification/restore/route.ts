@@ -1,24 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
-import { dbQueries, getDb } from '@/lib/db';
+import { dbQueries, query } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
 import { parseWithSchema, restoreSnapshotSchema } from '@/lib/validation';
-import { restoreVerifiedSnapshot, type SnapshotTable } from '@/lib/lineage';
+import { SNAPSHOT_TABLES } from '@/lib/lineage';
 import { logError } from '@/lib/logger';
+
+const ALLOWED_TABLES = new Set<string>(SNAPSHOT_TABLES);
 
 /**
  * POST /api/verification/restore
  *
- * Reverts one module row to the values that were last approved (`DATA-05`).
- *
- * The snapshot exists because editing a verified row stores its approved values
- * before overwriting them. Without a way to restore, that copy is write-only: it
- * records what was approved but cannot be brought back, so a mistaken overwrite of
- * an official figure is unrecoverable.
- *
- * Deliberately explicit rather than automatic. An approver may genuinely prefer
- * the newly submitted numbers, so silently reverting would discard a correction.
- * Every restore is audited with the actor's NIPP.
+ * Memulihkan baris modul ke nilai snapshot yang terakhir diverifikasi (DATA-05)
+ * langsung di database PostgreSQL ed_dashboard.
  */
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'verification:approve' });
@@ -33,12 +27,18 @@ export async function POST(req: NextRequest) {
 
     const { table, id } = parsed.data;
 
-    // The row must be inside the actor's branch scope; a snapshot restore rewrites
-    // official figures, so it is a write for scoping purposes.
-    const db = getDb();
-    const scopeRow = db
-      .prepare(`SELECT branch_code FROM ${table} WHERE id = ?`)
-      .get(id) as { branch_code: string | null } | undefined;
+    if (!ALLOWED_TABLES.has(table)) {
+      return NextResponse.json(
+        { success: false, error: `Tabel ${table} tidak didukung untuk pemulihan snapshot.` },
+        { status: 400 }
+      );
+    }
+
+    const scopeRes = await query<Record<string, unknown>>(
+      `SELECT * FROM ${table} WHERE id = $1`,
+      [id]
+    );
+    const scopeRow = scopeRes.rows[0];
 
     if (!scopeRow) {
       return NextResponse.json(
@@ -58,20 +58,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = restoreVerifiedSnapshot(db, {
-      table: table as SnapshotTable,
-      id,
-      actorNipp: auth.session.nipp,
-    });
-
-    if (!result.restored) {
+    const rawSnapshot = scopeRow.verified_snapshot_json;
+    if (!rawSnapshot) {
       return NextResponse.json(
-        { success: false, error: result.reason ?? 'Snapshot tidak dapat dipulihkan.' },
+        { success: false, error: 'Baris ini tidak memiliki snapshot terverifikasi yang dapat dipulihkan.' },
         { status: 409 }
       );
     }
 
-    dbQueries.createAuditLog({
+    let snapshot: Record<string, unknown>;
+    try {
+      snapshot =
+        typeof rawSnapshot === 'string'
+          ? (JSON.parse(rawSnapshot) as Record<string, unknown>)
+          : (rawSnapshot as Record<string, unknown>);
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Snapshot rusak dan tidak dapat dibaca.' },
+        { status: 409 }
+      );
+    }
+
+    const fields = Object.keys(snapshot).filter((key) => key in scopeRow && key !== 'id');
+    if (fields.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Snapshot tidak memuat kolom yang dapat dipulihkan.' },
+        { status: 409 }
+      );
+    }
+
+    const setClauses = fields.map((field, idx) => `"${field}" = $${idx + 1}`).join(', ');
+    const values = fields.map((field) => snapshot[field]);
+    const nextIdx = fields.length + 1;
+
+    await query(
+      `UPDATE ${table}
+       SET ${setClauses},
+           verification_status = 'verified',
+           verified_by = $${nextIdx},
+           verified_at = $${nextIdx + 1},
+           verified_snapshot_json = NULL
+       WHERE id = $${nextIdx + 2}`,
+      [...values, auth.session.nipp, new Date().toISOString(), id]
+    );
+
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,
@@ -80,14 +111,14 @@ export async function POST(req: NextRequest) {
       entity_id: id,
       details:
         `Memulihkan baris ${id} pada ${table} ke nilai terverifikasi terakhir. ` +
-        `Kolom dipulihkan: ${result.fields.join(', ')}.`,
+        `Kolom dipulihkan: ${fields.join(', ')}.`,
       ip_address: getClientIp(req),
     });
 
     return NextResponse.json({
       success: true,
-      message: `Baris ${id} dipulihkan ke nilai terverifikasi terakhir (${result.fields.length} kolom).`,
-      fields: result.fields,
+      message: `Baris ${id} dipulihkan ke nilai terverifikasi terakhir (${fields.length} kolom).`,
+      fields,
     });
   } catch (error: unknown) {
     logError('api/verification/restore', error, { requestId: req.headers.get('x-request-id') });

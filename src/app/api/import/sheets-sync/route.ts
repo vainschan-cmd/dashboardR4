@@ -79,15 +79,15 @@ export async function POST(req: NextRequest) {
     });
 
     // Update integration config metadata
-    const currentCfg = dbQueries.getGoogleSheetsConfig();
+    const currentCfg = await dbQueries.getGoogleSheetsConfig();
     currentCfg.spreadsheet_id = fetchResult.spreadsheetId;
     currentCfg.sheet_name = targetCheck.sheetName || currentCfg.sheet_name;
     currentCfg.range = targetCheck.range || currentCfg.range;
     currentCfg.last_sync_at = new Date().toISOString();
-    dbQueries.saveGoogleSheetsConfig(currentCfg);
+    await dbQueries.saveGoogleSheetsConfig(currentCfg);
 
     // Audit log using verified server session identity
-    dbQueries.createAuditLog({
+    await dbQueries.createAuditLog({
       user_id: auth.session.sub,
       user_name: auth.session.name,
       user_role: auth.session.role,

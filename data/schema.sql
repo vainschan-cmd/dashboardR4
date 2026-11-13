@@ -341,3 +341,30 @@ CREATE TABLE IF NOT EXISTS module_fasilitas (
 CREATE INDEX IF NOT EXISTS idx_mod_fas_branch_period ON module_fasilitas (branch_code, year, month);
 CREATE INDEX IF NOT EXISTS idx_mod_fas_status ON module_fasilitas (verification_status);
 CREATE INDEX IF NOT EXISTS idx_mod_fas_rec_id ON module_fasilitas (monthly_record_id);
+
+-- 17. Sesi Autentikasi Server-Side
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    jti VARCHAR(128) PRIMARY KEY,
+    user_id VARCHAR(128) NOT NULL,
+    token_type VARCHAR(32) NOT NULL,
+    token_version INTEGER DEFAULT 0,
+    issued_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    revoked_at BIGINT,
+    revoked_reason VARCHAR(64),
+    ip_address VARCHAR(64),
+    user_agent TEXT,
+    last_seen_at BIGINT
+);
+
+-- 18. Rate Limiting Brute Force Protection
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+    rate_key VARCHAR(128) PRIMARY KEY,
+    attempt_count INTEGER DEFAULT 0,
+    first_failed_at BIGINT NOT NULL,
+    locked_until BIGINT DEFAULT 0,
+    updated_at BIGINT NOT NULL
+);
+
+-- 19. View Konsolidasi Finansial Entitas
+CREATE OR REPLACE VIEW v_module_finansial_entitas AS SELECT * FROM module_finansial;

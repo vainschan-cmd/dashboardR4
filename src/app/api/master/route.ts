@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const { session } = auth;
-    const allBranches = dbQueries.getBranches();
+    const allBranches = await dbQueries.getBranches();
     const scopedBranchCode = enforceBranchFilterForRead(session, undefined);
     const branches = scopedBranchCode
       ? allBranches.filter(
@@ -21,36 +21,36 @@ export async function GET(req: NextRequest) {
         )
       : allBranches;
 
-    const allDepartments = dbQueries.getDepartments();
+    const allDepartments = await dbQueries.getDepartments();
     const scopedDeptId = enforceDepartmentFilterForRead(session, undefined);
     const departments = scopedDeptId
       ? allDepartments.filter(d => d.id === scopedDeptId)
       : allDepartments;
 
-    const indicators = dbQueries.getIndicators(scopedDeptId);
-    const equipment = dbQueries.getEquipmentCatalog();
+    const indicators = await dbQueries.getIndicators(scopedDeptId);
+    const equipment = await dbQueries.getEquipmentCatalog();
 
     // Only expose user directory to roles with `users:read` permission
     const canReadUsers = hasPermission(session.role, 'users:read');
-    const users = canReadUsers ? dbQueries.getUsers().map(toSafeUser) : [];
+    const users = canReadUsers ? (await dbQueries.getUsers()).map(toSafeUser) : [];
 
     // Only expose templates to roles with `templates:read` permission
     const canReadTemplates = hasPermission(session.role, 'templates:read');
-    const allTemplates = canReadTemplates ? dbQueries.getTemplates() : [];
+    const allTemplates = canReadTemplates ? await dbQueries.getTemplates() : [];
     const templates = scopedDeptId
       ? allTemplates.filter(t => t.department_id === scopedDeptId)
       : allTemplates;
 
     // Only expose sensitive system/database/integration configs to roles with `system_params:read`
     const canReadSystemParams = hasPermission(session.role, 'system_params:read');
-    const gsheetsConfig = canReadSystemParams ? dbQueries.getGoogleSheetsConfig() : null;
+    const gsheetsConfig = canReadSystemParams ? await dbQueries.getGoogleSheetsConfig() : null;
     const dbConfig = canReadSystemParams ? toSafeDbConfig(dbQueries.getDbConfig()) : null;
     const credentials = canReadSystemParams
-      ? toSafeIntegrationCredentials(dbQueries.getIntegrationCredentials())
+      ? await toSafeIntegrationCredentials(await dbQueries.getIntegrationCredentials())
       : null;
 
     // Non-sensitive session timeout/theme preferences needed by authenticated UI shell
-    const rawSystemParams = dbQueries.getSystemParameters();
+    const rawSystemParams = await dbQueries.getSystemParameters();
     const systemParams = {
       session_timeout_minutes: rawSystemParams.session_timeout_minutes,
       auto_logout_idle: rawSystemParams.auto_logout_idle,

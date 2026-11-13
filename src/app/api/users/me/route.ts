@@ -29,11 +29,11 @@ export async function GET(req: NextRequest) {
         // Reuse detection: a token already consumed by rotation must never work again.
         const rawRefresh = await verifyJwtToken(refreshCookie);
         if (rawRefresh && rawRefresh.type === 'refresh') {
-          const existing = dbQueries.getAuthSession(rawRefresh.jti);
+          const existing = await dbQueries.getAuthSession(rawRefresh.jti);
           if (existing && existing.revoked_at !== null && existing.revoked_reason === 'rotated') {
-            dbQueries.revokeAllUserSessions(rawRefresh.sub, 'refresh_reuse_detected');
+            await dbQueries.revokeAllUserSessions(rawRefresh.sub, 'refresh_reuse_detected');
             try {
-              dbQueries.createAuditLog({
+              await dbQueries.createAuditLog({
                 user_id: rawRefresh.sub,
                 user_name: rawRefresh.name,
                 user_role: rawRefresh.role,
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
     if (shouldRotateCookies) {
       // Rotate: invalidate the consumed refresh token before issuing a new pair.
       if (rotatedFromJti) {
-        dbQueries.revokeAuthSession(rotatedFromJti, 'rotated');
+        await dbQueries.revokeAuthSession(rotatedFromJti, 'rotated');
       }
       await issueSessionCookies(
         response,

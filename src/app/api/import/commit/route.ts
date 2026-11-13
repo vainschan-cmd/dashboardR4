@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = commitValidatedImportRecords({
+    const result = await commitValidatedImportRecords({
       session: auth.session,
       clientIp: getClientIp(req),
       batchId: parsed.data.batchId,

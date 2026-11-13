@@ -10,12 +10,13 @@ export async function GET(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const users = dbQueries.getUsers().map(toSafeUser);
+    const rawUsers = await dbQueries.getUsers();
+    const users = rawUsers.map(toSafeUser);
     const filePath = exportUsersToSpreadsheet(users);
     const fileBuffer = fs.readFileSync(filePath);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: auth.session.sub,
         user_name: auth.session.name,
         user_role: auth.session.role,

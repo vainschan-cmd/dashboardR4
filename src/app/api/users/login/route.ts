@@ -9,6 +9,17 @@ import {
 } from '@/lib/auth';
 import { loginSchema, parseWithSchema } from '@/lib/validation';
 
+function formatDbErrorMessage(err: unknown): string {
+  if (!err) return 'Koneksi database tidak tersedia.';
+  if (err instanceof AggregateError && Array.isArray(err.errors) && err.errors.length > 0) {
+    return err.errors.map((e) => (e instanceof Error ? e.message : String(e))).filter(Boolean).join('; ') || 'connect ECONNREFUSED 127.0.0.1:5432';
+  }
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  return String(err);
+}
+
 export async function POST(req: NextRequest) {
   const clientIp = getClientIp(req);
 
@@ -29,11 +40,11 @@ export async function POST(req: NextRequest) {
 
     const { nipp: inputNipp, password: inputPassword } = parsed.data;
 
-    // 1. Check Brute-Force Rate Limit (Persistent SQLite WAL storage by IP + NIPP)
+    // 1. Check Brute-Force Rate Limit
     const rateLimit = checkLoginRateLimit(clientIp, inputNipp);
     if (!rateLimit.allowed) {
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: inputNipp,
           user_name: inputNipp,
           user_role: 'anonymous',
@@ -62,13 +73,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Authenticate User against scrypt password hash (non-blocking)
-    const user = await dbQueries.authenticateUserAsync(inputNipp, inputPassword);
+    // 2. Authenticate User directly against PostgreSQL users table (fail-closed if PG is down)
+    let user;
+    try {
+      user = await dbQueries.authenticateUserAsync(inputNipp, inputPassword);
+    } catch (dbErr: unknown) {
+      console.error('[POST /api/users/login] Database connection error:', dbErr);
+      const msg = formatDbErrorMessage(dbErr);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Koneksi database PostgreSQL terputus atau tidak tersedia (${msg}). Pastikan server/container PostgreSQL ed_dashboard sedang aktif.`,
+        },
+        { status: 503 }
+      );
+    }
 
     if (!user) {
       recordLoginFailure(clientIp, inputNipp);
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: inputNipp,
           user_name: inputNipp,
           user_role: 'anonymous',
@@ -93,7 +117,7 @@ export async function POST(req: NextRequest) {
 
     if (!user.active) {
       try {
-        dbQueries.createAuditLog({
+        await dbQueries.createAuditLog({
           user_id: user.id,
           user_name: user.name,
           user_role: user.role,
@@ -109,19 +133,17 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         {
-          // Same message/status as invalid credentials to reduce account enumeration.
           success: false,
-          error: 'NIPP atau kata sandi yang Anda masukkan tidak sesuai.',
+          error: 'Akun Anda sedang dinonaktifkan oleh Administrator.',
         },
-        { status: 401 }
+        { status: 403 }
       );
     }
 
     // 3. Reset rate limit & Issue HttpOnly JWT Cookies
     resetLoginRateLimit(clientIp, inputNipp);
-    // Throttled to once per hour; keeps auth_sessions/auth_rate_limits bounded.
     maybeRunAuthHousekeeping();
-    const systemParams = dbQueries.getSystemParameters();
+    const systemParams = await dbQueries.getSystemParameters();
     const safeUser = toSafeUser(user);
 
     const response = NextResponse.json({
@@ -157,7 +179,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Record successful LOGIN in audit_logs
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: safeUser.id,
         user_name: safeUser.name,
         user_role: safeUser.role,

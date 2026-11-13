@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     // Revoke the access token session itself.
     if (session) {
-      dbQueries.revokeAuthSession(session.jti, 'logout');
+      await dbQueries.revokeAuthSession(session.jti, 'logout');
     }
 
     // Also revoke the refresh token presented with this request, so logout is terminal.
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (refreshCookie) {
       const refreshPayload = await resolveSessionToken(refreshCookie, 'refresh');
       if (refreshPayload) {
-        dbQueries.revokeAuthSession(refreshPayload.jti, 'logout');
+        await dbQueries.revokeAuthSession(refreshPayload.jti, 'logout');
       }
     }
 

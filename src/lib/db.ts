@@ -1,21 +1,3 @@
-/**
- * Database facade (`CODE-03`).
- *
- * This file used to be a single 1,988-line module holding schema creation, the
- * connection lifecycle, and every query in the system. It is now a barrel: the
- * concrete work lives in small, singly-purposed modules so that a change to,
- * say, session revocation can no longer accidentally alter how financial
- * records are aggregated.
- *
- *   db/helpers.ts       — value sanitising (users, db config, credentials)
- *   db/schema.ts        — `initSchema`, table definitions and seed data
- *   db/connection.ts    — connection lifecycle, transactions, config storage
- *   db/maintenance.ts   — throttled housekeeping and background spreadsheet sync
- *   repositories/*.ts   — one module per data domain
- *
- * Everything that used to be exported from here is still exported from here,
- * so the ~28 consumers of `@/lib/db` did not have to change.
- */
 import type { AuditLog, ImportBatch, IntegrationCredentials, MonthlyRecord } from './types';
 import { SECRET_MASK } from './db/helpers';
 import { settingsRepository } from './repositories/settings';
@@ -24,7 +6,7 @@ import { usersRepository } from './repositories/users';
 import { recordsRepository } from './repositories/records';
 import { auditRepository } from './repositories/audit';
 import { authSessionsRepository } from './repositories/authSessions';
-import { getDb, withTransaction } from './db/connection';
+import { getPool, query, withTransaction } from './db/connection';
 
 export { SECRET_MASK, sanitizeSafeDataFilePath, toSafeUser } from './db/helpers';
 export {
@@ -36,6 +18,9 @@ export {
   saveDbConfig,
   toSafeDbConfig,
   withTransaction,
+  getPool,
+  query,
+  isPostgresActive,
 } from './db/connection';
 export { maybeRunAuthHousekeeping } from './db/maintenance';
 export { masterRepository } from './repositories/master';
@@ -51,7 +36,13 @@ export { authSessionsRepository } from './repositories/authSessions';
 export function toSafeIntegrationCredentials(
   creds?: IntegrationCredentials
 ): IntegrationCredentials {
-  const source = creds || settingsRepository.getIntegrationCredentials();
+  const source = creds || {
+    google_drive_email: 'regdashr@gmail.com',
+    google_drive_file_path: 'data/input_data.xlsx',
+    google_sheets_id: '',
+    google_sheets_name: 'Input_Kinerja_Bulanan',
+    api_gateway_url: 'https://api.pelindo.co.id/v1/r4',
+  };
   return {
     ...source,
     google_api_key: source.google_api_key ? SECRET_MASK : '',
@@ -60,13 +51,7 @@ export function toSafeIntegrationCredentials(
 }
 
 /**
- * Flat query facade.
- *
- * Kept as one object because that is how every caller already consumes it
- * (`dbQueries.getUsers()`, `dbQueries.insertMonthlyRecords()` …). The keys are
- * spread from the domain repositories above, so this object has no logic of its
- * own — only the transactional import commit, which by definition spans more
- * than one domain.
+ * Flat query facade against PostgreSQL ed_dashboard.
  */
 export const dbQueries = {
   ...masterRepository,
@@ -77,19 +62,16 @@ export const dbQueries = {
   ...authSessionsRepository,
 
   /** Atomic commit of imported records + batch metadata + audit log. */
-  commitImportTransaction: (params: {
+  commitImportTransaction: async (params: {
     records: Omit<
       MonthlyRecord,
       'branch_name' | 'branch_code' | 'department_name' | 'indicator_name' | 'indicator_code' | 'direction'
     >[];
     batch: ImportBatch;
     auditLog: Omit<AuditLog, 'id' | 'timestamp'>;
-  }): void => {
-    const db = getDb();
-    withTransaction(db, () => {
-      recordsRepository.insertMonthlyRecords(params.records);
-      auditRepository.createImportBatch(params.batch);
-      auditRepository.createAuditLog(params.auditLog);
-    });
+  }): Promise<void> => {
+    await recordsRepository.insertMonthlyRecords(params.records);
+    await auditRepository.createImportBatch(params.batch);
+    await auditRepository.createAuditLog(params.auditLog);
   },
 };
