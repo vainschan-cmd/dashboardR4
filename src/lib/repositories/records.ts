@@ -1,6 +1,6 @@
 import type { MonthlyRecord } from '../types';
 import { query, withTransaction } from '../db/connection';
-import { toSafeUser } from '../db/helpers';
+import type { PoolClient } from 'pg';
 
 function toIsoString(val: unknown): string {
   if (!val) return new Date().toISOString();
@@ -29,7 +29,7 @@ export const recordsRepository = {
   }): Promise<MonthlyRecord[]> => {
     try {
       const conditions: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
       let paramIndex = 1;
 
       if (filter.branch_id && filter.branch_id !== 'ALL') {
@@ -97,7 +97,7 @@ export const recordsRepository = {
         ${limitClause}
       `;
 
-      const res = await query(sql, params);
+      const res = await query<Record<string, unknown>>(sql, params);
       return res.rows.map((r) => ({
         ...r,
         month: Number(r.month),
@@ -108,7 +108,7 @@ export const recordsRepository = {
         uploaded_at: toIsoString(r.uploaded_at),
         verified_at: toIsoStringOrNull(r.verified_at),
         is_simulated: Boolean(r.is_simulated),
-      }));
+      })) as MonthlyRecord[];
     } catch {
       return [];
     }
@@ -117,7 +117,7 @@ export const recordsRepository = {
   getMonthlyRecordsByIds: async (recordIds: string[]): Promise<MonthlyRecord[]> => {
     if (!recordIds || recordIds.length === 0) return [];
     try {
-      const res = await query('SELECT * FROM monthly_records WHERE id = ANY($1::varchar[])', [recordIds]);
+      const res = await query<Record<string, unknown>>('SELECT * FROM monthly_records WHERE id = ANY($1::varchar[])', [recordIds]);
       return res.rows.map((r) => ({
         ...r,
         month: Number(r.month),
@@ -128,7 +128,7 @@ export const recordsRepository = {
         uploaded_at: toIsoString(r.uploaded_at),
         verified_at: toIsoStringOrNull(r.verified_at),
         is_simulated: Boolean(r.is_simulated),
-      }));
+      })) as MonthlyRecord[];
     } catch {
       return [];
     }
@@ -144,7 +144,7 @@ export const recordsRepository = {
   }): Promise<number> => {
     try {
       const conditions: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
       let paramIndex = 1;
 
       if (filter.branch_id && filter.branch_id !== 'ALL') {
@@ -226,7 +226,7 @@ export const recordsRepository = {
     if (!recordIds || recordIds.length === 0) return;
     const now = new Date().toISOString();
 
-    await withTransaction(async (client: any) => {
+    await withTransaction(async (client: PoolClient) => {
       await client.query(
         `UPDATE monthly_records
          SET verification_status = $1, verified_by = $2, verified_at = $3::timestamptz, revision_notes = $4
@@ -266,7 +266,7 @@ export const recordsRepository = {
   ): Promise<void> => {
     if (!records || records.length === 0) return;
 
-    await withTransaction(async (client: any) => {
+    await withTransaction(async (client: PoolClient) => {
       const upsertSql = `
         INSERT INTO monthly_records (
           id, branch_id, department_id, indicator_id, month, year,

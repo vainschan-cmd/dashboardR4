@@ -50,7 +50,7 @@ const STATIC_INDICATORS: KPIIndicator[] = [
   { id: 'kpi_bor', code: 'OPS-BOR', name: 'Berth Occupancy Ratio (BOR)', department_id: 'dept_ops', category: 'Fasilitas', unit: '%', direction: 'lower_is_better', default_target: 60.0, is_core_kpi: true, active: true },
 ];
 
-let dynamicTemplates: TemplateConfig[] = [
+const dynamicTemplates: TemplateConfig[] = [
   {
     id: 'tpl_keu_v1',
     department_id: 'dept_keu',

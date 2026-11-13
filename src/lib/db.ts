@@ -6,7 +6,6 @@ import { usersRepository } from './repositories/users';
 import { recordsRepository } from './repositories/records';
 import { auditRepository } from './repositories/audit';
 import { authSessionsRepository } from './repositories/authSessions';
-import { getPool, query, withTransaction } from './db/connection';
 
 export { SECRET_MASK, sanitizeSafeDataFilePath, toSafeUser } from './db/helpers';
 export {

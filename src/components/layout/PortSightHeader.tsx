@@ -139,8 +139,11 @@ export default function PortSightHeader({
 
   const pageHeadings: Record<string, string> = {
     beranda: isAll
-      ? 'Ringkasan Eksekutif Regional 4 (Konsolidasi 28 Cabang)'
-      : `Ringkasan Eksekutif - ${selectedBranchTitle}`,
+      ? 'Summary Eksekutif Regional 4 (Konsolidasi 28 Cabang)'
+      : `Summary Eksekutif - ${selectedBranchTitle}`,
+    isu_strategis: isAll
+      ? 'Dashboard Isu Strategis & Program Prioritas Regional 4'
+      : `Isu Strategis & Program Prioritas - ${selectedBranchTitle}`,
     periode: isAll
       ? 'Data per Periode & Analisis Rentang Waktu (Multi-Modul)'
       : `Data per Periode - ${selectedBranchTitle}`,

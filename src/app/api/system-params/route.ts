@@ -56,7 +56,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-function validateDatabaseTarget(_resolvedAbsolutePath: string): string | null {
+function validateDatabaseTarget(targetPath: string): string | null {
+  if (!targetPath) return 'Jalur database tidak valid.';
   return null;
 }
 

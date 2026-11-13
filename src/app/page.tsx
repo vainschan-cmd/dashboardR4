@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import PortSightHeader from '@/components/layout/PortSightHeader';
 import Sidebar from '@/components/layout/Sidebar';
+import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import LoginScreen from '@/components/auth/LoginScreen';
 import DashboardModuleView from '@/components/dashboard/DashboardModuleView';
 import DashboardOverlays from '@/components/dashboard/DashboardOverlays';
@@ -222,6 +223,13 @@ export default function DashboardHome() {
           </footer>
         </main>
       </div>
+
+      <MobileBottomNav
+        activeTab={filters.activeTab}
+        onSelectTab={filters.setActiveTab}
+        onToggleSidebar={() => setIsMobileMenuOpen((prev) => !prev)}
+        isSidebarOpen={isMobileMenuOpen}
+      />
 
       <DashboardOverlays
         currentUser={currentUser}

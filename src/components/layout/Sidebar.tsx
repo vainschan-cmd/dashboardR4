@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import {
   LayoutDashboard,
+  Target,
   CalendarRange,
   Wallet,
   Ship,
@@ -119,6 +120,7 @@ export default function Sidebar({
   // Mapping icons to main tabs
   const tabIcons: Record<string, React.ElementType> = {
     beranda: LayoutDashboard,
+    isu_strategis: Target,
     periode: CalendarRange,
     keuangan: Wallet,
     opkom: Ship,
@@ -170,7 +172,7 @@ export default function Sidebar({
         <div className="sidebar-brand-header">
           <div
             onClick={() => handleSelect('beranda')}
-            onMouseEnter={(e) => handleMouseEnter(e, 'Beranda Pelindo R4')}
+            onMouseEnter={(e) => handleMouseEnter(e, 'Summary Pelindo R4')}
             onMouseLeave={handleMouseLeave}
             style={{
               cursor: 'pointer',

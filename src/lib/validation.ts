@@ -280,6 +280,42 @@ export const systemParamsPayloadSchema = z.object({
   credentials: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const isuStrategisKategoriEnum = z.enum([
+  'Operasional',
+  'Finansial',
+  'Fasilitas',
+  'Komersial',
+  'HSSE',
+  'SDM',
+]);
+
+export const isuStrategisPrioritasEnum = z.enum(['P0', 'P1', 'P2']);
+
+export const isuStrategisStatusEnum = z.enum([
+  'Open',
+  'On Progress',
+  'Monitoring',
+  'Resolved',
+]);
+
+export const isuStrategisSchema = z.object({
+  kode: z.string().trim().max(64).optional(),
+  cabangCode: z.string().trim().min(2, 'Kode cabang wajib diisi.').max(32),
+  cabangName: z.string().trim().min(2, 'Nama cabang wajib diisi.').max(128),
+  kategori: isuStrategisKategoriEnum,
+  prioritas: isuStrategisPrioritasEnum,
+  status: isuStrategisStatusEnum.default('Open'),
+  judul: z.string().trim().min(5, 'Judul isu minimal 5 karakter.').max(255),
+  akarMasalah: z.string().trim().min(5, 'Akar masalah wajib diisi minimal 5 karakter.').max(2000),
+  tindakLanjut: z.string().trim().min(5, 'Rencana tindak lanjut wajib diisi minimal 5 karakter.').max(2000),
+  pic: z.string().trim().min(2, 'PIC penanggung jawab wajib diisi.').max(128),
+  targetSelesai: z.string().trim().min(3, 'Target waktu selesai wajib diisi.').max(64),
+  progres: z.coerce.number().int().min(0, 'Progres minimal 0%').max(100, 'Progres maksimal 100%').default(0),
+  dampak: z.string().trim().min(5, 'Dampak positif / target capaian wajib diisi.').max(2000),
+});
+
+export const isuStrategisUpdateSchema = isuStrategisSchema.partial();
+
 export function parseWithSchema<T>(
   schema: z.ZodType<T>,
   payload: unknown

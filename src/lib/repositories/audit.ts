@@ -41,10 +41,11 @@ export const auditRepository = {
     try {
       const pool = getPool();
       const res = await pool.query('SELECT * FROM import_batches ORDER BY uploaded_at DESC LIMIT 50');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return res.rows.map((r: any) => ({
         ...r,
         error_log: typeof r.error_log === 'string' && r.error_log ? JSON.parse(r.error_log) : (r.error_log || null),
-      }));
+      })) as ImportBatch[];
     } catch {
       return [];
     }

@@ -43,6 +43,8 @@ const PROTECTED_API_RULES: Array<{
   // Aggregation endpoints introduced by the UI overhaul (ported to SQLite).
   { pattern: /^\/api\/beranda-summary(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
   { pattern: /^\/api\/finansial-summary(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
+  { pattern: /^\/api\/isu-strategis(\/|$)/, methods: ['GET'], permission: 'dashboard:read' },
+  { pattern: /^\/api\/isu-strategis(\/|$)/, methods: ['POST', 'PUT', 'DELETE'], permission: 'manual_input:write' },
 ];
 
 export async function proxy(request: NextRequest) {

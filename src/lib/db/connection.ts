@@ -1,4 +1,4 @@
-import { Pool, types, type PoolClient, type QueryResultRow } from 'pg';
+import { Pool, types, type QueryResultRow } from 'pg';
 import path from 'path';
 import fs from 'fs';
 import type { DatabaseConfig } from '../types';
@@ -132,18 +132,18 @@ export function getPool(): Pool {
   return pgPoolInstance;
 }
 
-export async function query<T extends QueryResultRow = any>(
+export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params: readonly unknown[] = []
 ): Promise<{ rows: T[] }> {
   const pool = getPool();
-  const res = await pool.query<T>(text, params as any[]);
+  const res = await pool.query<T>(text, params as unknown[] as (string | number | boolean | null | undefined)[]);
   return { rows: res.rows };
 }
 
 export async function withTransaction<T>(
-  firstArg: any,
-  secondArg?: any
+  firstArg: unknown,
+  secondArg?: unknown
 ): Promise<T> {
   const fn =
     typeof secondArg === 'function'
@@ -174,6 +174,7 @@ export async function withTransaction<T>(
  * Fallback blocker: SQLite telah dihapus.
  * Fungsi ini melempar Exception keras jika ada pemanggilan tak terduga.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getDb(): any {
   throw new Error('Basis data SQLite tidak lagi digunakan. Seluruh query diarahkan murni ke PostgreSQL ed_dashboard.');
 }

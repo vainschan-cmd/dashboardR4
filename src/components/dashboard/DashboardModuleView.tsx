@@ -18,6 +18,7 @@ import {
   ImportCenter,
   MasterDataView,
   PortSightBeranda,
+  PortSightIsuStrategis,
   PortSightFasilitas,
   PortSightKeuangan,
   PortSightKinerja,
@@ -119,6 +120,17 @@ export default function DashboardModuleView(props: DashboardModuleViewProps) {
           userRole={userRole}
           comparisonMode={comparisonMode}
           onOpenComparisonModal={onOpenComparisonModal}
+        />
+      );
+
+    case 'isu_strategis':
+      return (
+        <PortSightIsuStrategis
+          selectedTerminal={selectedTerminal}
+          selectedPeriod={selectedPeriod}
+          currentUser={currentUser}
+          userRole={userRole}
+          onNavigateTab={onNavigateTab}
         />
       );
 

@@ -10,6 +10,7 @@
 /** Every tab the shell can render. Anything else in `?tab=` is ignored. */
 export const VALID_TABS = [
   'beranda',
+  'isu_strategis',
   'periode',
   'keuangan',
   'opkom',

@@ -15,6 +15,7 @@ import ModuleSkeleton from './ModuleSkeleton';
 const loading = () => <ModuleSkeleton />;
 
 export const PortSightBeranda = dynamic(() => import('@/components/portsight/PortSightBeranda'), { loading });
+export const PortSightIsuStrategis = dynamic(() => import('@/components/portsight/PortSightIsuStrategis'), { loading });
 export const PortSightPeriode = dynamic(() => import('@/components/portsight/PortSightPeriode'), { loading });
 export const PortSightKeuangan = dynamic(() => import('@/components/portsight/PortSightKeuangan'), { loading });
 export const PortSightOpkom = dynamic(() => import('@/components/portsight/PortSightOpkom'), { loading });

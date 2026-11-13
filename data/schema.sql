@@ -368,3 +368,31 @@ CREATE TABLE IF NOT EXISTS auth_rate_limits (
 
 -- 19. View Konsolidasi Finansial Entitas
 CREATE OR REPLACE VIEW v_module_finansial_entitas AS SELECT * FROM module_finansial;
+
+-- 20. Manajemen Isu Strategis & Program Prioritas Regional 4
+CREATE TABLE IF NOT EXISTS isu_strategis (
+    id VARCHAR(64) PRIMARY KEY,
+    kode VARCHAR(64) UNIQUE NOT NULL,
+    cabang_code VARCHAR(32) NOT NULL DEFAULT 'R99',
+    cabang_name VARCHAR(128) NOT NULL,
+    kategori VARCHAR(64) NOT NULL,
+    prioritas VARCHAR(16) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'Open',
+    judul VARCHAR(255) NOT NULL,
+    akar_masalah TEXT NOT NULL,
+    tindak_lanjut TEXT NOT NULL,
+    pic VARCHAR(128) NOT NULL,
+    target_selesai VARCHAR(64) NOT NULL,
+    progres INTEGER NOT NULL DEFAULT 0 CHECK (progres >= 0 AND progres <= 100),
+    dampak TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by VARCHAR(64),
+    updated_by VARCHAR(64)
+);
+
+CREATE INDEX IF NOT EXISTS idx_isu_strategis_cabang ON isu_strategis(cabang_code);
+CREATE INDEX IF NOT EXISTS idx_isu_strategis_prioritas ON isu_strategis(prioritas);
+CREATE INDEX IF NOT EXISTS idx_isu_strategis_status ON isu_strategis(status);
+CREATE INDEX IF NOT EXISTS idx_isu_strategis_kategori ON isu_strategis(kategori);
+

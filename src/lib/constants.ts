@@ -37,7 +37,8 @@ export const OFFICIAL_BRANCHES: OfficialBranch[] = [
 ];
 
 export const MAIN_NAVIGATION_TABS = [
-  { id: 'beranda', label: 'Beranda' },
+  { id: 'beranda', label: 'Summary' },
+  { id: 'isu_strategis', label: 'Isu Strategis' },
   { id: 'periode', label: 'Data per Periode' },
   { id: 'keuangan', label: 'Kinerja Keuangan' },
   { id: 'opkom', label: 'Operasi & Komersial' },
