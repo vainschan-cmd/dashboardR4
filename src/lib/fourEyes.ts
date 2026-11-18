@@ -20,6 +20,8 @@
 export interface ActorIdentity {
   /** Stable employee id. This is the identity that matters. */
   nipp?: string | null;
+  /** Login username when distinct from NIPP. */
+  username?: string | null;
   /** Display name, used only to recognise legacy rows that stored a name. */
   name?: string | null;
   /** Session subject (users.id), for the same purpose. */
@@ -30,7 +32,7 @@ export interface UploaderConflict {
   /** The uploader value that matched the actor. */
   uploader: string;
   /** Which field matched — useful for the audit trail and for support. */
-  matchedOn: 'nipp' | 'name' | 'sub';
+  matchedOn: 'nipp' | 'username' | 'name' | 'sub';
 }
 
 function normalise(value: unknown): string {
@@ -55,6 +57,7 @@ export function findUploaderConflict(
   uploaders: Array<string | null | undefined>
 ): UploaderConflict | null {
   const nipp = normalise(actor.nipp);
+  const username = normalise(actor.username);
   const name = normalise(actor.name);
   const sub = normalise(actor.sub);
 
@@ -65,6 +68,7 @@ export function findUploaderConflict(
     // the value that is actually in the database, not a normalised copy.
     const asStored = String(raw ?? '').trim();
     if (nipp && uploader === nipp) return { uploader: asStored, matchedOn: 'nipp' };
+    if (username && uploader === username) return { uploader: asStored, matchedOn: 'username' };
     if (sub && uploader === sub) return { uploader: asStored, matchedOn: 'sub' };
     if (name && uploader === name) return { uploader: asStored, matchedOn: 'name' };
   }

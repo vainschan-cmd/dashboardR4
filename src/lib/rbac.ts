@@ -254,11 +254,53 @@ export function enforceBranchFilterForRead(
   session: JwtSessionPayload | null,
   requestedBranch?: string | null
 ): string | undefined {
-  if (session && session.role === 'pic_cabang' && session.branch_id && session.branch_id !== 'R99') {
+  if (session && session.role === 'pic_cabang') {
+    if (!session.branch_id || session.branch_id.toUpperCase() === 'R99') {
+      return 'NONE';
+    }
     const resolved = resolveBranchIdentity(session.branch_id);
-    return resolved ? resolved.code : session.branch_id;
+    if (!resolved || resolved.code === 'R99') {
+      return 'NONE';
+    }
+    return resolved.code;
   }
   return requestedBranch || undefined;
+}
+
+export interface SummaryBranchScope {
+  isPicCabang: boolean;
+  picBranchCode: string | null;
+  branchCodes: string[] | undefined;
+}
+
+/**
+ * Shared fail-closed branch scope resolver for summary endpoints
+ * (`/api/beranda-summary`, `/api/finansial-summary`).
+ * Ensures `pic_cabang` with missing or `'R99'` branch never expands to all branches.
+ */
+export function resolveSummaryBranchScope(
+  session: JwtSessionPayload | null,
+  requestedBranch?: string | null
+): SummaryBranchScope {
+  const rawBranch = enforceBranchFilterForRead(session, requestedBranch);
+  const isPicCabang = session?.role === 'pic_cabang';
+  const picBranchCode = isPicCabang
+    ? rawBranch && rawBranch !== 'NONE' && rawBranch !== 'R99'
+      ? rawBranch
+      : '__NONE__'
+    : null;
+
+  const branchCodes =
+    !isPicCabang && rawBranch && rawBranch !== 'ALL'
+      ? rawBranch === 'NONE'
+        ? ['__NONE__']
+        : rawBranch
+            .split(',')
+            .map((code) => code.trim())
+            .filter(Boolean)
+      : undefined;
+
+  return { isPicCabang, picBranchCode, branchCodes };
 }
 
 /**
@@ -389,15 +431,15 @@ export function resolveServerAssignedUserScope(input: {
     return { role: 'pic_dept_regional', branch_id: 'R99', department_id: resolvedDept || 'dept_ops' };
   }
 
-  // pic_cabang: resolve branch against official branches or infer from departemen/divisi text
+  // pic_cabang: resolve branch against operational branches (never R99 regional-wide)
   const directBranch = resolveBranchIdentity(input.branch_id);
-  if (directBranch) {
+  if (directBranch && directBranch.code !== 'R99') {
     return { role: 'pic_cabang', branch_id: directBranch.code, department_id: resolvedDept };
   }
   const inferredBranch = resolveBranchIdentity(`${input.departemen || ''} ${input.divisi || ''}`);
   return {
     role: 'pic_cabang',
-    branch_id: inferredBranch ? inferredBranch.code : 'R01',
+    branch_id: inferredBranch && inferredBranch.code !== 'R99' ? inferredBranch.code : 'R01',
     department_id: resolvedDept,
   };
 }
@@ -421,10 +463,19 @@ export function validateBranchWriteAccess(
 
   const targetResolved = resolveBranchIdentity(targetBranchRaw);
 
-  if (session.role === 'pic_cabang' && session.branch_id && session.branch_id !== 'R99') {
+  if (session.role === 'pic_cabang') {
     const assignedResolved = resolveBranchIdentity(session.branch_id);
-    const assignedCode = assignedResolved ? assignedResolved.code : session.branch_id.toUpperCase();
-    const assignedId = assignedResolved ? assignedResolved.id : session.branch_id;
+    if (!session.branch_id || !assignedResolved || assignedResolved.code === 'R99') {
+      return {
+        allowed: false,
+        canonicalCode: '',
+        branchId: '',
+        error: 'Akses ditolak: akun PIC Cabang wajib memiliki penugasan cabang operasional (bukan R99).',
+      };
+    }
+
+    const assignedCode = assignedResolved.code;
+    const assignedId = assignedResolved.id;
 
     if (!targetResolved) {
       return {

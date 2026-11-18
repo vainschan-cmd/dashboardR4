@@ -3,6 +3,7 @@ import path from 'path';
 import { validateSpreadsheetRows } from '@/lib/validator';
 import { requireAuth, validateDepartmentWriteAccess } from '@/lib/rbac';
 import { readWorkbookSafe, sheetToRowsChecked } from '@/lib/spreadsheet';
+import { readMultipartFormDataBounded, readRequestTextBounded } from '@/lib/httpBodyLimit';
 import {
   MAX_UPLOAD_FILE_BYTES,
   MAX_IMPORT_JSON_BYTES,
@@ -18,7 +19,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const contentType = req.headers.get('content-type') || '';
-    const contentLength = Number(req.headers.get('content-length') || 0);
 
     let rows: Array<Record<string, unknown>> = [];
     let filename = 'spreadsheet.xlsx';
@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
     const uploader = auth.session.nipp || 'pic_user';
 
     if (contentType.includes('multipart/form-data')) {
-      if (contentLength > MAX_UPLOAD_FILE_BYTES + 65536) {
+      const formData = await readMultipartFormDataBounded(req, MAX_UPLOAD_FILE_BYTES + 65536);
+      if (!formData) {
         return NextResponse.json(
           {
             success: false,
@@ -38,7 +39,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const formData = await req.formData();
       const file = formData.get('file') as File | null;
       if (!file) {
         return NextResponse.json(
@@ -98,19 +98,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message, error: message }, { status: 400 });
       }
     } else {
-      if (contentLength > MAX_IMPORT_JSON_BYTES) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: 'Ukuran payload JSON melebihi batas maksimum 2 MB.',
-            error: 'Ukuran payload JSON melebihi batas maksimum 2 MB.',
-          },
-          { status: 413 }
-        );
-      }
-
-      const rawText = await req.text();
-      if (Buffer.byteLength(rawText, 'utf8') > MAX_IMPORT_JSON_BYTES) {
+      const rawText = await readRequestTextBounded(req, MAX_IMPORT_JSON_BYTES);
+      if (rawText === null) {
         return NextResponse.json(
           {
             success: false,

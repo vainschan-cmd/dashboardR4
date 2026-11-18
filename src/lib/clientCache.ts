@@ -9,6 +9,8 @@ export interface CacheEntry<T> {
   staleTimeMs: number;
 }
 
+const MAX_CACHE_ENTRIES = 200;
+
 class ClientCache {
   private cache = new Map<string, CacheEntry<unknown>>();
   private defaultStaleTimeMs = 60_000; // 60 seconds
@@ -35,12 +37,24 @@ class ClientCache {
   }
 
   /**
-   * Put data into cache with a specific or default stale time.
+   * Put data into cache with a specific or default stale time (bounded to MAX_CACHE_ENTRIES).
    */
   set<T>(key: string, data: T, staleTimeMs?: number): void {
+    const now = Date.now();
+    if (!this.cache.has(key) && this.cache.size >= MAX_CACHE_ENTRIES) {
+      for (const [k, entry] of this.cache.entries()) {
+        if (now - entry.timestamp > entry.staleTimeMs) {
+          this.cache.delete(k);
+        }
+      }
+      if (this.cache.size >= MAX_CACHE_ENTRIES) {
+        const oldestKey = this.cache.keys().next().value;
+        if (oldestKey) this.cache.delete(oldestKey);
+      }
+    }
     this.cache.set(key, {
       data,
-      timestamp: Date.now(),
+      timestamp: now,
       staleTimeMs: staleTimeMs ?? this.defaultStaleTimeMs,
     });
   }

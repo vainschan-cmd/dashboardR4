@@ -239,7 +239,7 @@ export const recordsQuerySchema = z.object({
   verification_status: z.string().trim().max(64).optional(),
   // Pagination is mandatory for large tables: unbounded responses were ~650 KB.
   limit: z.coerce.number().int().min(1).max(500).optional().default(200),
-  offset: z.coerce.number().int().min(0).optional().default(0),
+  offset: z.coerce.number().int().min(0).max(50000).optional().default(0),
 });
 
 export const modulesDataQuerySchema = z.object({

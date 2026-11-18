@@ -1,4 +1,5 @@
 import type { UserRole } from './types';
+import { ROLE_RANK } from './roleMapping';
 import { hasPermission, type Permission } from './rbac';
 
 /**
@@ -236,19 +237,46 @@ export function authorize(
         'Gunakan formulir ubah kata sandi pribadi untuk akun Anda sendiri.'
       );
     }
+
+    // SA-11: Enforce strict role-rank dominance so non-Super-Admin actors
+    // (e.g. admin_regional) cannot create, promote, reset, or delete peer-rank
+    // accounts and bypass Four-Eyes separation of duties.
+    if (
+      role !== 'super_admin' &&
+      targetRole &&
+      (action === 'user:create' ||
+        action === 'user:update' ||
+        action === 'user:delete' ||
+        action === 'user:reset_password') &&
+      targetRole in ROLE_RANK &&
+      ROLE_RANK[targetRole as UserRole] >= ROLE_RANK[role]
+    ) {
+      return deny(
+        'role_not_permitted',
+        `Akses ditolak: role ${role} tidak dapat mengelola atau menetapkan akun setingkat/lebih tinggi (${targetRole}).`
+      );
+    }
   }
 
   // --- Branch scoping for writes -------------------------------------------
   const targetBranch = normaliseBranch(context.targetBranch);
   const actorBranch = normaliseBranch(actor.branch_id);
   const isBranchScopedRole = role === 'pic_cabang';
-  const actorIsCentral = !actorBranch || actorBranch === 'R99';
+  const actorHasOperationalBranch = Boolean(actorBranch) && actorBranch !== 'R99';
 
-  if (targetBranch && isBranchScopedRole && !actorIsCentral && targetBranch !== actorBranch) {
-    return deny(
-      'branch_out_of_scope',
-      `Akses ditolak: sebagai PIC Cabang [${actorBranch}], Anda tidak diizinkan mengubah data cabang [${targetBranch}].`
-    );
+  if (isBranchScopedRole && (targetBranch || action === 'data:write' || action === 'data:import')) {
+    if (!actorHasOperationalBranch) {
+      return deny(
+        'branch_out_of_scope',
+        'Akses ditolak: akun PIC Cabang wajib memiliki penugasan cabang operasional (bukan R99).'
+      );
+    }
+    if (targetBranch && targetBranch !== actorBranch) {
+      return deny(
+        'branch_out_of_scope',
+        `Akses ditolak: sebagai PIC Cabang [${actorBranch}], Anda tidak diizinkan mengubah data cabang [${targetBranch}].`
+      );
+    }
   }
 
   // --- Department scoping for writes ---------------------------------------
@@ -300,7 +328,10 @@ export function resolveReadBranchScope(
   if (!actor) return requested;
 
   const actorBranch = normaliseBranch(actor.branch_id);
-  if (actor.role === 'pic_cabang' && actorBranch && actorBranch !== 'R99') {
+  if (actor.role === 'pic_cabang') {
+    if (!actorBranch || actorBranch === 'R99') {
+      return 'NONE';
+    }
     return actorBranch;
   }
   return requested;

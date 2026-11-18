@@ -50,7 +50,19 @@ export interface FinansialModuleSummaryInput {
 export const FINANSIAL_EFF_COLUMNS_SQL = `
   CASE
     WHEN $1::boolean AND verification_status <> 'verified' AND verified_snapshot_json IS NOT NULL
-    THEN COALESCE(NULLIF(verified_snapshot_json->>'realisasi', '')::double precision, realisasi)
+    THEN COALESCE(
+      NULLIF(verified_snapshot_json->>'realisasi', '')::double precision,
+      CASE UPPER(TRIM(entitas))
+        WHEN 'CABANG' THEN NULLIF(verified_snapshot_json->>'cabang_rp', '')::double precision
+        WHEN 'PJM' THEN NULLIF(verified_snapshot_json->>'pjm_rp', '')::double precision
+        WHEN 'PMT' THEN NULLIF(verified_snapshot_json->>'pmt_rp', '')::double precision
+        WHEN 'PSL' THEN NULLIF(verified_snapshot_json->>'psl_rp', '')::double precision
+        WHEN 'PTP' THEN NULLIF(verified_snapshot_json->>'ptp_rp', '')::double precision
+        WHEN 'ELIMINASI' THEN NULLIF(verified_snapshot_json->>'eliminasi_rp', '')::double precision
+        ELSE NULL
+      END,
+      0::double precision
+    )
     ELSE realisasi
   END AS eff_realisasi,
   CASE

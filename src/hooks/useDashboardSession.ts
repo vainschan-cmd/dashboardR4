@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SystemParameters, User, UserRole } from '@/lib/types';
+import { clientCache } from '@/lib/clientCache';
 
 /**
  * Session, theme, and inactivity handling for the dashboard shell (`CODE-02`).
@@ -190,6 +191,7 @@ export function useDashboardSession() {
       if (elapsedMs >= timeoutMs) {
         clearInterval(intervalId);
         fetch('/api/users/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+        clientCache.invalidate();
         clearStoredSession();
         setIdleWarningSeconds(null);
         setCurrentUser(null);
@@ -208,12 +210,16 @@ export function useDashboardSession() {
     }, 4000);
 
     // The access cookie lives 15 minutes; without this heartbeat an active user
-    // would be logged out mid-task.
+    // would be logged out mid-task. Uses POST so proxy.ts CSRF origin checks apply (SA-13).
     const heartbeatId = setInterval(() => {
       const lastActivity = readActivity() ?? lastRecord;
       const timeoutMinutes = systemParams.session_timeout_minutes || 30;
       if (Date.now() - lastActivity >= timeoutMinutes * 60 * 1000) return;
-      fetch('/api/users/me?rotate=1', { credentials: 'include', cache: 'no-store' }).catch(() => {
+      fetch('/api/users/me?rotate=1', {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      }).catch(() => {
         // Not fatal: the idle timer still owns logout.
       });
     }, 10 * 60 * 1000);
@@ -227,6 +233,7 @@ export function useDashboardSession() {
 
   const handleLoginSuccess = useCallback(
     (user: User) => {
+      clientCache.invalidate();
       setSessionExpiredMessage(null);
       setIdleWarningSeconds(null);
       clearStoredSession();
@@ -240,6 +247,7 @@ export function useDashboardSession() {
     fetch('/api/users/logout', { method: 'POST', credentials: 'include' }).catch((e) => {
       console.warn('Gagal memanggil endpoint logout:', e);
     });
+    clientCache.invalidate();
     clearStoredSession();
     setSessionExpiredMessage(null);
     setIdleWarningSeconds(null);

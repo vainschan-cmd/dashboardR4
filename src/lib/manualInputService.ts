@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import * as xlsx from 'xlsx';
 import { readWorkbookSafe } from './spreadsheet';
 import { getBranchByCode, getCanonicalBranchCode, getBranchNameByCode, getModuleDepartmentId } from './constants';
@@ -851,11 +850,6 @@ export function saveManualInputRecord(payload: ManualInputPayload): {
       wb.Sheets[sheetName] = xlsx.utils.json_to_sheet(existingRows);
       const updatedBuf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
       fs.writeFileSync(excelPath, updatedBuf);
-
-      const downloadsPath = path.join(os.homedir(), 'Downloads', 'input_data.xlsx');
-      if (fs.existsSync(downloadsPath)) {
-        fs.writeFileSync(downloadsPath, updatedBuf);
-      }
     }
   } catch (err) {
     console.warn('[ManualInput] Non-fatal spreadsheet export warning:', err);

@@ -25,6 +25,23 @@ export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY_PATTERN.test(key);
 }
 
+const SENSITIVE_INLINE_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
+  // Redact embedded database credentials inside PostgreSQL/AMQP/HTTP DSNs
+  { pattern: /(postgres(?:ql)?:\/\/[^:\s/"']+:)[^@\s/"']+(@)/gi, replacement: '$1[redacted]$2' },
+  // Redact Authorization Bearer tokens inside error messages
+  { pattern: /(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi, replacement: '$1[redacted]' },
+  // Redact API keys passed in query strings (?key=... / &api_key=...)
+  { pattern: /([?&](?:api[_-]?key|key|token|secret)=)[^&\s"']+/gi, replacement: '$1[redacted]' },
+];
+
+function scrubInlineSecrets(text: string): string {
+  let out = text;
+  for (const { pattern, replacement } of SENSITIVE_INLINE_PATTERNS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
 /**
  * Deep-copy a value with sensitive fields replaced by a placeholder.
  * Values that are not plain data (functions, class instances) are dropped.
@@ -32,8 +49,9 @@ export function isSensitiveKey(key: string): boolean {
 export function redactForLog(value: unknown, depth = 0): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
+    const scrubbed = scrubInlineSecrets(value);
     // Truncate long strings so a log line cannot become a data dump.
-    return value.length > 500 ? `${value.slice(0, 500)}…` : value;
+    return scrubbed.length > 500 ? `${scrubbed.slice(0, 500)}…` : scrubbed;
   }
   if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (typeof value === 'bigint') return value.toString();

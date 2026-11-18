@@ -34,7 +34,11 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:ictpi4@localhost:5432/ed_dashboard';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('[Sync] Error: environment variable DATABASE_URL wajib disetel (tidak ada fallback kredensial).');
+  process.exit(1);
+}
 const SQLITE_PATH = path.join(cwd, 'data', 'ed_dashboard.db');
 
 async function syncAll() {
@@ -115,7 +119,7 @@ async function syncAll() {
       }
 
       const sqliteCols = sqlite.prepare(`PRAGMA table_info('${table}')`).all().map((c) => c.name);
-      
+
       sqlite.exec(`DELETE FROM ${table};`);
       const sample = pgRows[0];
       const validCols = Object.keys(sample).filter((col) => sqliteCols.includes(col));

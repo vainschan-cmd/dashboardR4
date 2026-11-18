@@ -26,6 +26,12 @@ description = "Hardcoded bootstrap PIC password"
 regex = '''BOOTSTRAP_PIC_PASSWORD\s*=\s*["']?[^\s"']{8,}["']?'''
 tags = ["secret", "password"]
 
+[[rules]]
+id = "portsight-postgres-dsn-password"
+description = "Hardcoded PostgreSQL connection string with embedded password"
+regex = '''postgres(?:ql)?://[^:\s/"']+:[^@\s/"']+@[^\s/"']+'''
+tags = ["secret", "database"]
+
 [allowlist]
 description = """
 Bukan kredensial, beserta alasannya.
@@ -60,4 +66,8 @@ regexes = [
   '''pelindo_r4_executive_dashboard_secret_key_production_32chars_min''',
   '''Coba-Lewat-Put-2026''',
   '''Ambil-Alih-Akun-2026''',
+  # Nilai historis yang sudah terpublikasi pada commit lama (sudah dihapus dari HEAD & wajib dirotasi di produksi).
+  '''postgresql://postgres:ictpi4@localhost:5432''',
+  # Contoh dokumentasi pada docs/architecture/POSTGRESQL.md.
+  '''postgres://username:password@hostname:5432''',
 ]

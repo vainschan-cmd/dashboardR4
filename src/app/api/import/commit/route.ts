@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp } from '@/lib/auth';
 import { requireAuth } from '@/lib/rbac';
+import { readRequestTextBounded } from '@/lib/httpBodyLimit';
 import { MAX_IMPORT_JSON_BYTES, importCommitSchema, parseWithSchema } from '@/lib/validation';
 import { commitValidatedImportRecords } from '@/lib/importService';
 
@@ -9,20 +10,8 @@ export async function POST(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const contentLength = Number(req.headers.get('content-length') || 0);
-    if (contentLength > MAX_IMPORT_JSON_BYTES) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Ukuran permintaan impor melebihi batas maksimum 2 MB.',
-          error: 'Ukuran permintaan impor melebihi batas maksimum 2 MB.',
-        },
-        { status: 413 }
-      );
-    }
-
-    const rawText = await req.text();
-    if (Buffer.byteLength(rawText, 'utf8') > MAX_IMPORT_JSON_BYTES) {
+    const rawText = await readRequestTextBounded(req, MAX_IMPORT_JSON_BYTES);
+    if (rawText === null) {
       return NextResponse.json(
         {
           success: false,

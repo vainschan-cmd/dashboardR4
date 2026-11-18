@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/rbac';
+import { getClientIp } from '@/lib/auth';
+import { logError } from '@/lib/logger';
 import {
   getTargetVersions,
   getActiveTarget,
@@ -31,8 +33,8 @@ export async function GET(req: NextRequest) {
       versions,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Gagal mengambil versi target';
-    return apiError(msg, {
+    logError('api/master/target-versions', err, { method: 'GET', requestId: req.headers.get('x-request-id') });
+    return apiError('Gagal mengambil versi target.', {
       code: ERROR_CODES.DATABASE_ERROR,
       status: 500,
     });
@@ -86,16 +88,16 @@ export async function POST(req: NextRequest) {
         entity: 'KPI_TARGET_VERSION',
         entity_id: created.id,
         details: `Versi target ${created.version} untuk ${indicator_id} sebesar ${created.target_value} berlaku ${created.effective_from}`,
-        ip_address: req.headers.get('x-forwarded-for') || '127.0.0.1',
+        ip_address: getClientIp(req),
       });
     } catch (auditErr) {
-      console.warn('[POST /api/master/target-versions] Audit log error:', auditErr);
+      logError('api/master/target-versions:audit', auditErr, { requestId: req.headers.get('x-request-id') });
     }
 
     return apiSuccess(created, { status: 201 });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Gagal membuat versi target baru';
-    return apiError(msg, {
+    logError('api/master/target-versions', err, { method: 'POST', requestId: req.headers.get('x-request-id') });
+    return apiError('Gagal membuat versi target baru.', {
       code: ERROR_CODES.DATABASE_ERROR,
       status: 500,
     });

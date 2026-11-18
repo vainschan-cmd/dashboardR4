@@ -1,6 +1,18 @@
 import * as XLSX from 'xlsx';
 import { MonthlyRecord, TemplateConfig, Branch, KPIIndicator } from './types';
 
+/**
+ * Neutralize spreadsheet formula-prefix characters (`=`, `+`, `-`, `@`, `\t`, `\r`)
+ * so exported strings cannot be evaluated as formulas if re-saved or pasted (`SA-28`).
+ */
+export function neutralizeFormulaCell(value: unknown): string {
+  const str = String(value ?? '');
+  if (/^[\s\t\r]*[=+\-@]/.test(str) || str.startsWith('\t') || str.startsWith('\r')) {
+    return `'${str}`;
+  }
+  return str;
+}
+
 export function generateTemplateWorkbook(
   template: TemplateConfig,
   sampleBranches: Branch[],
@@ -9,7 +21,7 @@ export function generateTemplateWorkbook(
   const wb = XLSX.utils.book_new();
 
   // 1. Data Input Sheet
-  const headers = template.columns.map(c => c.column_name);
+  const headers = template.columns.map(c => neutralizeFormulaCell(c.column_name));
   const sampleRows: Array<Array<string | number>> = [headers];
 
   const targetBranch = sampleBranches[0] || { code: 'CBG-TGPRK', name: 'Cabang Tanjung Priok' };
@@ -17,9 +29,9 @@ export function generateTemplateWorkbook(
     const row = template.columns.map(col => {
       switch (col.field_key) {
         case 'branch_code':
-          return targetBranch.code;
+          return neutralizeFormulaCell(targetBranch.code);
         case 'branch_name':
-          return targetBranch.name;
+          return neutralizeFormulaCell(targetBranch.name);
         case 'department_code':
           return 'OPS';
         case 'month':
@@ -27,19 +39,21 @@ export function generateTemplateWorkbook(
         case 'year':
           return 2026;
         case 'indicator_code':
-          return ind.code;
+          return neutralizeFormulaCell(ind.code);
         case 'indicator_name':
-          return ind.name;
+          return neutralizeFormulaCell(ind.name);
         case 'target':
           return ind.default_target;
         case 'realization':
           return Number((ind.default_target * (0.95 + idx * 0.02)).toFixed(2));
         case 'unit':
-          return ind.unit;
+          return neutralizeFormulaCell(ind.unit);
         case 'notes':
           return 'Contoh input data bulanan resmi';
         default:
-          return col.sample_value || '';
+          return typeof col.sample_value === 'number'
+            ? col.sample_value
+            : neutralizeFormulaCell(col.sample_value || '');
       }
     });
     sampleRows.push(row);
@@ -79,25 +93,25 @@ export function exportRecordsToExcel(
   const wb = XLSX.utils.book_new();
 
   const dataRows = records.map(r => ({
-    'ID Record': r.id,
+    'ID Record': neutralizeFormulaCell(r.id),
     'Tahun': r.year,
     'Bulan': r.month,
-    'Kode Cabang': r.branch_code || r.branch_id,
-    'Nama Cabang': r.branch_name || '-',
-    'Departemen': r.department_name || r.department_id,
-    'Kode Indikator': r.indicator_code || r.indicator_id,
-    'Nama Indikator': r.indicator_name || '-',
+    'Kode Cabang': neutralizeFormulaCell(r.branch_code || r.branch_id),
+    'Nama Cabang': neutralizeFormulaCell(r.branch_name || '-'),
+    'Departemen': neutralizeFormulaCell(r.department_name || r.department_id),
+    'Kode Indikator': neutralizeFormulaCell(r.indicator_code || r.indicator_id),
+    'Nama Indikator': neutralizeFormulaCell(r.indicator_name || '-'),
     'Target': r.target,
     'Realisasi': r.realization,
-    'Satuan': r.unit,
+    'Satuan': neutralizeFormulaCell(r.unit),
     'Capaian (%)': r.achievement_pct,
-    'Status Indikator': r.status_color.toUpperCase(),
-    'Status Verifikasi': r.verification_status,
-    'Catatan Revisi': r.revision_notes || '-',
-    'Waktu Upload': r.uploaded_at,
-    'Pengunggah': r.uploaded_by,
-    'Verifikator': r.verified_by || '-',
-    'Waktu Verifikasi': r.verified_at || '-',
+    'Status Indikator': neutralizeFormulaCell(r.status_color.toUpperCase()),
+    'Status Verifikasi': neutralizeFormulaCell(r.verification_status),
+    'Catatan Revisi': neutralizeFormulaCell(r.revision_notes || '-'),
+    'Waktu Upload': neutralizeFormulaCell(r.uploaded_at),
+    'Pengunggah': neutralizeFormulaCell(r.uploaded_by),
+    'Verifikator': neutralizeFormulaCell(r.verified_by || '-'),
+    'Waktu Verifikasi': neutralizeFormulaCell(r.verified_at || '-'),
     'Klasifikasi Data': r.is_simulated ? 'DATA SIMULASI' : 'DATA RESMI'
   }));
 

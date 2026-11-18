@@ -47,6 +47,16 @@ const nextConfig: NextConfig = {
             : []),
         ],
       },
+      {
+        // SA-18: Strict sandbox CSP on HTML report export overrides global 'unsafe-inline' script-src
+        source: '/api/reports/export',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; sandbox",
+          },
+        ],
+      },
     ];
   },
 };

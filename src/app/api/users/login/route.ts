@@ -8,23 +8,33 @@ import {
   getClientIp,
 } from '@/lib/auth';
 import { loginSchema, parseWithSchema } from '@/lib/validation';
+import { readRequestTextBounded } from '@/lib/httpBodyLimit';
+import { logError } from '@/lib/logger';
 
-function formatDbErrorMessage(err: unknown): string {
-  if (!err) return 'Koneksi database tidak tersedia.';
-  if (err instanceof AggregateError && Array.isArray(err.errors) && err.errors.length > 0) {
-    return err.errors.map((e) => (e instanceof Error ? e.message : String(e))).filter(Boolean).join('; ') || 'connect ECONNREFUSED 127.0.0.1:5432';
-  }
-  if (err instanceof Error && err.message) {
-    return err.message;
-  }
-  return String(err);
-}
+const MAX_LOGIN_BODY_BYTES = 4096;
 
 export async function POST(req: NextRequest) {
   const clientIp = getClientIp(req);
 
   try {
-    const body = (await req.json()) as Record<string, unknown>;
+    const rawBody = await readRequestTextBounded(req, MAX_LOGIN_BODY_BYTES);
+    if (rawBody === null) {
+      return NextResponse.json(
+        { success: false, error: 'Ukuran payload login melebihi batas yang diizinkan.' },
+        { status: 413 }
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Format body login tidak valid (JSON diharapkan).' },
+        { status: 400 }
+      );
+    }
+
     const normalizedPayload = {
       nipp: String(body?.nipp || body?.username || '').trim(),
       password: String(body?.password || '').trim(),
@@ -43,19 +53,23 @@ export async function POST(req: NextRequest) {
     // 1. Check Brute-Force Rate Limit
     const rateLimit = checkLoginRateLimit(clientIp, inputNipp);
     if (!rateLimit.allowed) {
-      try {
-        await dbQueries.createAuditLog({
-          user_id: inputNipp,
-          user_name: inputNipp,
-          user_role: 'anonymous',
-          action: 'LOGIN',
-          entity: 'AuthSession',
-          entity_id: inputNipp,
-          details: `Percobaan login diblokir sementara (Rate Limit). Coba lagi dalam ${rateLimit.retryAfterSeconds} detik.`,
-          ip_address: clientIp,
-        });
-      } catch {
-        // ignore non-fatal audit error
+      // SA-07: Only record an audit log once per lockout window so an unauthenticated
+      // 429 flood cannot amplify writes to PostgreSQL audit_logs and starve the DB pool.
+      if (rateLimit.shouldAuditLockout) {
+        try {
+          await dbQueries.createAuditLog({
+            user_id: inputNipp,
+            user_name: inputNipp,
+            user_role: 'anonymous',
+            action: 'LOGIN',
+            entity: 'AuthSession',
+            entity_id: inputNipp,
+            details: `Percobaan login diblokir sementara (Rate Limit). Coba lagi dalam ${rateLimit.retryAfterSeconds} detik.`,
+            ip_address: clientIp,
+          });
+        } catch {
+          // ignore non-fatal audit error
+        }
       }
 
       return NextResponse.json(
@@ -78,12 +92,11 @@ export async function POST(req: NextRequest) {
     try {
       user = await dbQueries.authenticateUserAsync(inputNipp, inputPassword);
     } catch (dbErr: unknown) {
-      console.error('[POST /api/users/login] Database connection error:', dbErr);
-      const msg = formatDbErrorMessage(dbErr);
+      logError('POST /api/users/login db', dbErr, { requestId: req.headers.get('x-request-id') });
       return NextResponse.json(
         {
           success: false,
-          error: `Koneksi database PostgreSQL terputus atau tidak tersedia (${msg}). Pastikan server/container PostgreSQL ed_dashboard sedang aktif.`,
+          error: 'Layanan autentikasi sedang tidak tersedia. Silakan coba beberapa saat lagi atau hubungi Administrator.',
         },
         { status: 503 }
       );
@@ -116,6 +129,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!user.active) {
+      recordLoginFailure(clientIp, inputNipp);
       try {
         await dbQueries.createAuditLog({
           user_id: user.id,
@@ -195,9 +209,9 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Terjadi kesalahan saat memproses autentikasi.';
+    logError('POST /api/users/login', error, { requestId: req.headers.get('x-request-id') });
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: 'Terjadi kesalahan saat memproses autentikasi.' },
       { status: 500 }
     );
   }

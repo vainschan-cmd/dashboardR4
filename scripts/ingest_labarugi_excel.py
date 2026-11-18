@@ -1,10 +1,11 @@
 import sqlite3
 import openpyxl
 import os
+import sys
 
-excel_file = '/Users/rekaskuy/.gemini/antigravity/brain/275cc606-d832-47b9-8b21-59e3de4ee300/.user_uploaded/media_1794383563533_bcbb2477.xlsx'
+excel_file = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.getcwd(), 'data', 'labarugi.xlsx')
 if not os.path.exists(excel_file):
-    excel_file = '/Users/rekaskuy/.gemini/antigravity/brain/275cc606-d832-47b9-8b21-59e3de4ee300/.user_uploaded/media_1794383300960_db436734.xlsx'
+    raise FileNotFoundError(f'File spreadsheet tidak ditemukan: {excel_file}')
 
 wb = openpyxl.load_workbook(excel_file, data_only=True)
 ws = wb['labarugi']

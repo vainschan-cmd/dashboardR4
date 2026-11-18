@@ -200,10 +200,15 @@ export async function POST(req: NextRequest) {
     const moduleUploaders = await dbQueries.getModuleUploadersByRecordIds(recordIds);
     const uploaderValues = [
       ...targetRecords.map((record) => record.uploaded_by),
-      ...Object.values(moduleUploaders),
+      ...Object.values(moduleUploaders).flat(),
     ];
     const separation = checkSeparationOfDuties(
-      { nipp: auth.session.nipp, name: auth.session.name, sub: auth.session.sub },
+      {
+        nipp: auth.session.nipp,
+        username: auth.session.username,
+        name: auth.session.name,
+        sub: auth.session.sub,
+      },
       { uploaders: uploaderValues }
     );
 

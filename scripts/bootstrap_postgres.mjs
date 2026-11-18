@@ -164,9 +164,17 @@ async function main() {
     const masterUserFile = path.resolve(process.cwd(), 'data', 'master_user_pic.xlsx');
 
     if (defaultPassword && fs.existsSync(masterUserFile)) {
+      if (defaultPassword.length < 12) {
+        console.error(
+          '[Bootstrap PG] Error: BOOTSTRAP_PIC_PASSWORD / SEED_DEFAULT_PASSWORD minimal 12 karakter.'
+        );
+        process.exit(1);
+      }
+      // SA-26: Default must_change_password=true for seeded accounts; CI test suites
+      // opt out explicitly via BOOTSTRAP_TEST_READY=true.
+      const mustChangePassword = process.env.BOOTSTRAP_TEST_READY !== 'true';
       const wb = xlsx.readFile(masterUserFile);
       const rows = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      const passwordHash = hashPassword(defaultPassword);
 
       for (const r of rows) {
         const nipp = String(r['NIPP (USERNAME)'] || '').trim();
@@ -178,12 +186,14 @@ async function main() {
         const branchId = String(r['CABANG'] || 'R99').trim();
         const email = String(r['EMAIL'] || `${nipp}@pelindo.co.id`).trim();
         const id = `usr_${nipp}`;
+        // SA-26: Derive a unique random scrypt salt & hash per user account.
+        const passwordHash = hashPassword(defaultPassword);
 
         await client.query(
           `INSERT INTO users (id, username, nipp, name, email, divisi, departemen, role, branch_id, password_hash, active, must_change_password)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, false)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11)
            ON CONFLICT (username) DO NOTHING`,
-          [id, nipp, nipp, name, email, divisi, departemen, role, branchId, passwordHash]
+          [id, nipp, nipp, name, email, divisi, departemen, role, branchId, passwordHash, mustChangePassword]
         );
       }
       console.log(`[Bootstrap PG] Seed akun pengguna dari master_user_pic.xlsx selesai (${rows.length} baris diproses).`);

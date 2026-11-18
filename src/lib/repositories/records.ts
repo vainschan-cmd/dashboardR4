@@ -195,25 +195,43 @@ export const recordsRepository = {
     }
   },
 
-  getModuleUploadersByRecordIds: async (recordIds: string[]): Promise<Record<string, string>> => {
+  getModuleUploadersByRecordIds: async (recordIds: string[]): Promise<Record<string, string[]>> => {
     if (!recordIds || recordIds.length === 0) return {};
-    try {
-      const res = await query(
-        `SELECT DISTINCT monthly_record_id, uploaded_by
-         FROM module_finansial
-         WHERE monthly_record_id = ANY($1::varchar[]) AND uploaded_by IS NOT NULL`,
-        [recordIds]
-      );
-      const map: Record<string, string> = {};
-      for (const r of res.rows) {
-        if (r.monthly_record_id && r.uploaded_by) {
-          map[r.monthly_record_id] = r.uploaded_by;
-        }
+    // SA-06: Query all 6 module_* tables without overwriting multi-uploader entries,
+    // and fail-closed on DB error so Four-Eyes cannot be silently bypassed.
+    const moduleTables = [
+      'module_finansial',
+      'module_opkom',
+      'module_kinerja',
+      'module_utilisasi',
+      'module_peralatan',
+      'module_fasilitas',
+    ] as const;
+
+    const unionSql = moduleTables
+      .map(
+        (table) =>
+          `SELECT COALESCE(monthly_record_id, id) AS record_key, uploaded_by
+             FROM ${table}
+            WHERE (id = ANY($1::varchar[]) OR monthly_record_id = ANY($1::varchar[]))
+              AND uploaded_by IS NOT NULL`
+      )
+      .join('\nUNION ALL\n');
+
+    const res = await query<{ record_key: string; uploaded_by: string }>(unionSql, [recordIds]);
+    const map: Record<string, Set<string>> = {};
+    for (const r of res.rows) {
+      if (r.record_key && r.uploaded_by) {
+        if (!map[r.record_key]) map[r.record_key] = new Set<string>();
+        map[r.record_key].add(String(r.uploaded_by).trim());
       }
-      return map;
-    } catch {
-      return {};
     }
+
+    const out: Record<string, string[]> = {};
+    for (const [key, set] of Object.entries(map)) {
+      out[key] = Array.from(set);
+    }
+    return out;
   },
 
   // Update record verification across monthly_records and all module_* tables
@@ -227,10 +245,17 @@ export const recordsRepository = {
     const now = new Date().toISOString();
 
     await withTransaction(async (client: PoolClient) => {
+      // Lock target rows first to prevent TOCTOU races during verification transitions.
+      await client.query(
+        'SELECT id FROM monthly_records WHERE id = ANY($1::varchar[]) FOR UPDATE',
+        [recordIds]
+      );
+
       await client.query(
         `UPDATE monthly_records
          SET verification_status = $1, verified_by = $2, verified_at = $3::timestamptz, revision_notes = $4
-         WHERE id = ANY($5::varchar[])`,
+         WHERE id = ANY($5::varchar[])
+           AND verification_status IN ('pending_verification', 'revision_needed')`,
         [status, verifiedBy, now, revisionNotes || null, recordIds]
       );
 
@@ -257,7 +282,8 @@ export const recordsRepository = {
     });
   },
 
-  // Save imported records
+  // Save imported records using multi-row batched upserts (SA-25) to avoid holding
+  // a PG pool client across thousands of sequential round-trips.
   insertMonthlyRecords: async (
     records: Omit<
       MonthlyRecord,
@@ -266,66 +292,80 @@ export const recordsRepository = {
   ): Promise<void> => {
     if (!records || records.length === 0) return;
 
-    await withTransaction(async (client: PoolClient) => {
-      const upsertSql = `
-        INSERT INTO monthly_records (
-          id, branch_id, department_id, indicator_id, month, year,
-          target, realization, unit, achievement_pct, status_color, notes,
-          source_type, batch_id, verification_status, revision_notes,
-          uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6,
-          $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16,
-          $17, $18::timestamptz, $19, $20::timestamptz, $21
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          branch_id = EXCLUDED.branch_id,
-          department_id = EXCLUDED.department_id,
-          indicator_id = EXCLUDED.indicator_id,
-          month = EXCLUDED.month,
-          year = EXCLUDED.year,
-          target = EXCLUDED.target,
-          realization = EXCLUDED.realization,
-          unit = EXCLUDED.unit,
-          achievement_pct = EXCLUDED.achievement_pct,
-          status_color = EXCLUDED.status_color,
-          notes = EXCLUDED.notes,
-          source_type = EXCLUDED.source_type,
-          batch_id = EXCLUDED.batch_id,
-          verification_status = EXCLUDED.verification_status,
-          revision_notes = EXCLUDED.revision_notes,
-          uploaded_by = EXCLUDED.uploaded_by,
-          uploaded_at = EXCLUDED.uploaded_at,
-          verified_by = EXCLUDED.verified_by,
-          verified_at = EXCLUDED.verified_at,
-          is_simulated = EXCLUDED.is_simulated
-      `;
+    const BATCH_SIZE = 200;
+    const COLS_PER_ROW = 21;
 
-      for (const r of records) {
-        await client.query(upsertSql, [
-          r.id,
-          r.branch_id,
-          r.department_id,
-          r.indicator_id,
-          r.month,
-          r.year,
-          r.target,
-          r.realization,
-          r.unit,
-          r.achievement_pct,
-          r.status_color || null,
-          r.notes || null,
-          r.source_type || 'manual_entry',
-          r.batch_id || null,
-          r.verification_status || 'verified',
-          r.revision_notes || null,
-          r.uploaded_by || null,
-          r.uploaded_at || new Date().toISOString(),
-          r.verified_by || null,
-          r.verified_at || null,
-          Boolean(r.is_simulated),
-        ]);
+    await withTransaction(async (client: PoolClient) => {
+      for (let offset = 0; offset < records.length; offset += BATCH_SIZE) {
+        const chunk = records.slice(offset, offset + BATCH_SIZE);
+        const valuesSql: string[] = [];
+        const params: unknown[] = [];
+
+        for (let i = 0; i < chunk.length; i++) {
+          const r = chunk[i];
+          const base = i * COLS_PER_ROW;
+          valuesSql.push(
+            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, ` +
+              `$${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, ` +
+              `$${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, ` +
+              `$${base + 17}, $${base + 18}::timestamptz, $${base + 19}, $${base + 20}::timestamptz, $${base + 21})`
+          );
+          params.push(
+            r.id,
+            r.branch_id,
+            r.department_id,
+            r.indicator_id,
+            r.month,
+            r.year,
+            r.target,
+            r.realization,
+            r.unit,
+            r.achievement_pct,
+            r.status_color || null,
+            r.notes || null,
+            r.source_type || 'manual_entry',
+            r.batch_id || null,
+            r.verification_status || 'verified',
+            r.revision_notes || null,
+            r.uploaded_by || null,
+            r.uploaded_at || new Date().toISOString(),
+            r.verified_by || null,
+            r.verified_at || null,
+            Boolean(r.is_simulated)
+          );
+        }
+
+        const batchUpsertSql = `
+          INSERT INTO monthly_records (
+            id, branch_id, department_id, indicator_id, month, year,
+            target, realization, unit, achievement_pct, status_color, notes,
+            source_type, batch_id, verification_status, revision_notes,
+            uploaded_by, uploaded_at, verified_by, verified_at, is_simulated
+          ) VALUES ${valuesSql.join(', ')}
+          ON CONFLICT (id) DO UPDATE SET
+            branch_id = EXCLUDED.branch_id,
+            department_id = EXCLUDED.department_id,
+            indicator_id = EXCLUDED.indicator_id,
+            month = EXCLUDED.month,
+            year = EXCLUDED.year,
+            target = EXCLUDED.target,
+            realization = EXCLUDED.realization,
+            unit = EXCLUDED.unit,
+            achievement_pct = EXCLUDED.achievement_pct,
+            status_color = EXCLUDED.status_color,
+            notes = EXCLUDED.notes,
+            source_type = EXCLUDED.source_type,
+            batch_id = EXCLUDED.batch_id,
+            verification_status = EXCLUDED.verification_status,
+            revision_notes = EXCLUDED.revision_notes,
+            uploaded_by = EXCLUDED.uploaded_by,
+            uploaded_at = EXCLUDED.uploaded_at,
+            verified_by = EXCLUDED.verified_by,
+            verified_at = EXCLUDED.verified_at,
+            is_simulated = EXCLUDED.is_simulated
+        `;
+
+        await client.query(batchUpsertSql, params);
       }
     });
   },

@@ -44,6 +44,9 @@ async function login(nipp, password) {
   });
   assert.equal(res.status, 200, `Login ${nipp} gagal (${res.status})`);
   const jar = parseCookies(res);
+  if (jar['__Host-portsight_access_token']) {
+    return `__Host-portsight_access_token=${jar['__Host-portsight_access_token']}`;
+  }
   return `portsight_access_token=${jar.portsight_access_token}`;
 }
 

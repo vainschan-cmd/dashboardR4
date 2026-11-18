@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveManualInputRecord, getModuleDepartmentId, ModuleType } from '@/lib/manualInputService';
-import { OFFICIAL_BRANCHES } from '@/lib/constants';
+import {
+  OFFICIAL_BRANCHES,
+  getBranchNameByCode,
+  getCanonicalBranchCode,
+} from '@/lib/constants';
 import { logError } from '@/lib/logger';
 import { resolveReadBranchScope } from '@/lib/policy';
 import {
@@ -97,9 +101,36 @@ export async function POST(req: NextRequest) {
     }
     const { module, data } = parsed.data;
 
-    // 1. Enforce Server-Side Branch Scope (Row-Level Security for pic_cabang)
+    // 1. Enforce Server-Side Branch Scope (Row-Level Security for pic_cabang, NV-04)
     const rawRequestedBranch = data.kodeCabang || data.branchCode || data.KODE_CBG;
-    const requestedBranch = typeof rawRequestedBranch === 'string' ? rawRequestedBranch : undefined;
+    const rawRequestedBranchName = data.namaCabang || data.branchName || data.NM_CBG;
+    const requestedBranchCode =
+      typeof rawRequestedBranch === 'string' && rawRequestedBranch.trim()
+        ? rawRequestedBranch.trim()
+        : undefined;
+    const requestedBranchName =
+      typeof rawRequestedBranchName === 'string' && rawRequestedBranchName.trim()
+        ? rawRequestedBranchName.trim()
+        : undefined;
+
+    // Reject conflicting code vs name payloads (e.g. kodeCabang='R01' + namaCabang='Balikpapan')
+    const resolvedFromCode = requestedBranchCode
+      ? getCanonicalBranchCode(requestedBranchCode)
+      : undefined;
+    const resolvedFromName = requestedBranchName
+      ? getCanonicalBranchCode(undefined, requestedBranchName)
+      : undefined;
+    if (resolvedFromCode && resolvedFromName && resolvedFromCode !== resolvedFromName) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Kode cabang dan nama cabang pada payload tidak cocok.',
+        },
+        { status: 403 }
+      );
+    }
+
+    const requestedBranch = resolvedFromCode || resolvedFromName;
     const branchCheck = validateBranchWriteAccess(auth.session, requestedBranch);
     if (!branchCheck.allowed) {
       return NextResponse.json(
@@ -118,10 +149,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Lock branch code in payload to validated branch
+    // Lock all branch code & name aliases in payload to the validated canonical branch (NV-04)
+    const canonicalCode = branchCheck.canonicalCode;
+    const canonicalName = canonicalCode ? getBranchNameByCode(canonicalCode) : undefined;
     const scopedData: Record<string, unknown> = {
       ...data,
-      kodeCabang: branchCheck.canonicalCode,
+      kodeCabang: canonicalCode,
+      branchCode: canonicalCode,
+      KODE_CBG: canonicalCode,
+      ...(canonicalName
+        ? {
+            namaCabang: canonicalName,
+            branchName: canonicalName,
+            NM_CBG: canonicalName,
+          }
+        : {}),
     };
 
     const result = await saveManualInputRecord({
@@ -153,10 +195,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const message = error instanceof Error ? error.message : 'Gagal menyimpan data manual.';
     logError('api/manual-input', error, { requestId: req.headers.get('x-request-id') });
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: 'Gagal menyimpan data manual.' },
       { status: 500 }
     );
   }

@@ -5,6 +5,11 @@
 
 export type JobStatus = 'pending' | 'running' | 'retrying' | 'completed' | 'failed';
 
+export interface ETLJobOwner {
+  userId: string;
+  role: string;
+}
+
 export interface ETLJob<TResult = unknown, TPayload = unknown> {
   id: string;
   name: string;
@@ -15,6 +20,7 @@ export interface ETLJob<TResult = unknown, TPayload = unknown> {
   maxRetries: number;
   lastError?: string;
   result?: TResult;
+  createdBy?: ETLJobOwner;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -24,7 +30,15 @@ class ETLJobManager {
   private jobs = new Map<string, ETLJob>();
   private readonly maxHistory = 100;
 
-  createJob<TPayload>(name: string, payload?: TPayload, maxRetries = 3): ETLJob<unknown, TPayload> {
+  createJob<TPayload>(
+    name: string,
+    payload?: TPayload,
+    maxRetries = 3,
+    createdBy?: ETLJobOwner
+  ): ETLJob<unknown, TPayload> {
+    const safeMaxRetries = Number.isFinite(maxRetries)
+      ? Math.min(10, Math.max(0, Math.floor(maxRetries)))
+      : 3;
     const id = `job_etl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const job: ETLJob<unknown, TPayload> = {
       id,
@@ -33,7 +47,8 @@ class ETLJobManager {
       payload,
       progress: 0,
       retryCount: 0,
-      maxRetries,
+      maxRetries: safeMaxRetries,
+      ...(createdBy ? { createdBy } : {}),
       createdAt: new Date().toISOString(),
     };
 
@@ -46,8 +61,12 @@ class ETLJobManager {
     return this.jobs.get(id);
   }
 
-  listJobs(limit = 20): ETLJob[] {
-    return Array.from(this.jobs.values())
+  listJobs(limit = 20, ownerUserId?: string): ETLJob[] {
+    const values = Array.from(this.jobs.values());
+    const filtered = ownerUserId
+      ? values.filter((job) => job.createdBy?.userId === ownerUserId)
+      : values;
+    return filtered
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
   }

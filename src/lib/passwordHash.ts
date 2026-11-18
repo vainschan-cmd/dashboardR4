@@ -37,7 +37,6 @@ export function isPasswordHashed(password?: string | null): boolean {
  * is intentionally expensive (~100 ms) and would block the whole process.
  */
 export function hashPassword(plainPassword: string): string {
-  if (isPasswordHashed(plainPassword)) return plainPassword;
   const salt = randomBytes(SALT_BYTES).toString('hex');
   const derivedKey = scryptSync(plainPassword, salt, KEY_LENGTH).toString('hex');
   return `${SCRYPT_PREFIX}${salt}$${derivedKey}`;
@@ -45,7 +44,6 @@ export function hashPassword(plainPassword: string): string {
 
 /** Non-blocking password hash for request handlers. */
 export async function hashPasswordAsync(plainPassword: string): Promise<string> {
-  if (isPasswordHashed(plainPassword)) return plainPassword;
   const salt = randomBytes(SALT_BYTES).toString('hex');
   const derivedKey = await scryptAsync(plainPassword, salt, KEY_LENGTH);
   return `${SCRYPT_PREFIX}${salt}$${derivedKey.toString('hex')}`;

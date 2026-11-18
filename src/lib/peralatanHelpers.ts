@@ -89,8 +89,10 @@ export function resolvePeralatanBranchCode(namaCabang: string, fallbackCode?: st
   if (cleaned && PERALATAN_BRANCH_CODE_OVERRIDES[cleaned]) {
     return PERALATAN_BRANCH_CODE_OVERRIDES[cleaned];
   }
-  const canonical = getCanonicalBranchCode(fallbackCode, namaCabang);
-  if (canonical) return canonical;
+  const canonicalFromName = getCanonicalBranchCode(undefined, namaCabang);
+  if (canonicalFromName) return canonicalFromName;
+  const canonicalFromFallback = getCanonicalBranchCode(fallbackCode);
+  if (canonicalFromFallback) return canonicalFromFallback;
   return String(fallbackCode || '').trim().toUpperCase() || 'R99';
 }
 

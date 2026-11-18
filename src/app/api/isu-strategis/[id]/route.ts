@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isuStrategisRepository } from '@/lib/repositories/isuStrategis';
 import { isuStrategisUpdateSchema, parseWithSchema } from '@/lib/validation';
-import { resolveRequestSession } from '@/lib/rbac';
-import { getClientIp } from '@/lib/auth';
+import {
+  requireAuth,
+  enforceBranchFilterForRead,
+  validateBranchWriteAccess,
+} from '@/lib/rbac';
+import { getClientIp, type JwtSessionPayload } from '@/lib/auth';
+import { getBranchNameByCode } from '@/lib/constants';
 import { dbQueries } from '@/lib/db';
+import { logError } from '@/lib/logger';
+
+type IsuStrategisRecord = NonNullable<Awaited<ReturnType<typeof isuStrategisRepository.getById>>>;
 
 type RouteContext = { params: Promise<{ id: string }> | { id: string } };
 
@@ -12,7 +20,38 @@ async function resolveParamId(context: RouteContext): Promise<string> {
   return p?.id || '';
 }
 
+async function loadWritableIsu(
+  id: string,
+  session: JwtSessionPayload,
+  notFoundMessage: string
+): Promise<
+  | { ok: true; existing: IsuStrategisRecord; canonicalCode: string }
+  | { ok: false; response: NextResponse }
+> {
+  const existing = await isuStrategisRepository.getById(id);
+  if (!existing) {
+    return {
+      ok: false,
+      response: NextResponse.json({ success: false, error: notFoundMessage }, { status: 404 }),
+    };
+  }
+  const existingCheck = validateBranchWriteAccess(session, existing.cabangCode);
+  if (!existingCheck.allowed) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { success: false, error: existingCheck.error || 'Akses ditolak: isu strategis berada di luar cabang Anda.' },
+        { status: 403 }
+      ),
+    };
+  }
+  return { ok: true, existing, canonicalCode: existingCheck.canonicalCode };
+}
+
 export async function GET(req: NextRequest, context: RouteContext) {
+  const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const id = await resolveParamId(context);
     if (!id) {
@@ -24,31 +63,35 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: 'Data isu strategis tidak ditemukan.' }, { status: 404 });
     }
 
+    const scopedBranch = enforceBranchFilterForRead(auth.session, null);
+    if (scopedBranch && item.cabangCode !== scopedBranch && item.cabangCode !== 'R99') {
+      return NextResponse.json(
+        { success: false, error: 'Akses ditolak: isu strategis berada di luar cakupan cabang Anda.' },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json({ success: true, data: item });
   } catch (error: unknown) {
-    console.error('[GET /api/isu-strategis/:id] Error:', error);
-    const message = error instanceof Error ? error.message : 'Gagal mengambil data isu.';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/isu-strategis/[id]', error, { method: 'GET', requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal mengambil data isu.' }, { status: 500 });
   }
 }
 
 export async function PUT(req: NextRequest, context: RouteContext) {
+  const auth = await requireAuth(req, { requiredPermission: 'manual_input:write' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const id = await resolveParamId(context);
     if (!id) {
       return NextResponse.json({ success: false, error: 'ID isu tidak valid.' }, { status: 400 });
     }
 
-    const session = await resolveRequestSession(req);
+    const loaded = await loadWritableIsu(id, auth.session, 'Data isu tidak ditemukan untuk diperbarui.');
+    if (!loaded.ok) return loaded.response;
+
     const clientIp = getClientIp(req);
-
-    if (session && session.role === 'viewer') {
-      return NextResponse.json(
-        { success: false, error: 'Akses ditolak: Akun Viewer (BOD) hanya memiliki izin baca.' },
-        { status: 403 }
-      );
-    }
-
     const body = (await req.json()) as Record<string, unknown>;
     const parsed = parseWithSchema(isuStrategisUpdateSchema, body);
 
@@ -56,8 +99,25 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     }
 
-    const updater = session?.name || session?.sub || 'PIC_REGIONAL_4';
-    const updated = await isuStrategisRepository.update(id, parsed.data, updater);
+    const updatePayload = { ...parsed.data };
+    if (updatePayload.cabangCode !== undefined) {
+      const targetCheck = validateBranchWriteAccess(auth.session, updatePayload.cabangCode);
+      if (!targetCheck.allowed) {
+        return NextResponse.json(
+          { success: false, error: targetCheck.error || 'Akses ditolak: cabang tujuan berada di luar wewenang Anda.' },
+          { status: 403 }
+        );
+      }
+      updatePayload.cabangCode = targetCheck.canonicalCode;
+      if (auth.session.role === 'pic_cabang') {
+        updatePayload.cabangName = getBranchNameByCode(targetCheck.canonicalCode);
+      }
+    } else if (auth.session.role === 'pic_cabang' && updatePayload.cabangName !== undefined) {
+      updatePayload.cabangName = getBranchNameByCode(loaded.canonicalCode);
+    }
+
+    const updater = auth.session.name || auth.session.sub;
+    const updated = await isuStrategisRepository.update(id, updatePayload, updater);
 
     if (!updated) {
       return NextResponse.json({ success: false, error: 'Data isu tidak ditemukan untuk diperbarui.' }, { status: 404 });
@@ -66,9 +126,9 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     // Rekam Audit Trail
     try {
       await dbQueries.createAuditLog({
-        user_id: session?.sub || 'user_pic',
+        user_id: auth.session.sub,
         user_name: updater,
-        user_role: session?.role || 'pic',
+        user_role: auth.session.role,
         action: 'UPDATE_MANUAL_DATA',
         entity: 'ISU_STRATEGIS',
         entity_id: id,
@@ -76,7 +136,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         ip_address: clientIp,
       });
     } catch (auditErr) {
-      console.warn('[PUT /api/isu-strategis/:id] Audit log error:', auditErr);
+      logError('api/isu-strategis/[id]:audit', auditErr, { method: 'PUT', requestId: req.headers.get('x-request-id') });
     }
 
     return NextResponse.json({
@@ -85,34 +145,26 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       data: updated,
     });
   } catch (error: unknown) {
-    console.error('[PUT /api/isu-strategis/:id] Error:', error);
-    const message = error instanceof Error ? error.message : 'Gagal memperbarui data isu.';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/isu-strategis/[id]', error, { method: 'PUT', requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal memperbarui data isu.' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest, context: RouteContext) {
+  const auth = await requireAuth(req, { requiredPermission: 'manual_input:write' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const id = await resolveParamId(context);
     if (!id) {
       return NextResponse.json({ success: false, error: 'ID isu tidak valid.' }, { status: 400 });
     }
 
-    const session = await resolveRequestSession(req);
+    const loaded = await loadWritableIsu(id, auth.session, 'Data isu tidak ditemukan.');
+    if (!loaded.ok) return loaded.response;
+    const { existing } = loaded;
+
     const clientIp = getClientIp(req);
-
-    if (session && session.role === 'viewer') {
-      return NextResponse.json(
-        { success: false, error: 'Akses ditolak: Akun Viewer (BOD) hanya memiliki izin baca.' },
-        { status: 403 }
-      );
-    }
-
-    const existing = await isuStrategisRepository.getById(id);
-    if (!existing) {
-      return NextResponse.json({ success: false, error: 'Data isu tidak ditemukan.' }, { status: 404 });
-    }
-
     const deleted = await isuStrategisRepository.delete(id);
     if (!deleted) {
       return NextResponse.json({ success: false, error: 'Gagal menghapus data isu dari database.' }, { status: 500 });
@@ -121,9 +173,9 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     // Rekam Audit Trail
     try {
       await dbQueries.createAuditLog({
-        user_id: session?.sub || 'user_pic',
-        user_name: session?.name || 'PIC_REGIONAL_4',
-        user_role: session?.role || 'pic',
+        user_id: auth.session.sub,
+        user_name: auth.session.name || auth.session.sub,
+        user_role: auth.session.role,
         action: 'UPDATE_MANUAL_DATA',
         entity: 'ISU_STRATEGIS',
         entity_id: id,
@@ -131,7 +183,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
         ip_address: clientIp,
       });
     } catch (auditErr) {
-      console.warn('[DELETE /api/isu-strategis/:id] Audit log error:', auditErr);
+      logError('api/isu-strategis/[id]:audit', auditErr, { method: 'DELETE', requestId: req.headers.get('x-request-id') });
     }
 
     return NextResponse.json({
@@ -140,8 +192,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       id,
     });
   } catch (error: unknown) {
-    console.error('[DELETE /api/isu-strategis/:id] Error:', error);
-    const message = error instanceof Error ? error.message : 'Gagal menghapus data isu.';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/isu-strategis/[id]', error, { method: 'DELETE', requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal menghapus data isu.' }, { status: 500 });
   }
 }

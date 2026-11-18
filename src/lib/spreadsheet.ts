@@ -19,6 +19,90 @@ import * as XLSX from 'xlsx';
 
 /** Hard ceiling regardless of caller — protects the event loop. */
 export const MAX_SPREADSHEET_ROWS = 5000;
+/** Maximum worksheet columns allowed before sheet_to_json materialization (`SA-20`). */
+export const MAX_SPREADSHEET_COLUMNS = 100;
+/** Maximum ZIP archive entries allowed inside an .xlsx container (`SA-20`). */
+export const MAX_ZIP_ENTRIES = 200;
+/** Maximum total uncompressed payload allowed inside an .xlsx ZIP container (25 MB). */
+export const MAX_ZIP_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
+/** Maximum compression ratio allowed when uncompressed payload exceeds 1 MB. */
+export const MAX_ZIP_COMPRESSION_RATIO = 100;
+
+/**
+ * Inspect ZIP Central Directory headers before passing an `.xlsx` buffer to SheetJS
+ * so high-ratio ZIP/XML decompression bombs are rejected before inflation (`SA-20`).
+ */
+export function assertSafeZipArchive(buffer: Buffer): void {
+  // Only inspect PK ZIP containers (e.g. .xlsx); plain .csv / legacy .xls skip this check.
+  if (buffer.length < 22 || buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+    return;
+  }
+
+  // Locate End of Central Directory (EOCD) record signature 0x06054b50 from the tail
+  const minOffset = Math.max(0, buffer.length - 65557);
+  let eocdOffset = -1;
+  for (let i = buffer.length - 22; i >= minOffset; i--) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  if (eocdOffset === -1) {
+    throw new Error('Berkas spreadsheet (.xlsx) rusak atau struktur ZIP tidak valid.');
+  }
+
+  const totalEntries = buffer.readUInt16LE(eocdOffset + 10);
+  const cdSize = buffer.readUInt32LE(eocdOffset + 12);
+  const cdOffset = buffer.readUInt32LE(eocdOffset + 16);
+
+  if (totalEntries > MAX_ZIP_ENTRIES) {
+    throw new Error(
+      `Berkas spreadsheet ditolak: jumlah entri arsip (${totalEntries}) melebihi batas maksimum ${MAX_ZIP_ENTRIES}.`
+    );
+  }
+
+  if (cdOffset + cdSize > buffer.length) {
+    throw new Error('Berkas spreadsheet (.xlsx) memiliki direktori ZIP yang tidak valid.');
+  }
+
+  let cursor = cdOffset;
+  let parsedEntries = 0;
+  let totalUncompressed = 0;
+
+  while (cursor + 46 <= cdOffset + cdSize && parsedEntries < totalEntries) {
+    if (buffer.readUInt32LE(cursor) !== 0x02014b50) {
+      break;
+    }
+    const uncompressedSize = buffer.readUInt32LE(cursor + 24);
+    const nameLen = buffer.readUInt16LE(cursor + 28);
+    const extraLen = buffer.readUInt16LE(cursor + 30);
+    const commentLen = buffer.readUInt16LE(cursor + 32);
+
+    // Reject ZIP64 sentinel (0xFFFFFFFF) or excessive uncompressed totals
+    if (uncompressedSize === 0xffffffff) {
+      throw new Error('Berkas spreadsheet ditolak: arsip ZIP64 berukuran besar tidak didukung.');
+    }
+
+    totalUncompressed += uncompressedSize;
+    if (totalUncompressed > MAX_ZIP_UNCOMPRESSED_BYTES) {
+      throw new Error(
+        'Berkas spreadsheet ditolak: ukuran data terdekompresi melebihi batas keamanan 25 MB.'
+      );
+    }
+
+    cursor += 46 + nameLen + extraLen + commentLen;
+    parsedEntries += 1;
+  }
+
+  if (
+    totalUncompressed > 1_048_576 &&
+    totalUncompressed / Math.max(1, buffer.length) > MAX_ZIP_COMPRESSION_RATIO
+  ) {
+    throw new Error(
+      'Berkas spreadsheet ditolak: rasio kompresi arsip tidak wajar (potensi ZIP bomb).'
+    );
+  }
+}
 
 export interface SafeReadOptions {
   /** Maximum rows to read per sheet. Clamped to MAX_SPREADSHEET_ROWS. */
@@ -53,6 +137,9 @@ export function clampRowLimit(requested?: number): number {
  */
 export function readWorkbookSafe(buffer: Buffer, options: SafeReadOptions = {}): SafeWorkbook {
   const rows = clampRowLimit(options.maxRows);
+
+  // SA-20: Reject ZIP decompression bombs before invoking synchronous SheetJS decompression.
+  assertSafeZipArchive(buffer);
 
   let workbook: XLSX.WorkBook;
   try {
@@ -105,6 +192,17 @@ export function sheetToRowsChecked(
 ): SheetRowsResult {
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) return { rows: [], truncated: false };
+
+  const ref = sheet['!ref'];
+  if (ref) {
+    const range = XLSX.utils.decode_range(ref);
+    const colCount = range.e.c - range.s.c + 1;
+    if (colCount > MAX_SPREADSHEET_COLUMNS) {
+      throw new Error(
+        `Lembar spreadsheet ditolak: jumlah kolom (${colCount}) melebihi batas maksimum ${MAX_SPREADSHEET_COLUMNS}.`
+      );
+    }
+  }
 
   const limit = clampRowLimit(maxRows);
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Array<Record<string, unknown>>;

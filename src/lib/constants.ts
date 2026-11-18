@@ -74,6 +74,13 @@ export function getBranchById(id: string): OfficialBranch | undefined {
 }
 
 export function getCanonicalBranchCode(code?: string, name?: string): string {
+  // Prioritize official branch codes before free-text branch names so a spoofed
+  // namaCabang cannot override a validated canonical kodeCabang (NV-04).
+  if (code) {
+    const cleanCode = String(code).trim().toUpperCase();
+    const found = OFFICIAL_BRANCHES.find(b => b.code === cleanCode);
+    if (found) return found.code;
+  }
   if (name) {
     const cleanName = String(name).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     for (const b of OFFICIAL_BRANCHES) {
@@ -88,10 +95,7 @@ export function getCanonicalBranchCode(code?: string, name?: string): string {
     if (cleanName === 'regional4' || cleanName === 'reg4') return 'R99';
   }
   if (code) {
-    const cleanCode = String(code).trim().toUpperCase();
-    const found = OFFICIAL_BRANCHES.find(b => b.code === cleanCode);
-    if (found) return found.code;
-    return cleanCode;
+    return String(code).trim().toUpperCase();
   }
   return '';
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
+import { logError } from '@/lib/logger';
 import {
   requireAuth,
   enforceBranchFilterForRead,
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
       month,
       year,
       verified_only,
+      limit: 10000,
     });
 
     const format = (searchParams.get('format') || '').toLowerCase();
@@ -85,6 +87,10 @@ export async function GET(req: NextRequest) {
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
           'Content-Disposition': 'inline; filename="Executive_Briefing_BOD_Regional4.html"',
+          // SA-18: Strict sandbox CSP prevents any script execution even if rendered inline.
+          'Content-Security-Policy':
+            "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; sandbox",
+          'X-Content-Type-Options': 'nosniff',
         },
       });
     }
@@ -110,7 +116,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Gagal mengekspor laporan.';
-    return NextResponse.json({ success: false, message }, { status: 500 });
+    logError('api/reports/export', error, { requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, message: 'Gagal mengekspor laporan.' }, { status: 500 });
   }
 }

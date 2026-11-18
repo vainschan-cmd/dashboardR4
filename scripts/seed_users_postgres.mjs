@@ -28,11 +28,13 @@ async function run() {
   console.log(`Loaded ${rows.length} users from master_user_pic.xlsx`);
 
   const defaultPassword = process.env.SEED_DEFAULT_PASSWORD || process.env.BOOTSTRAP_PIC_PASSWORD;
-  if (!defaultPassword) {
-    console.error('Error: environment variable SEED_DEFAULT_PASSWORD atau BOOTSTRAP_PIC_PASSWORD wajib disetel.');
+  if (!defaultPassword || defaultPassword.length < 12) {
+    console.error(
+      'Error: environment variable SEED_DEFAULT_PASSWORD atau BOOTSTRAP_PIC_PASSWORD wajib disetel (minimal 12 karakter).'
+    );
     process.exit(1);
   }
-  const passwordHash = hashPassword(defaultPassword);
+  const mustChangePassword = process.env.BOOTSTRAP_TEST_READY !== 'true';
 
   for (const r of rows) {
     const nipp = String(r['NIPP (USERNAME)']).trim();
@@ -43,10 +45,12 @@ async function run() {
     const branch_id = String(r['CABANG'] || 'R99').trim();
     const email = String(r['EMAIL'] || `${nipp}@pelindo.co.id`).trim();
     const id = `usr_${nipp}`;
+    // SA-26: Unique per-user scrypt salt; never overwrite already-rotated production password_hash.
+    const passwordHash = hashPassword(defaultPassword);
 
     await client.query(`
-      INSERT INTO users (id, username, nipp, name, email, divisi, departemen, role, branch_id, password_hash, active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+      INSERT INTO users (id, username, nipp, name, email, divisi, departemen, role, branch_id, password_hash, active, must_change_password)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11)
       ON CONFLICT (username) DO UPDATE SET
         nipp = EXCLUDED.nipp,
         name = EXCLUDED.name,
@@ -54,10 +58,8 @@ async function run() {
         divisi = EXCLUDED.divisi,
         departemen = EXCLUDED.departemen,
         role = EXCLUDED.role,
-        branch_id = EXCLUDED.branch_id,
-        password_hash = EXCLUDED.password_hash,
-        active = true
-    `, [id, nipp, nipp, name, email, divisi, departemen, role, branch_id, passwordHash]);
+        branch_id = EXCLUDED.branch_id
+    `, [id, nipp, nipp, name, email, divisi, departemen, role, branch_id, passwordHash, mustChangePassword]);
   }
 
   const countRes = await client.query('SELECT count(*) FROM users');

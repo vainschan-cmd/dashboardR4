@@ -56,3 +56,6 @@ next-env.d.ts
 
 # SQLite database (berisi hash kata sandi akun; jangan di-commit)
 /data/ed_dashboard.db
+
+# Konfigurasi koneksi DB runtime (berisi kredensial terenkripsi; jangan di-commit)
+/data/db_config.json

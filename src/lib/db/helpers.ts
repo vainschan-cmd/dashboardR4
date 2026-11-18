@@ -34,8 +34,9 @@ export function sanitizeSafeDataFilePath(
 export function toSafeUser(raw: Record<string, unknown> | User): User {
   if (!raw) return raw as User;
   const rawRecord = raw as Record<string, unknown>;
-  const { password: _removedPassword, ...rest } = rawRecord;
+  const { password: _removedPassword, password_hash: _removedPasswordHash, ...rest } = rawRecord;
   void _removedPassword;
+  void _removedPasswordHash;
   return {
     ...(rest as unknown as User),
     nipp: String(rawRecord.nipp || rawRecord.username || ''),

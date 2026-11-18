@@ -1,12 +1,12 @@
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import * as xlsx from 'xlsx';
 import { User, UserRole } from './types';
 import { OFFICIAL_BRANCHES } from './constants';
 import { resolveBootstrapPassword } from './bootstrap';
 import { readWorkbookSafe, sheetToRows } from './spreadsheet';
 import { dbQueries } from './db';
+import { neutralizeFormulaCell } from './excelExporter';
 // `FEAT-10`: file-imported roles are parsed strictly, never fuzzy-matched.
 import { canGrantRole, describeAllowedRoles, parseRoleStrict } from './roleMapping';
 // `CODE-04`: the seed data lives in a dependency-free module so `db.ts` can read
@@ -61,55 +61,46 @@ export function getMasterUserSpreadsheetPath(): string {
   return path.join(dataDir, MASTER_USER_FILE);
 }
 
+function assertNotSymlink(filePath: string): void {
+  if (!fs.existsSync(filePath)) return;
+  const lstat = fs.lstatSync(filePath);
+  if (lstat.isSymbolicLink()) {
+    throw new Error('Akses berkas ditolak: symbolic link tidak diizinkan.');
+  }
+}
+
 /**
- * Find the latest master_user_pic.xlsx between Downloads folder and data folder
+ * Find the authoritative master_user_pic.xlsx strictly confined inside workspace `./data` (`SA-22`).
  */
-export function findLatestMasterUserSpreadsheet(): { path: string; source: 'downloads' | 'data'; mtime: Date } | null {
-  const downloadsPath = path.join(os.homedir(), 'Downloads', MASTER_USER_FILE);
+export function findLatestMasterUserSpreadsheet(): { path: string; source: 'data'; mtime: Date } | null {
   const dataPath = path.join(process.cwd(), 'data', MASTER_USER_FILE);
-
-  let downloadsStat: fs.Stats | null = null;
-  let dataStat: fs.Stats | null = null;
-
-  if (fs.existsSync(downloadsPath)) {
-    try { downloadsStat = fs.statSync(downloadsPath); } catch {}
-  }
   if (fs.existsSync(dataPath)) {
-    try { dataStat = fs.statSync(dataPath); } catch {}
-  }
-
-  if (downloadsStat && dataStat) {
-    if (downloadsStat.mtimeMs >= dataStat.mtimeMs) {
-      return { path: downloadsPath, source: 'downloads', mtime: downloadsStat.mtime };
-    } else {
+    try {
+      assertNotSymlink(dataPath);
+      const dataStat = fs.statSync(dataPath);
       return { path: dataPath, source: 'data', mtime: dataStat.mtime };
+    } catch {
+      return null;
     }
-  } else if (downloadsStat) {
-    return { path: downloadsPath, source: 'downloads', mtime: downloadsStat.mtime };
-  } else if (dataStat) {
-    return { path: dataPath, source: 'data', mtime: dataStat.mtime };
   }
-
   return null;
 }
 
 /**
- * Export a list of users to the official Excel spreadsheet
+ * Build an in-memory Excel workbook buffer for user exports without mutating disk (`SA-13` + `SA-28`).
  */
-export function exportUsersToSpreadsheet(users: User[]): string {
-  const filePath = getMasterUserSpreadsheetPath();
-
+export function buildUsersWorkbookBuffer(users: User[]): Buffer {
   const rows = users.map((u, idx) => ({
     'NO': idx + 1,
-    'NIPP (USERNAME)': u.nipp || u.username,
-    'NAMA LENGKAP': u.name,
-    'DIVISI': u.divisi || '-',
-    'DEPARTEMEN': u.departemen || '-',
-    'HAK AKSES (ROLE)': u.role,
-    'CABANG': u.branch_id || 'R99',
-    'EMAIL': u.email || `${(u.nipp || u.username)}@pelindo.co.id`,
+    'NIPP (USERNAME)': neutralizeFormulaCell(u.nipp || u.username),
+    'NAMA LENGKAP': neutralizeFormulaCell(u.name),
+    'DIVISI': neutralizeFormulaCell(u.divisi || '-'),
+    'DEPARTEMEN': neutralizeFormulaCell(u.departemen || '-'),
+    'HAK AKSES (ROLE)': neutralizeFormulaCell(u.role),
+    'CABANG': neutralizeFormulaCell(u.branch_id || 'R99'),
+    'EMAIL': neutralizeFormulaCell(u.email || `${u.nipp || u.username}@pelindo.co.id`),
     'STATUS': u.active ? 'AKTIF' : 'NONAKTIF',
-    'TANGGAL TERDAFTAR': u.created_at || new Date().toISOString().split('T')[0],
+    'TANGGAL TERDAFTAR': neutralizeFormulaCell(u.created_at || new Date().toISOString().split('T')[0]),
   }));
 
   const wb = xlsx.utils.book_new();
@@ -156,22 +147,19 @@ export function exportUsersToSpreadsheet(users: User[]): string {
   wsMeta['!cols'] = [{ wch: 26 }, { wch: 60 }];
   xlsx.utils.book_append_sheet(wb, wsMeta, 'INFO_GOOGLE_DRIVE');
 
-  const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  return xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+/**
+ * Export a list of users to the workspace `./data/master_user_pic.xlsx` mirror (`SA-22`).
+ */
+export function exportUsersToSpreadsheet(users: User[]): string {
+  const filePath = getMasterUserSpreadsheetPath();
+  assertNotSymlink(filePath);
+  const buf = buildUsersWorkbookBuffer(users);
   fs.writeFileSync(filePath, buf);
 
-  // Otomatis salin ke folder Downloads pengguna agar langsung siap di-upload ke Google Drive
-  try {
-    const downloadsDir = path.join(os.homedir(), 'Downloads');
-    if (fs.existsSync(downloadsDir)) {
-      const downloadsFile = path.join(downloadsDir, MASTER_USER_FILE);
-      fs.writeFileSync(downloadsFile, buf);
-      console.log(`[UserSync] Spreadsheet master user juga disalin ke: ${downloadsFile}`);
-    }
-  } catch (err) {
-    console.error('[UserSync] Gagal menyalin ke folder Downloads:', err);
-  }
-
-  console.log(`[UserSync] Spreadsheet master user tersimpan di: ${filePath} (${users.length} akun, akun drive: ${DRIVE_ACCOUNT})`);
+  console.log(`[UserSync] Spreadsheet master user tersimpan di: ${MASTER_USER_FILE} (${users.length} akun, akun drive: ${DRIVE_ACCOUNT})`);
   return filePath;
 }
 
@@ -198,7 +186,7 @@ export interface ImportUserResult {
   rejectedCount: number;
   rejected: Array<{ nipp: string; reason: string }>;
   sourcePath: string;
-  sourceType: 'downloads' | 'data' | 'buffer' | 'fallback';
+  sourceType: 'data' | 'buffer' | 'fallback';
   users: User[];
 }
 
@@ -235,30 +223,39 @@ export async function importUsersFromSpreadsheet(
 
   let wb: xlsx.WorkBook;
   let sourcePath = '';
-  let sourceType: 'downloads' | 'data' | 'buffer' | 'fallback' = 'data';
+  let sourceType: 'data' | 'buffer' | 'fallback' = 'data';
+
+  const readBoundedDiskFile = (filePath: string): Buffer => {
+    assertNotSymlink(filePath);
+    const stat = fs.statSync(filePath);
+    if (stat.size > 5 * 1024 * 1024) {
+      throw new Error('Ukuran berkas master user melebihi batas maksimum 5 MB.');
+    }
+    return fs.readFileSync(filePath);
+  };
 
   if (Buffer.isBuffer(customInput)) {
-    wb = readWorkbookSafe(customInput).workbook;
+    wb = readWorkbookSafe(customInput, { maxRows: MAX_IMPORTED_USERS, firstSheetOnly: false }).workbook;
     sourceType = 'buffer';
     sourcePath = 'Uploaded Buffer';
   } else if (typeof customInput === 'string' && fs.existsSync(customInput)) {
     sourcePath = customInput;
-    sourceType = customInput.includes('Downloads') ? 'downloads' : 'data';
-    const buf = fs.readFileSync(customInput);
-    wb = readWorkbookSafe(buf).workbook;
+    sourceType = 'data';
+    const buf = readBoundedDiskFile(customInput);
+    wb = readWorkbookSafe(buf, { maxRows: MAX_IMPORTED_USERS, firstSheetOnly: false }).workbook;
   } else {
     const latest = findLatestMasterUserSpreadsheet();
     if (latest && fs.existsSync(latest.path)) {
       sourcePath = latest.path;
       sourceType = latest.source;
-      const buf = fs.readFileSync(latest.path);
-      wb = readWorkbookSafe(buf).workbook;
+      const buf = readBoundedDiskFile(latest.path);
+      wb = readWorkbookSafe(buf, { maxRows: MAX_IMPORTED_USERS, firstSheetOnly: false }).workbook;
     } else {
       const defaultPath = ensureMasterUserSpreadsheet();
       sourcePath = defaultPath;
       sourceType = 'fallback';
-      const buf = fs.readFileSync(defaultPath);
-      wb = readWorkbookSafe(buf).workbook;
+      const buf = readBoundedDiskFile(defaultPath);
+      wb = readWorkbookSafe(buf, { maxRows: MAX_IMPORTED_USERS, firstSheetOnly: false }).workbook;
     }
   }
 
@@ -343,6 +340,13 @@ export async function importUsersFromSpreadsheet(
 
     const rawBranch = row['CABANG'] || row['PENUGASAN CABANG'] || row['cabang'] || row['branch_id'];
     const branch_id = normalizeBranch(rawBranch);
+    if (role === 'pic_cabang' && branch_id === 'R99') {
+      rejected.push({
+        nipp,
+        reason: 'Akun PIC Cabang wajib memiliki kode cabang operasional (bukan R99 atau kosong).',
+      });
+      continue;
+    }
     const rawEmail = row['EMAIL'] || row['email'];
     const email = rawEmail ? String(rawEmail).trim() : `${nipp}@pelindo.co.id`;
 

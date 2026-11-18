@@ -10,13 +10,20 @@ import {
   getClientIp,
   readRefreshTokenCookie,
 } from '@/lib/auth';
+import { logError } from '@/lib/logger';
 
-export async function GET(req: NextRequest) {
+async function handleSessionRequest(req: NextRequest, allowRotation: boolean) {
   try {
-    // `rotate=1` is the client's silent renewal + activity heartbeat: it issues a
-    // new short-lived access token without touching the refresh token, so it is
-    // safe to call while other requests are in flight.
-    const wantsAccessRotation = req.nextUrl.searchParams.get('rotate') === '1';
+    const wantsAccessRotation = allowRotation && req.nextUrl.searchParams.get('rotate') === '1';
+
+    // SA-13: Block cross-site GET-based session rotation attempts (e.g. top-level navigation CSRF).
+    const secFetchSite = (req.headers.get('sec-fetch-site') || '').trim().toLowerCase();
+    if (req.method === 'GET' && wantsAccessRotation && secFetchSite === 'cross-site') {
+      return NextResponse.json(
+        { success: false, authenticated: false, error: 'Permintaan rotasi lintas origin ditolak.' },
+        { status: 403 }
+      );
+    }
 
     let session = await getSessionFromRequest(req);
     let shouldRotateCookies = false;
@@ -87,6 +94,21 @@ export async function GET(req: NextRequest) {
     const safeUser = toSafeUser(dbUser);
     const systemParams = await dbQueries.getSystemParameters();
 
+    // SA-10: Atomically consume the refresh token BEFORE issuing replacement cookies.
+    // If a concurrent request already consumed `rotatedFromJti`, treat as token reuse.
+    if (shouldRotateCookies && rotatedFromJti) {
+      const consumed = await dbQueries.consumeRefreshSession(rotatedFromJti);
+      if (!consumed) {
+        await dbQueries.revokeAllUserSessions(safeUser.id, 'refresh_reuse_detected');
+        const conflictRes = NextResponse.json(
+          { success: false, authenticated: false, user: null },
+          { status: 401 }
+        );
+        clearSessionCookies(conflictRes);
+        return conflictRes;
+      }
+    }
+
     const response = NextResponse.json({
       success: true,
       authenticated: true,
@@ -112,10 +134,6 @@ export async function GET(req: NextRequest) {
     });
 
     if (shouldRotateCookies) {
-      // Rotate: invalidate the consumed refresh token before issuing a new pair.
-      if (rotatedFromJti) {
-        await dbQueries.revokeAuthSession(rotatedFromJti, 'rotated');
-      }
       await issueSessionCookies(
         response,
         safeUser,
@@ -134,10 +152,19 @@ export async function GET(req: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Gagal memuat sesi pengguna.';
+    logError('api/users/me', error, { requestId: req.headers.get('x-request-id') });
     return NextResponse.json(
-      { success: false, authenticated: false, user: null, error: message },
+      { success: false, authenticated: false, user: null, error: 'Gagal memuat sesi pengguna.' },
       { status: 500 }
     );
   }
+}
+
+export async function GET(req: NextRequest) {
+  return handleSessionRequest(req, true);
+}
+
+/** CSRF-protected session renewal/rotation endpoint (`SA-13`). */
+export async function POST(req: NextRequest) {
+  return handleSessionRequest(req, true);
 }

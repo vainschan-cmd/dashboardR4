@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
+import path from 'path';
 import { dbQueries, toSafeUser } from '@/lib/db';
 import { requireAuth } from '@/lib/rbac';
+import { readMultipartFormDataBounded } from '@/lib/httpBodyLimit';
 import { MAX_UPLOAD_FILE_BYTES, userSyncDriveSchema, parseWithSchema } from '@/lib/validation';
 import {
   exportUsersToSpreadsheet,
@@ -21,11 +23,24 @@ export async function POST(req: NextRequest) {
 
     // Check if multipart form data (user uploaded custom file)
     if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
+      const formData = await readMultipartFormDataBounded(req, MAX_UPLOAD_FILE_BYTES + 65536);
+      if (!formData) {
+        return NextResponse.json(
+          { success: false, error: 'Ukuran berkas Excel melebihi batas maksimum 5 MB.' },
+          { status: 413 }
+        );
+      }
       const file = formData.get('file') as File | null;
       if (!file) {
         return NextResponse.json(
           { success: false, error: 'File Excel tidak ditemukan dalam request.' },
+          { status: 400 }
+        );
+      }
+      const ext = path.extname(file.name || '').toLowerCase();
+      if (ext !== '.xlsx' && ext !== '.xls') {
+        return NextResponse.json(
+          { success: false, error: 'Format berkas tidak didukung. Gunakan format .xlsx atau .xls.' },
           { status: 400 }
         );
       }
@@ -79,10 +94,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         direction: 'pull',
-        message: `Berhasil mengambil data dari Spreadsheet My Drive (${result.sourceType === 'downloads' ? 'folder Downloads' : 'data internal'}): ${result.createdCount} PIC baru ditambahkan, ${result.updatedCount} PIC diperbarui${result.rejectedCount > 0 ? `, ${result.rejectedCount} baris ditolak` : ''}. Total ${result.users.length} PIC siap digunakan.`,
+        message: `Berhasil mengambil data dari Spreadsheet My Drive (data internal): ${result.createdCount} PIC baru ditambahkan, ${result.updatedCount} PIC diperbarui${result.rejectedCount > 0 ? `, ${result.rejectedCount} baris ditolak` : ''}. Total ${result.users.length} PIC siap digunakan.`,
         account: DRIVE_ACCOUNT,
         fileName: MASTER_USER_FILE,
-        source: result.sourcePath,
+        source: path.basename(result.sourcePath),
         sourceType: result.sourceType,
         totalUsers: result.users.length,
         createdCount: result.createdCount,

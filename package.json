@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "tunnel": "node scripts/keep_portdash.js",
-    "tunnel:cloudflare": "sh -c './cloudflared tunnel run --token \"${CLOUDFLARE_TUNNEL_TOKEN:-}\"'",
+    "tunnel:cloudflare": "sh -c 'TUNNEL_TOKEN=\"${CLOUDFLARE_TUNNEL_TOKEN:-}\" ./cloudflared tunnel run'",
     "tunnel:quick": "./cloudflared tunnel --url http://localhost:3000",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "lucide-react": "^1.65.0",
-    "next": "16.4.3",
+    "next": "16.4.6",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -40,7 +40,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.6",
     "typescript": "^5",
     "vitest": "^3.2.7"
   }

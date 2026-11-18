@@ -5,24 +5,18 @@ import { ingestInputData } from '@/lib/ingestInputData';
 import { dbQueries, sanitizeSafeDataFilePath } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
 import { requireAuth } from '@/lib/rbac';
-import { driveSyncSchema, parseWithSchema } from '@/lib/validation';
+import { logError } from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, { requiredPermission: 'import:write' });
+  // SA-29: Restrict full-regional file sync strictly to Super Admin (system_params:manage)
+  // and ignore caller-supplied arbitrary filePath overrides.
+  const auth = await requireAuth(req, { requiredPermission: 'system_params:manage' });
   if (!auth.authorized) return auth.response;
 
   try {
-    const rawBody = await req.json().catch(() => ({}));
-    const parsed = parseWithSchema(driveSyncSchema, rawBody);
-    const customPath = parsed.success ? parsed.data.customPath : undefined;
-    const rawFilePath =
-      customPath ||
-      (typeof (rawBody as Record<string, unknown>)?.filePath === 'string'
-        ? String((rawBody as Record<string, unknown>).filePath)
-        : undefined);
-
+    const creds = await dbQueries.getIntegrationCredentials();
     const { safeRelativePath, resolvedAbsolutePath: targetFile } = sanitizeSafeDataFilePath(
-      rawFilePath,
+      creds?.google_drive_file_path,
       'input_data.xlsx',
       ['.xlsx', '.xls', '.csv']
     );
@@ -40,7 +34,7 @@ export async function POST(req: NextRequest) {
     const stats = await ingestInputData(targetFile);
 
     try {
-      dbQueries.createAuditLog({
+      await dbQueries.createAuditLog({
         user_id: auth.session.sub,
         user_name: auth.session.name,
         user_role: auth.session.role,
@@ -62,11 +56,11 @@ export async function POST(req: NextRequest) {
       syncedAt: new Date().toISOString(),
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Gagal melakukan sinkronisasi file drive.';
+    logError('api/import/drive-sync', error, { requestId: req.headers.get('x-request-id') });
     return NextResponse.json(
       {
         success: false,
-        error: message,
+        error: 'Gagal melakukan sinkronisasi file drive.',
       },
       { status: 500 }
     );
@@ -74,7 +68,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { requiredPermission: 'import:write' });
+  const auth = await requireAuth(req, { requiredPermission: 'system_params:manage' });
   if (!auth.authorized) return auth.response;
 
   const filePath = path.join(process.cwd(), 'data', 'input_data.xlsx');

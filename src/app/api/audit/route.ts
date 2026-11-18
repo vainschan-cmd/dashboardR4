@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbQueries } from '@/lib/db';
 import { requireAuth } from '@/lib/rbac';
 import { auditQuerySchema, parseWithSchema } from '@/lib/validation';
+import { logError } from '@/lib/logger';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'audit_logs:read' });
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
       batches,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Gagal memuat log audit.';
-    return NextResponse.json({ success: false, message }, { status: 500 });
+    logError('api/audit', error, { requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, message: 'Gagal memuat log audit.' }, { status: 500 });
   }
 }

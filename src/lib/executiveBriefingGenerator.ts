@@ -9,8 +9,18 @@ export interface ExecutiveBriefingParams {
   generatedBy: string;
 }
 
+export function escapeHtml(input: unknown): string {
+  return String(input ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function generateExecutiveBriefingHtml(params: ExecutiveBriefingParams): string {
   const { records, branches, month, year, generatedBy } = params;
+  const safeGeneratedBy = escapeHtml(generatedBy);
 
   // Aggregate metrics
   let totalRevenue = 0;
@@ -61,21 +71,19 @@ export function generateExecutiveBriefingHtml(params: ExecutiveBriefingParams): 
   </style>
 </head>
 <body>
-  <div class="no-print" style="margin-bottom: 16px; text-align: right;">
-    <button onclick="window.print()" style="padding: 8px 16px; background: #0369a1; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
-      Cetak / Simpan PDF
-    </button>
+  <div class="no-print" style="margin-bottom: 16px; text-align: right; font-size: 9pt; color: #475569;">
+    Gunakan pintasan <strong>Ctrl+P</strong> / <strong>Cmd+P</strong> pada browser untuk mencetak atau menyimpan sebagai PDF.
   </div>
 
   <div class="header">
     <div>
       <h1 class="title">EXECUTIVE BRIEFING REPORT</h1>
-      <div class="subtitle">PT Pelabuhan Indonesia (Persero) Regional 4 — ${periodLabel}</div>
+      <div class="subtitle">PT Pelabuhan Indonesia (Persero) Regional 4 — ${escapeHtml(periodLabel)}</div>
     </div>
     <div class="meta">
       <div>Dokumen Resmi Direksi (BOD)</div>
-      <div>Dicetak oleh: ${generatedBy}</div>
-      <div>Waktu: ${new Date().toLocaleString('id-ID')}</div>
+      <div>Dicetak oleh: ${safeGeneratedBy}</div>
+      <div>Waktu: ${escapeHtml(new Date().toLocaleString('id-ID'))}</div>
     </div>
   </div>
 
@@ -123,9 +131,9 @@ export function generateExecutiveBriefingHtml(params: ExecutiveBriefingParams): 
         const count = records.filter(r => r.branch_id === b.id || r.branch_code === b.code).length;
         return `<tr>
           <td>${idx + 1}</td>
-          <td><strong>${b.code}</strong></td>
-          <td>${b.name}</td>
-          <td>${b.region || 'Regional 4'}</td>
+          <td><strong>${escapeHtml(b.code)}</strong></td>
+          <td>${escapeHtml(b.name)}</td>
+          <td>${escapeHtml(b.region || 'Regional 4')}</td>
           <td style="text-align: right;">${count}</td>
         </tr>`;
       }).join('')}

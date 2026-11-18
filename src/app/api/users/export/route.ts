@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
 import { dbQueries, toSafeUser } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
 import { requireAuth } from '@/lib/rbac';
-import { exportUsersToSpreadsheet, MASTER_USER_FILE } from '@/lib/userPicSync';
+import { logError } from '@/lib/logger';
+import { buildUsersWorkbookBuffer, MASTER_USER_FILE } from '@/lib/userPicSync';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'users:manage' });
@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
   try {
     const rawUsers = await dbQueries.getUsers();
     const users = rawUsers.map(toSafeUser);
-    const filePath = exportUsersToSpreadsheet(users);
-    const fileBuffer = fs.readFileSync(filePath);
+    // SA-13 / SA-22: Stream workbook purely from memory without mutating local/Downloads disk on GET.
+    const fileBuffer = buildUsersWorkbookBuffer(users);
 
     try {
       await dbQueries.createAuditLog({
@@ -30,15 +30,16 @@ export async function GET(req: NextRequest) {
       // ignore non-fatal audit error
     }
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${MASTER_USER_FILE}"`,
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Gagal mengekspor data pengguna.';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/users/export', error, { requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal mengekspor data pengguna.' }, { status: 500 });
   }
 }

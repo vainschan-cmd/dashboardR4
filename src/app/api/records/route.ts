@@ -8,6 +8,38 @@ import {
   enforceVerificationStatusFilterForRead,
 } from '@/lib/rbac';
 import { recordsQuerySchema, parseWithSchema } from '@/lib/validation';
+import { logError } from '@/lib/logger';
+
+const MAX_RECORD_FIELDS = 30;
+const ALLOWED_RECORD_FIELDS = new Set([
+  'id',
+  'branch_id',
+  'branch_code',
+  'branch_name',
+  'department_id',
+  'department_name',
+  'indicator_id',
+  'indicator_code',
+  'indicator_name',
+  'direction',
+  'month',
+  'year',
+  'target',
+  'realization',
+  'unit',
+  'achievement_pct',
+  'status_color',
+  'notes',
+  'source_type',
+  'batch_id',
+  'verification_status',
+  'revision_notes',
+  'uploaded_by',
+  'uploaded_at',
+  'verified_by',
+  'verified_at',
+  'is_simulated',
+]);
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'records:read' });
@@ -58,27 +90,33 @@ export async function GET(req: NextRequest) {
     });
     const total = await dbQueries.countMonthlyRecords(filters);
 
-    // Field selection / DTO projection (PERF-07)
+    // Field selection / DTO projection (PERF-07 + SA-25 allowlist & cap)
     const rawFields = searchParams.get('fields');
     const requestedFields = rawFields
-      ? rawFields
-          .split(',')
-          .map((f) => f.trim())
-          .filter(Boolean)
+      ? Array.from(
+          new Set(
+            rawFields
+              .split(',')
+              .slice(0, MAX_RECORD_FIELDS)
+              .map((f) => f.trim())
+              .filter((f) => ALLOWED_RECORD_FIELDS.has(f))
+          )
+        )
       : null;
 
-    const projectedRecords = requestedFields
-      ? records.map((r) => {
-          const projected: Record<string, unknown> = {};
-          const recordMap = r as unknown as Record<string, unknown>;
-          for (const f of requestedFields) {
-            if (f in recordMap) {
-              projected[f] = recordMap[f];
+    const projectedRecords =
+      requestedFields && requestedFields.length > 0
+        ? records.map((r) => {
+            const projected: Record<string, unknown> = {};
+            const recordMap = r as unknown as Record<string, unknown>;
+            for (const f of requestedFields) {
+              if (Object.hasOwn(recordMap, f)) {
+                projected[f] = recordMap[f];
+              }
             }
-          }
-          return projected;
-        })
-      : records;
+            return projected;
+          })
+        : records;
 
     return NextResponse.json({
       success: true,
@@ -90,7 +128,7 @@ export async function GET(req: NextRequest) {
       records: projectedRecords,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Gagal memuat rekaman bulanan.';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/records', error, { requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal memuat rekaman bulanan.' }, { status: 500 });
   }
 }

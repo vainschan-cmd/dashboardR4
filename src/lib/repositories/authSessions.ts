@@ -100,17 +100,33 @@ export const authSessionsRepository = {
     }
   },
 
+  /**
+   * Atomically consume a single-use refresh session (`SA-10`).
+   * Returns true only for the single winner; any concurrent replay sees false
+   * and triggers refresh-reuse detection.
+   */
+  consumeRefreshSession: async (jti: string): Promise<boolean> => {
+    const pool = getPool();
+    const now = Math.floor(Date.now() / 1000);
+    const res = await pool.query(
+      `UPDATE auth_sessions
+          SET revoked_at = $1, revoked_reason = 'rotated'
+        WHERE jti = $2
+          AND token_type = 'refresh'
+          AND revoked_at IS NULL
+        RETURNING jti`,
+      [now, jti]
+    );
+    return (res.rowCount || 0) === 1;
+  },
+
   revokeAllUserSessions: async (userId: string, reason: string = 'admin_action'): Promise<void> => {
-    try {
-      const pool = getPool();
-      const now = Math.floor(Date.now() / 1000);
-      await pool.query(
-        'UPDATE auth_sessions SET revoked_at = $1, revoked_reason = $2 WHERE user_id = $3 AND revoked_at IS NULL',
-        [now, reason, userId]
-      );
-    } catch (e) {
-      console.warn('[PG] Gagal mencabut seluruh auth session user:', e);
-    }
+    const pool = getPool();
+    const now = Math.floor(Date.now() / 1000);
+    await pool.query(
+      'UPDATE auth_sessions SET revoked_at = $1, revoked_reason = $2 WHERE user_id = $3 AND revoked_at IS NULL',
+      [now, reason, userId]
+    );
   },
 
   touchAuthSession: async (jti: string): Promise<void> => {
@@ -158,16 +174,12 @@ export const authSessionsRepository = {
   },
 
   bumpUserTokenVersion: async (userId: string): Promise<number> => {
-    try {
-      const pool = getPool();
-      const res = await pool.query(
-        'UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE id = $1 RETURNING token_version',
-        [userId]
-      );
-      return Number(res.rows[0]?.token_version || 0);
-    } catch {
-      return 0;
-    }
+    const pool = getPool();
+    const res = await pool.query(
+      'UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE id = $1 RETURNING token_version',
+      [userId]
+    );
+    return Number(res.rows[0]?.token_version || 0);
   },
 
   verifyUserPasswordAsync: async (userId: string, plainPassword: string): Promise<boolean> => {
@@ -203,10 +215,9 @@ export const authSessionsRepository = {
       `UPDATE users
           SET password_hash = $1,
               must_change_password = $2,
-              created_at = $3::timestamptz,
               token_version = COALESCE(token_version, 0) + 1
-        WHERE id = $4`,
-      [hashed, Boolean(options.mustChangePassword), new Date().toISOString(), userId]
+        WHERE id = $3`,
+      [hashed, Boolean(options.mustChangePassword), userId]
     );
 
     await authSessionsRepository.revokeAllUserSessions(userId, 'password_change');

@@ -1,9 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { OFFICIAL_BRANCHES, getCanonicalBranchCode, getBranchNameByCode } from '@/lib/constants';
+import {
+  OFFICIAL_BRANCHES,
+  MODULE_DEPARTMENT_MAP,
+  getCanonicalBranchCode,
+  getBranchNameByCode,
+} from '@/lib/constants';
 import { query } from '@/lib/db';
-import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
+import {
+  requireAuth,
+  enforceBranchFilterForRead,
+  enforceDepartmentFilterForRead,
+  enforceVerificationFilterForRead,
+} from '@/lib/rbac';
 import { canonicalRekening, parseMetricPercent, parseRealisasi } from '@/lib/finansialHelpers';
+import { logError } from '@/lib/logger';
 import {
   normalizeGrupEntitas,
   normalizeKondisi,
@@ -41,14 +52,6 @@ function matchesPeriod(
     return rowVal >= startVal && rowVal <= endVal;
   }
   return true;
-}
-
-async function ensureModuleTablesPopulated() {
-  const res = await query<{ count: number }>('SELECT COUNT(*) as count FROM module_finansial');
-  const count = Number(res.rows[0]?.count || 0);
-  if (count === 0) {
-    console.warn('[modules-data] Tabel module_finansial kosong di PostgreSQL ed_dashboard.');
-  }
 }
 
 function resolveVerificationRow<T extends Record<string, any>>(
@@ -99,13 +102,25 @@ function resolveVerificationRow<T extends Record<string, any>>(
   return null;
 }
 
+const MAX_MODULE_QUERY_ROWS = 10_000;
+
+function buildBranchWhereClause(
+  targetBranches: string[] | null,
+  rawBranch: string | undefined,
+  column: string,
+  params: unknown[]
+): string {
+  if (rawBranch === 'NONE') return ' AND 1 = 0';
+  if (!targetBranches || targetBranches.length === 0 || targetBranches.includes('ALL')) return '';
+  params.push(targetBranches);
+  return ` AND UPPER(${column}) = ANY($${params.length}::text[])`;
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
   if (!auth.authorized) return auth.response;
 
   try {
-    await ensureModuleTablesPopulated();
-
     const { searchParams } = new URL(req.url);
     const requestedBranch =
       searchParams.get('branchCode') ||
@@ -113,6 +128,10 @@ export async function GET(req: NextRequest) {
       searchParams.get('terminal') ||
       undefined;
     const rawBranch = enforceBranchFilterForRead(auth.session, requestedBranch);
+    const scopedDept = enforceDepartmentFilterForRead(auth.session, undefined);
+    const canAccessModule = (moduleKey: keyof typeof MODULE_DEPARTMENT_MAP): boolean =>
+      !scopedDept || MODULE_DEPARTMENT_MAP[moduleKey] === scopedDept;
+
     const targetBranches =
       rawBranch && rawBranch !== 'ALL'
         ? rawBranch === 'NONE'
@@ -129,11 +148,11 @@ export async function GET(req: NextRequest) {
       return targetBranches.includes(code.toUpperCase());
     };
 
-    // Default verifiedOnly = true for BOD viewer role unless explicitly overridden via ?verifiedOnly=false
-    const isBodViewer = auth.session.role === 'viewer';
-    const verifiedOnlyParam = searchParams.get('verifiedOnly');
-    const verifiedOnly =
-      verifiedOnlyParam !== null ? verifiedOnlyParam === 'true' : isBodViewer;
+    // SA-03: Enforce server-side verification filter (BOD viewer is ALWAYS verifiedOnly=true)
+    const verifiedOnly = enforceVerificationFilterForRead(
+      auth.session,
+      searchParams.get('verifiedOnly') ?? searchParams.get('verified_only')
+    );
 
     // Period filters
     const exactYearParam = searchParams.get('year') ? Number(searchParams.get('year')) : undefined;
@@ -194,13 +213,20 @@ export async function GET(req: NextRequest) {
     const entitasParam = searchParams.get('entitas')?.trim().toUpperCase();
     const nmCbgParam = searchParams.get('nmCbg')?.trim().toLowerCase();
 
-    const rawFinRows = (
-      await query(
-        'SELECT * FROM v_module_finansial_entitas ORDER BY year DESC, month DESC, branch_code ASC, rekening ASC, entitas ASC'
-      )
-    ).rows as any[];
+    let rawFinRows: any[] = [];
+    if (canAccessModule('finansial')) {
+      const finParams: unknown[] = [];
+      const finBranchSql = buildBranchWhereClause(targetBranches, rawBranch, 'branch_code', finParams);
+      rawFinRows = (
+        await query(
+          `SELECT * FROM v_module_finansial_entitas WHERE 1=1 ${finBranchSql} ORDER BY year DESC, month DESC, branch_code ASC, rekening ASC, entitas ASC LIMIT ${MAX_MODULE_QUERY_ROWS}`,
+          finParams
+        )
+      ).rows as any[];
+    }
 
     const allFinMapped: FinansialRecord[] = rawFinRows
+      .filter(r => matchesBranch(getCanonicalBranchCode(r.branch_code, r.branch_name)))
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
@@ -275,11 +301,20 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Opkom from PostgreSQL module_opkom
-    const rawOpkomRows = (
-      await query('SELECT * FROM module_opkom ORDER BY year DESC, month DESC, branch_code ASC')
-    ).rows as any[];
+    let rawOpkomRows: any[] = [];
+    if (canAccessModule('opkom')) {
+      const opkomParams: unknown[] = [];
+      const opkomBranchSql = buildBranchWhereClause(targetBranches, rawBranch, 'branch_code', opkomParams);
+      rawOpkomRows = (
+        await query(
+          `SELECT * FROM module_opkom WHERE 1=1 ${opkomBranchSql} ORDER BY year DESC, month DESC, branch_code ASC LIMIT ${MAX_MODULE_QUERY_ROWS}`,
+          opkomParams
+        )
+      ).rows as any[];
+    }
 
     const opkom = rawOpkomRows
+      .filter(r => matchesBranch(getCanonicalBranchCode(r.branch_code, r.branch_name)))
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
@@ -313,11 +348,20 @@ export async function GET(req: NextRequest) {
       });
 
     // 3. Kinerja from PostgreSQL module_kinerja
-    const rawKinerjaRows = (
-      await query('SELECT * FROM module_kinerja ORDER BY year DESC, month DESC, branch_code ASC')
-    ).rows as any[];
+    let rawKinerjaRows: any[] = [];
+    if (canAccessModule('kinerja')) {
+      const kinParams: unknown[] = [];
+      const kinBranchSql = buildBranchWhereClause(targetBranches, rawBranch, 'branch_code', kinParams);
+      rawKinerjaRows = (
+        await query(
+          `SELECT * FROM module_kinerja WHERE 1=1 ${kinBranchSql} ORDER BY year DESC, month DESC, branch_code ASC LIMIT ${MAX_MODULE_QUERY_ROWS}`,
+          kinParams
+        )
+      ).rows as any[];
+    }
 
     const kinerja = rawKinerjaRows
+      .filter(r => matchesBranch(getCanonicalBranchCode(r.branch_code, r.branch_name)))
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
@@ -346,11 +390,20 @@ export async function GET(req: NextRequest) {
       });
 
     // 4. Utilisasi from PostgreSQL module_utilisasi
-    const rawUtilRows = (
-      await query('SELECT * FROM module_utilisasi ORDER BY year DESC, month DESC, branch_code ASC')
-    ).rows as any[];
+    let rawUtilRows: any[] = [];
+    if (canAccessModule('utilisasi')) {
+      const utilParams: unknown[] = [];
+      const utilBranchSql = buildBranchWhereClause(targetBranches, rawBranch, 'branch_code', utilParams);
+      rawUtilRows = (
+        await query(
+          `SELECT * FROM module_utilisasi WHERE 1=1 ${utilBranchSql} ORDER BY year DESC, month DESC, branch_code ASC LIMIT ${MAX_MODULE_QUERY_ROWS}`,
+          utilParams
+        )
+      ).rows as any[];
+    }
 
     const utilisasi = rawUtilRows
+      .filter(r => matchesBranch(getCanonicalBranchCode(r.branch_code, r.branch_name)))
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
@@ -387,15 +440,24 @@ export async function GET(req: NextRequest) {
     const kategoriAlatParam = searchParams.get('kategoriAlat')?.trim().toLowerCase();
     const kondisiParam = searchParams.get('kondisi')?.trim();
 
-    const rawAlatRows = (
-      await query(
-        `SELECT *, TO_CHAR(tanggal, 'YYYY-MM-DD') AS tanggal_iso
-         FROM module_peralatan
-         ORDER BY tanggal DESC, grup_entitas ASC, nama_cabang ASC, nama_alat ASC`
-      )
-    ).rows as any[];
+    let rawAlatRows: any[] = [];
+    if (canAccessModule('peralatan')) {
+      const alatParams: unknown[] = [];
+      const alatBranchSql = buildBranchWhereClause(targetBranches, rawBranch, 'branch_code', alatParams);
+      rawAlatRows = (
+        await query(
+          `SELECT *, TO_CHAR(tanggal, 'YYYY-MM-DD') AS tanggal_iso
+           FROM module_peralatan
+           WHERE 1=1 ${alatBranchSql}
+           ORDER BY tanggal DESC, grup_entitas ASC, nama_cabang ASC, nama_alat ASC
+           LIMIT ${MAX_MODULE_QUERY_ROWS}`,
+          alatParams
+        )
+      ).rows as any[];
+    }
 
     const allAlatMapped: PeralatanRecord[] = rawAlatRows
+      .filter(r => matchesBranch(resolvePeralatanBranchCode(String(r.nama_cabang || '').trim(), r.branch_code) || 'R99'))
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
@@ -470,11 +532,20 @@ export async function GET(req: NextRequest) {
     }
 
     // 6. Fasilitas from PostgreSQL module_fasilitas
-    const rawFasRows = (
-      await query('SELECT * FROM module_fasilitas ORDER BY year DESC, month DESC, branch_code ASC')
-    ).rows as any[];
+    let rawFasRows: any[] = [];
+    if (canAccessModule('fasilitas')) {
+      const fasParams: unknown[] = [];
+      const fasBranchSql = buildBranchWhereClause(targetBranches, rawBranch, 'branch_code', fasParams);
+      rawFasRows = (
+        await query(
+          `SELECT * FROM module_fasilitas WHERE 1=1 ${fasBranchSql} ORDER BY year DESC, month DESC, branch_code ASC LIMIT ${MAX_MODULE_QUERY_ROWS}`,
+          fasParams
+        )
+      ).rows as any[];
+    }
 
     const fasilitas = rawFasRows
+      .filter(r => matchesBranch(getCanonicalBranchCode(r.branch_code, r.branch_name)))
       .map(r => resolveVerificationRow(r, verifiedOnly, counters))
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .map(r => {
@@ -518,14 +589,27 @@ export async function GET(req: NextRequest) {
     }));
 
     // 8. Additional KPI Records from PostgreSQL monthly_records (e.g. kpi_rfu, kpi_sla, kpi_csat)
+    const kpiParams: unknown[] = [];
+    const kpiBranchSql = buildBranchWhereClause(targetBranches, rawBranch, 'b.code', kpiParams);
+    let kpiDeptSql = '';
+    if (scopedDept) {
+      kpiParams.push(scopedDept);
+      kpiDeptSql = ` AND r.department_id = $${kpiParams.length}`;
+    }
+    const kpiVerifiedSql = verifiedOnly ? " AND r.verification_status = 'verified'" : '';
+
     const rawKpiRecords = (
-      await query(`
+      await query(
+        `
         SELECT r.id, r.indicator_id, r.year, r.month, r.target, r.realization, r.unit,
                r.achievement_pct, r.verification_status, b.code as branch_code, b.name as branch_name
         FROM monthly_records r
         JOIN branches b ON r.branch_id = b.id
-        WHERE r.indicator_id IN ('kpi_rfu', 'kpi_sla', 'kpi_csat')
-      `)
+        WHERE r.indicator_id IN ('kpi_rfu', 'kpi_sla', 'kpi_csat') ${kpiBranchSql} ${kpiDeptSql} ${kpiVerifiedSql}
+        LIMIT ${MAX_MODULE_QUERY_ROWS}
+      `,
+        kpiParams
+      )
     ).rows as any[];
 
     const kpiRecords = rawKpiRecords
@@ -568,8 +652,8 @@ export async function GET(req: NextRequest) {
       equipmentCatalog,
       kpiRecords,
     });
-  } catch (error: any) {
-    console.error('Error in /api/modules-data:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    logError('api/modules-data', error, { requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal memuat data modul dari database.' }, { status: 500 });
   }
 }

@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isuStrategisRepository } from '@/lib/repositories/isuStrategis';
 import { isuStrategisSchema, parseWithSchema } from '@/lib/validation';
-import { resolveRequestSession } from '@/lib/rbac';
+import {
+  requireAuth,
+  enforceBranchFilterForRead,
+  validateBranchWriteAccess,
+} from '@/lib/rbac';
 import { getClientIp } from '@/lib/auth';
+import { getBranchNameByCode } from '@/lib/constants';
 import { dbQueries } from '@/lib/db';
+import { logError } from '@/lib/logger';
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
+  if (!auth.authorized) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
     const filter = {
-      cabang: searchParams.get('cabang') || undefined,
+      cabang: enforceBranchFilterForRead(auth.session, searchParams.get('cabang') || undefined),
       kategori: searchParams.get('kategori') || undefined,
       prioritas: searchParams.get('prioritas') || undefined,
       status: searchParams.get('status') || undefined,
@@ -19,25 +28,17 @@ export async function GET(req: NextRequest) {
     const data = await isuStrategisRepository.getAll(filter);
     return NextResponse.json({ success: true, data, total: data.length });
   } catch (error: unknown) {
-    console.error('[GET /api/isu-strategis] Error:', error);
-    const message = error instanceof Error ? error.message : 'Gagal memuat data isu strategis.';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/isu-strategis', error, { method: 'GET', requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal memuat data isu strategis.' }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req, { requiredPermission: 'manual_input:write' });
+  if (!auth.authorized) return auth.response;
+
   try {
-    const session = await resolveRequestSession(req);
     const clientIp = getClientIp(req);
-
-    // Verifikasi role jika ada sesi (viewer / BOD adalah read-only)
-    if (session && session.role === 'viewer') {
-      return NextResponse.json(
-        { success: false, error: 'Akses ditolak: Akun Viewer (BOD) hanya memiliki izin baca.' },
-        { status: 403 }
-      );
-    }
-
     const body = (await req.json()) as Record<string, unknown>;
     const parsed = parseWithSchema(isuStrategisSchema, body);
 
@@ -48,15 +49,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const author = session?.name || session?.sub || 'PIC_REGIONAL_4';
-    const created = await isuStrategisRepository.create(parsed.data, author);
+    const branchCheck = validateBranchWriteAccess(auth.session, parsed.data.cabangCode);
+    if (!branchCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: branchCheck.error || 'Akses ditolak: cabang di luar wewenang Anda.' },
+        { status: 403 }
+      );
+    }
+
+    const scopedPayload =
+      auth.session.role === 'pic_cabang'
+        ? {
+            ...parsed.data,
+            cabangCode: branchCheck.canonicalCode,
+            cabangName: getBranchNameByCode(branchCheck.canonicalCode),
+          }
+        : {
+            ...parsed.data,
+            cabangCode: branchCheck.canonicalCode,
+          };
+
+    const author = auth.session.name || auth.session.sub;
+    const created = await isuStrategisRepository.create(scopedPayload, author);
 
     // Rekam Audit Trail ke PostgreSQL
     try {
       await dbQueries.createAuditLog({
-        user_id: session?.sub || 'user_pic',
+        user_id: auth.session.sub,
         user_name: author,
-        user_role: session?.role || 'pic',
+        user_role: auth.session.role,
         action: 'CREATE_MANUAL_DATA',
         entity: 'ISU_STRATEGIS',
         entity_id: created.id,
@@ -64,7 +85,7 @@ export async function POST(req: NextRequest) {
         ip_address: clientIp,
       });
     } catch (auditErr) {
-      console.warn('[POST /api/isu-strategis] Audit log non-fatal error:', auditErr);
+      logError('api/isu-strategis:audit', auditErr, { method: 'POST', requestId: req.headers.get('x-request-id') });
     }
 
     return NextResponse.json(
@@ -72,8 +93,7 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error: unknown) {
-    console.error('[POST /api/isu-strategis] Error:', error);
-    const message = error instanceof Error ? error.message : 'Gagal menyimpan isu strategis.';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    logError('api/isu-strategis', error, { method: 'POST', requestId: req.headers.get('x-request-id') });
+    return NextResponse.json({ success: false, error: 'Gagal menyimpan isu strategis.' }, { status: 500 });
   }
 }

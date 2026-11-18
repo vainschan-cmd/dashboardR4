@@ -65,11 +65,23 @@ async function runTest(name, fn) {
   }
 }
 
+function parseCookiePair(response, baseCookieName) {
+  const rawList = response.headers.getSetCookie?.() ?? [];
+  const candidates = rawList.length > 0 ? rawList : [response.headers.get('set-cookie') || ''];
+  const joined = candidates.join(', ');
+  const hostMatch = joined.match(new RegExp(`(__Host-${baseCookieName})=([^;]+)`));
+  if (hostMatch) {
+    return { name: hostMatch[1], value: hostMatch[2], pair: `${hostMatch[1]}=${hostMatch[2]}` };
+  }
+  const legacyMatch = joined.match(new RegExp(`(?:^|[,;\\s])(${baseCookieName})=([^;]+)`));
+  if (legacyMatch) {
+    return { name: legacyMatch[1], value: legacyMatch[2], pair: `${legacyMatch[1]}=${legacyMatch[2]}` };
+  }
+  return null;
+}
+
 function parseCookie(response, cookieName) {
-  const setCookie = response.headers.get('set-cookie');
-  if (!setCookie) return null;
-  const match = setCookie.match(new RegExp(`${cookieName}=([^;]+)`));
-  return match ? match[1] : null;
+  return parseCookiePair(response, cookieName)?.value ?? null;
 }
 
 async function loginUser(nipp, password = passwordFor(nipp)) {
@@ -79,9 +91,16 @@ async function loginUser(nipp, password = passwordFor(nipp)) {
     body: JSON.stringify({ nipp, password }),
   });
   const data = await res.json();
-  const token = parseCookie(res, 'portsight_access_token');
-  const refreshToken = parseCookie(res, 'portsight_refresh_token');
-  return { res, data, token, refreshToken };
+  const accessPair = parseCookiePair(res, 'portsight_access_token');
+  const refreshPair = parseCookiePair(res, 'portsight_refresh_token');
+  return {
+    res,
+    data,
+    token: accessPair?.value ?? null,
+    refreshToken: refreshPair?.value ?? null,
+    accessCookie: accessPair?.pair ?? '',
+    refreshCookie: refreshPair?.pair ?? '',
+  };
 }
 
 async function main() {
@@ -137,31 +156,31 @@ async function main() {
   let picCabangCookie = '';
 
   await runTest('Autentikasi Admin Regional (10002) dan penerbitan HttpOnly cookie', async () => {
-    const { res, data, token } = await loginUser('10002');
+    const { res, data, token, accessCookie } = await loginUser('10002');
     assert.equal(res.status, 200);
     assert.equal(data.success, true);
     assert.equal(data.user.role, 'admin_regional');
     assert.ok(token, 'Token cookie portsight_session harus terbit');
-    adminCookie = `portsight_access_token=${token}`;
+    adminCookie = accessCookie;
   });
 
   await runTest('Autentikasi BOD / Viewer (10000)', async () => {
-    const { res, data, token } = await loginUser('10000');
+    const { res, data, token, accessCookie } = await loginUser('10000');
     assert.equal(res.status, 200);
     assert.equal(data.success, true);
     assert.equal(data.user.role, 'viewer');
     assert.ok(token);
-    viewerCookie = `portsight_access_token=${token}`;
+    viewerCookie = accessCookie;
   });
 
   await runTest('Autentikasi PIC Cabang Makassar (10004) dengan branch_id R01', async () => {
-    const { res, data, token } = await loginUser('10004');
+    const { res, data, token, accessCookie } = await loginUser('10004');
     assert.equal(res.status, 200);
     assert.equal(data.success, true);
     assert.equal(data.user.role, 'pic_cabang');
     assert.equal(data.user.branch_id, 'R01');
     assert.ok(token);
-    picCabangCookie = `portsight_access_token=${token}`;
+    picCabangCookie = accessCookie;
   });
 
   // 3. Hak Akses Sesuai Role
@@ -259,16 +278,16 @@ async function main() {
   });
 
   await runTest('Logout mencabut access dan refresh token (401)', async () => {
-    const { token, refreshToken } = await loginUser('10002');
+    const { refreshToken, accessCookie, refreshCookie } = await loginUser('10002');
     const logoutRes = await fetch(`${BASE_URL}/api/users/logout`, {
       method: 'POST',
       headers: {
-        Cookie: `portsight_access_token=${token}; portsight_refresh_token=${refreshToken}`,
+        Cookie: `${accessCookie}; ${refreshCookie}`,
       },
     });
     assert.equal(logoutRes.status, 200);
     const afterAccess = await fetch(`${BASE_URL}/api/master`, {
-      headers: { Cookie: `portsight_access_token=${token}` },
+      headers: { Cookie: accessCookie },
     });
     assert.equal(afterAccess.status, 401);
     const afterRefresh = await fetch(`${BASE_URL}/api/master`, {
@@ -433,10 +452,10 @@ async function main() {
   });
 
   await runTest('GET /api/users/me?rotate=1 menerbitkan access token baru', async () => {
-    const { token } = await loginUser('10004');
+    const { token, accessCookie } = await loginUser('10004');
     assert.ok(token, 'Access token harus tersedia');
     const res = await fetch(`${BASE_URL}/api/users/me?rotate=1`, {
-      headers: { Cookie: `portsight_access_token=${token}` },
+      headers: { Cookie: accessCookie },
     });
     assert.equal(res.status, 200);
     const rotated = parseCookie(res, 'portsight_access_token');
@@ -455,10 +474,10 @@ async function main() {
   // the `cookie` header on public endpoints: login returned 200 but the session
   // cookie could never authenticate, so every login looked successful yet failed.
   await runTest('Cookie hasil login benar-benar mengautentikasi /api/users/me', async () => {
-    const { token } = await loginUser('10002');
+    const { token, accessCookie } = await loginUser('10002');
     assert.ok(token, 'Access token harus terbit');
     const res = await fetch(`${BASE_URL}/api/users/me`, {
-      headers: { Cookie: `portsight_access_token=${token}` },
+      headers: { Cookie: accessCookie },
     });
     assert.equal(res.status, 200, 'Cookie dari login harus diterima oleh /api/users/me');
     const data = await res.json();

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, enforceBranchFilterForRead } from '@/lib/rbac';
+import {
+  requireAuth,
+  resolveSummaryBranchScope,
+  enforceDepartmentFilterForRead,
+  enforceVerificationFilterForRead,
+} from '@/lib/rbac';
 import { getFinansialModuleSummary } from '@/lib/finansialConsolidationService';
+import { logError } from '@/lib/logger';
 
 /**
  * Mengurai parameter period:
@@ -21,6 +27,14 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'dashboard:read' });
   if (!auth.authorized) return auth.response;
 
+  const scopedDept = enforceDepartmentFilterForRead(auth.session, undefined);
+  if (scopedDept && scopedDept !== 'dept_keu') {
+    return NextResponse.json(
+      { success: false, error: 'Akses ditolak: data finansial berada di luar departemen Anda.' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const tahun = parsePeriodParam(searchParams.get('tahun'));
@@ -35,29 +49,15 @@ export async function GET(req: NextRequest) {
       searchParams.get('branch') ||
       searchParams.get('terminal') ||
       undefined;
-    const rawBranch = enforceBranchFilterForRead(auth.session, requestedBranch);
+    const { isPicCabang, picBranchCode, branchCodes } = resolveSummaryBranchScope(
+      auth.session,
+      requestedBranch
+    );
 
-    const isPicCabang =
-      auth.session.role === 'pic_cabang' &&
-      Boolean(auth.session.branch_id) &&
-      auth.session.branch_id !== 'R99';
-
-    const picBranchCode = isPicCabang ? rawBranch || auth.session.branch_id || null : null;
-
-    const branchCodes =
-      !isPicCabang && rawBranch && rawBranch !== 'ALL'
-        ? rawBranch === 'NONE'
-          ? ['__NONE__']
-          : rawBranch
-              .split(',')
-              .map((b) => b.trim())
-              .filter(Boolean)
-        : undefined;
-
-    const isBodViewer = auth.session.role === 'viewer';
-    const verifiedOnlyParam = searchParams.get('verifiedOnly');
-    const verifiedOnly =
-      verifiedOnlyParam !== null ? verifiedOnlyParam === 'true' : isBodViewer;
+    const verifiedOnly = enforceVerificationFilterForRead(
+      auth.session,
+      searchParams.get('verifiedOnly') ?? searchParams.get('verified_only')
+    );
 
     const payload = await getFinansialModuleSummary({
       tahun,
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(payload);
   } catch (err) {
-    console.error('[/api/finansial-summary] Error:', err);
+    logError('api/finansial-summary', err, { requestId: req.headers.get('x-request-id') });
     return NextResponse.json(
       {
         success: false,

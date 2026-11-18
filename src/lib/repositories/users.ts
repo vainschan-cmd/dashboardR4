@@ -6,7 +6,7 @@ import {
 import { checkPasswordStrength } from '../passwordPolicy';
 import { getPool } from '../db/connection';
 import { toSafeUser } from '../db/helpers';
-import { scheduleUsersSpreadsheetSync } from '../db/maintenance';
+import { getDummyPasswordHash, scheduleUsersSpreadsheetSync } from '../db/maintenance';
 import { authSessionsRepository } from './authSessions';
 
 /**
@@ -18,7 +18,7 @@ export const usersRepository = {
   getUsers: async (): Promise<User[]> => {
     const pool = getPool();
     const res = await pool.query(
-      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, created_at
+      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, token_version, created_at
        FROM users
        ORDER BY nipp ASC, name ASC`
     );
@@ -30,7 +30,7 @@ export const usersRepository = {
     if (!cleanNipp) return null;
     const pool = getPool();
     const res = await pool.query(
-      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, created_at
+      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, token_version, created_at
        FROM users
        WHERE nipp = $1 OR username = $1
        LIMIT 1`,
@@ -45,7 +45,7 @@ export const usersRepository = {
     if (!clean) return null;
     const pool = getPool();
     const res = await pool.query(
-      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, created_at
+      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, token_version, created_at
        FROM users
        WHERE username = $1 OR nipp = $1
        LIMIT 1`,
@@ -59,7 +59,7 @@ export const usersRepository = {
     if (!id) return null;
     const pool = getPool();
     const res = await pool.query(
-      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, created_at
+      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, active, must_change_password, token_version, created_at
        FROM users
        WHERE id = $1
        LIMIT 1`,
@@ -127,6 +127,7 @@ export const usersRepository = {
       department_id: data.department_id || null,
       active: true,
       must_change_password: Boolean(data.mustChangePassword),
+      token_version: 0,
       created_at: createdAt,
     };
 
@@ -203,7 +204,7 @@ export const usersRepository = {
     const pool = getPool();
     // Query langsung ke PostgreSQL. Jika container PostgreSQL berhenti, pool.query melempar ECONNREFUSED
     const res = await pool.query(
-      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, password_hash, active, must_change_password, created_at
+      `SELECT id, username, nipp, name, email, divisi, departemen, role, branch_id, department_id, password_hash, active, must_change_password, token_version, created_at
        FROM users
        WHERE nipp = $1 OR username = $1
        LIMIT 1`,
@@ -212,6 +213,8 @@ export const usersRepository = {
 
     const pgRow = res.rows[0];
     if (!pgRow) {
+      // SA-15: Equalize authentication latency for unknown NIPPs to mitigate timing enumeration.
+      await verifyPasswordAsync(password, getDummyPasswordHash());
       return null;
     }
 

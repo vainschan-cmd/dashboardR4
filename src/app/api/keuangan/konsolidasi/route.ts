@@ -5,6 +5,7 @@ import { logError } from '@/lib/logger';
 import {
   requireAuth,
   enforceBranchFilterForRead,
+  enforceDepartmentFilterForRead,
   enforceVerificationFilterForRead,
 } from '@/lib/rbac';
 
@@ -12,23 +13,17 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'records:read' });
   if (!auth.authorized) return auth.response;
 
+  const scopedDept = enforceDepartmentFilterForRead(auth.session, undefined);
+  if (scopedDept && scopedDept !== 'dept_keu') {
+    return NextResponse.json(
+      { success: false, error: 'Akses ditolak: data keuangan konsolidasi berada di luar departemen Anda.' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(req.url);
 
-    // Default to the most recent period that actually exists
-    const latestYearRes = await query<{ year: number | null }>(
-      'SELECT MAX(year) AS year FROM module_finansial'
-    );
-    const latestYear = Number(latestYearRes.rows[0]?.year) || new Date().getFullYear();
-
-    const latestMonthRes = await query<{ month: number | null }>(
-      'SELECT MAX(month) AS month FROM module_finansial WHERE year = $1',
-      [latestYear]
-    );
-    const latestMonth = Number(latestMonthRes.rows[0]?.month) || 12;
-
-    const year = Number(searchParams.get('year') || latestYear);
-    const month = Number(searchParams.get('month') || latestMonth);
     const branchParam =
       searchParams.get('branch') ||
       searchParams.get('branches') ||
@@ -41,9 +36,30 @@ export async function GET(req: NextRequest) {
       auth.session,
       searchParams.get('verifiedOnly') ?? searchParams.get('verified_only')
     );
+    const verifiedFilter = verifiedOnly ? " AND verification_status = 'verified'" : '';
+    const bopoVerifiedFilter = verifiedOnly
+      ? " AND b.verification_status = 'verified' AND p.verification_status = 'verified'"
+      : '';
+
+    // Default to the most recent period that actually exists within allowed verification scope
+    const latestYearRes = await query<{ year: number | null }>(
+      `SELECT MAX(year) AS year FROM module_finansial WHERE 1=1 ${verifiedFilter}`
+    );
+    const latestYear = Number(latestYearRes.rows[0]?.year) || new Date().getFullYear();
+
+    const latestMonthRes = await query<{ month: number | null }>(
+      `SELECT MAX(month) AS month FROM module_finansial WHERE year = $1 ${verifiedFilter}`,
+      [latestYear]
+    );
+    const latestMonth = Number(latestMonthRes.rows[0]?.month) || 12;
+
+    const year = Number(searchParams.get('year') || latestYear);
+    const month = Number(searchParams.get('month') || latestMonth);
 
     const selectedCodes: string[] = [];
-    if (scopedBranch && scopedBranch !== 'ALL' && scopedBranch !== 'NONE') {
+    if (scopedBranch === 'NONE') {
+      selectedCodes.push('__NONE__');
+    } else if (scopedBranch && scopedBranch !== 'ALL') {
       for (const raw of scopedBranch.split(',')) {
         const trimmed = raw.trim();
         const code = getCanonicalBranchCode(trimmed, trimmed);
@@ -60,8 +76,6 @@ export async function GET(req: NextRequest) {
         vals: selectedCodes,
       };
     };
-
-    const verifiedFilter = verifiedOnly ? " AND verification_status = 'verified'" : '';
 
     // 1. KPI Aggregates: Laba Bersih, Pendapatan, Beban
     const kpiB = branchFilter('branch_code', 3);
@@ -166,7 +180,7 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN entitas='PTP' THEN realisasi ELSE 0 END) as ptp,
         SUM(realisasi) as grand_total
       FROM v_module_finansial_entitas
-      WHERE year = $1 AND month = $2 AND rekening = 'Pendapatan' AND entitas != 'ELIMINASI' ${topPendapatanB.clause}
+      WHERE year = $1 AND month = $2 AND rekening = 'Pendapatan' AND entitas != 'ELIMINASI' ${topPendapatanB.clause} ${verifiedFilter}
       GROUP BY branch_name
       ORDER BY grand_total DESC
       LIMIT 10
@@ -202,7 +216,7 @@ export async function GET(req: NextRequest) {
         CASE WHEN p.konsolidasi_rp > 0 THEN (abs(b.konsolidasi_rp) / p.konsolidasi_rp) * 100 ELSE 0 END as bopo
       FROM module_finansial b
       JOIN module_finansial p ON b.branch_code = p.branch_code AND b.year = p.year AND b.month = p.month
-      WHERE b.year = $1 AND b.month = $2 AND b.rekening = 'Beban' AND p.rekening = 'Pendapatan' ${bopoB.clause}
+      WHERE b.year = $1 AND b.month = $2 AND b.rekening = 'Beban' AND p.rekening = 'Pendapatan' ${bopoB.clause} ${bopoVerifiedFilter}
       ORDER BY b.branch_name ASC
       `,
       [year, month, ...bopoB.vals]
@@ -225,7 +239,7 @@ export async function GET(req: NextRequest) {
       `
       SELECT entitas, SUM(realisasi) as total_laba
       FROM v_module_finansial_entitas
-      WHERE year = $1 AND month = $2 AND rekening = 'Laba Bersih' AND entitas != 'ELIMINASI' ${kontribusiB.clause}
+      WHERE year = $1 AND month = $2 AND rekening = 'Laba Bersih' AND entitas != 'ELIMINASI' ${kontribusiB.clause} ${verifiedFilter}
       GROUP BY entitas
       ORDER BY total_laba DESC
       `,
@@ -255,7 +269,7 @@ export async function GET(req: NextRequest) {
       `
       SELECT branch_name, branch_code, realisasi
       FROM v_module_finansial_entitas
-      WHERE year = $1 AND month = $2 AND rekening = 'Laba Bersih' AND entitas = 'PJM' ${pjmB.clause}
+      WHERE year = $1 AND month = $2 AND rekening = 'Laba Bersih' AND entitas = 'PJM' ${pjmB.clause} ${verifiedFilter}
       ORDER BY realisasi ASC
       LIMIT 10
       `,
@@ -274,6 +288,7 @@ export async function GET(req: NextRequest) {
       `
       SELECT DISTINCT year, month
       FROM v_module_finansial_entitas
+      WHERE 1=1 ${verifiedFilter}
       ORDER BY year DESC, month DESC
       `
     );
@@ -284,6 +299,7 @@ export async function GET(req: NextRequest) {
             `
             SELECT DISTINCT branch_code, branch_name
             FROM v_module_finansial_entitas
+            WHERE 1=1 ${verifiedFilter}
             ORDER BY branch_name ASC
             `
           )
@@ -291,7 +307,7 @@ export async function GET(req: NextRequest) {
             `
             SELECT DISTINCT branch_code, branch_name
             FROM v_module_finansial_entitas
-            WHERE branch_code = ANY($1::text[])
+            WHERE branch_code = ANY($1::text[]) ${verifiedFilter}
             ORDER BY branch_name ASC
             `,
             [selectedCodes]

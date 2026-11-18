@@ -66,7 +66,8 @@ export function getDbConfig(): DatabaseConfig {
     } catch {}
   }
 
-  const effectivePassword = envPass || (parsed.pg_password ? decryptSecret(parsed.pg_password) : 'ictpi4');
+  const decryptedCfgPassword = parsed.pg_password ? decryptSecret(parsed.pg_password) : '';
+  const effectivePassword = envPass || process.env.PGPASSWORD || decryptedCfgPassword || '';
 
   return {
     engine: 'postgres',
@@ -98,28 +99,47 @@ export function isPostgresActive(): boolean {
   return true;
 }
 
+function resolvePgSslOption(enableSsl: boolean): { rejectUnauthorized: boolean; ca?: string } | undefined {
+  if (!enableSsl) return undefined;
+  // SA-23: Verify X.509 certificates by default; allow self-signed opt-in only outside production.
+  const allowSelfSigned =
+    process.env.PG_SSL_ALLOW_SELF_SIGNED === 'true' && process.env.NODE_ENV !== 'production';
+  const caPath = process.env.PGSSLROOTCERT?.trim();
+  const ca = caPath && fs.existsSync(caPath) ? fs.readFileSync(caPath, 'utf8') : undefined;
+  return {
+    rejectUnauthorized: !allowSelfSigned,
+    ...(ca ? { ca } : {}),
+  };
+}
+
 export function getPool(): Pool {
   if (!pgPoolInstance) {
     const envUrl = getEnvDatabaseUrl();
     const cfg = getDbConfig();
+    const sslOption = resolvePgSslOption(Boolean(cfg.pg_ssl));
 
     if (envUrl) {
       pgPoolInstance = new Pool({
         connectionString: envUrl,
         max: Number(cfg.max_connections) || 10,
-        ssl: cfg.pg_ssl ? { rejectUnauthorized: false } : undefined,
+        ssl: sslOption,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000,
       });
     } else {
+      if (!cfg.pg_password) {
+        throw new Error(
+          'Kredensial database PostgreSQL tidak tersedia atau gagal didekripsi. Setel DATABASE_URL atau PGPASSWORD.'
+        );
+      }
       pgPoolInstance = new Pool({
         host: cfg.pg_host || 'localhost',
         port: Number(cfg.pg_port) || 5432,
         database: cfg.pg_database || 'ed_dashboard',
         user: cfg.pg_user || 'postgres',
-        password: cfg.pg_password || 'ictpi4',
+        password: cfg.pg_password,
         max: Number(cfg.max_connections) || 10,
-        ssl: cfg.pg_ssl ? { rejectUnauthorized: false } : undefined,
+        ssl: sslOption,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000,
       });

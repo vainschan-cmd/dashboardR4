@@ -20,29 +20,46 @@ const COOKIE_NAME_PREFIX = process.env.NODE_ENV === 'production' ? '__Host-' : '
 export const ACCESS_TOKEN_COOKIE = `${COOKIE_NAME_PREFIX}portsight_access_token`;
 export const REFRESH_TOKEN_COOKIE = `${COOKIE_NAME_PREFIX}portsight_refresh_token`;
 
-/** Pre-`__Host-` names, still read so an upgrade does not log everyone out. */
+/** Pre-`__Host-` names, still cleared on logout and optionally readable during migration. */
 const LEGACY_ACCESS_TOKEN_COOKIE = 'portsight_access_token';
 const LEGACY_REFRESH_TOKEN_COOKIE = 'portsight_refresh_token';
 
-/** Read the access token, accepting the legacy cookie name. */
-export function readAccessTokenCookie(req: NextRequest): string | undefined {
-  return (
-    req.cookies.get(ACCESS_TOKEN_COOKIE)?.value ||
-    req.cookies.get(LEGACY_ACCESS_TOKEN_COOKIE)?.value
-  );
+function allowLegacyAuthCookies(): boolean {
+  if (process.env.NODE_ENV !== 'production') return true;
+  return process.env.ALLOW_LEGACY_AUTH_COOKIES === 'true';
 }
 
-/** Read the refresh token, accepting the legacy cookie name. */
+/**
+ * Read the access token cookie.
+ * In production, only the `__Host-` prefixed cookie is trusted by default to prevent
+ * sibling-subdomain session fixation (NV-02); legacy fallback requires
+ * `ALLOW_LEGACY_AUTH_COOKIES=true`.
+ */
+export function readAccessTokenCookie(req: NextRequest): string | undefined {
+  const primary = req.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
+  if (primary) return primary;
+  if (allowLegacyAuthCookies()) {
+    return req.cookies.get(LEGACY_ACCESS_TOKEN_COOKIE)?.value;
+  }
+  return undefined;
+}
+
+/**
+ * Read the refresh token cookie.
+ * In production, only the `__Host-` prefixed cookie is trusted by default (NV-02).
+ */
 export function readRefreshTokenCookie(req: NextRequest): string | undefined {
-  return (
-    req.cookies.get(REFRESH_TOKEN_COOKIE)?.value ||
-    req.cookies.get(LEGACY_REFRESH_TOKEN_COOKIE)?.value
-  );
+  const primary = req.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+  if (primary) return primary;
+  if (allowLegacyAuthCookies()) {
+    return req.cookies.get(LEGACY_REFRESH_TOKEN_COOKIE)?.value;
+  }
+  return undefined;
 }
 
 /**
  * Access token lifetime. Short by design: the client renews it silently with
- * `GET /api/users/me?rotate=1`, so a stolen access token is useless after 15
+ * `POST /api/users/me?rotate=1`, so a stolen access token is useless after 15
  * minutes while the refresh token stays HttpOnly and revocable server-side.
  */
 const ACCESS_TOKEN_TTL_MINUTES = 15;
@@ -66,6 +83,7 @@ export interface JwtSessionPayload {
   branch_id: string | null;
   department_id: string | null;
   token_version: number;
+  must_change_password?: boolean;
   iat: number;
   exp: number;
   jti: string;
@@ -268,7 +286,10 @@ export async function resolveSessionToken(
     }
   }
 
-  return payload;
+  return {
+    ...payload,
+    must_change_password: Boolean(user.must_change_password),
+  };
 }
 
 /**
@@ -445,61 +466,137 @@ export async function getSessionFromRequest(req: NextRequest): Promise<JwtSessio
   return null;
 }
 
+export function isTrustProxyEnabled(): boolean {
+  const raw = (process.env.TRUST_PROXY || '').trim().toLowerCase();
+  return raw === 'true' || raw === 'cloudflare' || raw === 'reverse_proxy';
+}
+
+function getTrustProxyMode(): 'cloudflare' | 'reverse_proxy' {
+  const explicitMode = (process.env.TRUST_PROXY_MODE || '').trim().toLowerCase();
+  if (explicitMode === 'cloudflare') return 'cloudflare';
+  if (explicitMode === 'reverse_proxy') return 'reverse_proxy';
+  const raw = (process.env.TRUST_PROXY || '').trim().toLowerCase();
+  if (raw === 'cloudflare') return 'cloudflare';
+  return 'reverse_proxy';
+}
+
+function sanitizeIpLiteral(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let candidate = raw.trim();
+  if (candidate.startsWith('[') && candidate.endsWith(']')) {
+    candidate = candidate.slice(1, -1);
+  }
+  // Strip IPv4 :port suffix if present (e.g. "203.0.113.5:54321")
+  if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(candidate)) {
+    candidate = candidate.split(':')[0];
+  }
+  if (!candidate || candidate.length > 45) return null;
+  if (!/^[0-9a-fA-F:.]+$/.test(candidate)) return null;
+  return candidate;
+}
+
 /**
  * Resolve the client IP used for rate limiting / audit.
  *
- * Forwarding headers are only trusted when `TRUST_PROXY=true` (set this when the
- * app runs behind Cloudflare / a reverse proxy you control). Otherwise every
- * request is attributed to the local socket so a spoofed `X-Forwarded-For`
- * cannot reset the rate limiter.
+ * Forwarding headers are only trusted when `TRUST_PROXY=true` (or explicit
+ * `TRUST_PROXY=cloudflare` / `reverse_proxy`).
+ * - In `cloudflare` mode (`TRUST_PROXY_MODE=cloudflare`), `CF-Connecting-IP` is
+ *   preferred (origin port MUST be firewalled to Cloudflare Tunnel/IPs).
+ * - In `reverse_proxy` mode (default when `TRUST_PROXY=true`), client-spoofable
+ *   `CF-Connecting-IP` is ignored and `X-Forwarded-For` is parsed from the RIGHT
+ *   using `TRUST_PROXY_HOPS` (default 1) so client-prepended entries cannot spoof IP.
  */
 export function getClientIp(req: NextRequest | Request): string {
-  const trustProxy = process.env.TRUST_PROXY === 'true';
-  if (trustProxy) {
-    const cfConnectingIp = req.headers.get('cf-connecting-ip');
-    if (cfConnectingIp) {
-      return cfConnectingIp.trim();
+  if (isTrustProxyEnabled()) {
+    const mode = getTrustProxyMode();
+    if (mode === 'cloudflare') {
+      const cfConnectingIp = sanitizeIpLiteral(req.headers.get('cf-connecting-ip'));
+      if (cfConnectingIp) {
+        return cfConnectingIp;
+      }
     }
+
     const forwarded = req.headers.get('x-forwarded-for');
     if (forwarded) {
-      return forwarded.split(',')[0].trim();
+      const entries = forwarded
+        .split(',')
+        .map((part) => sanitizeIpLiteral(part))
+        .filter((part): part is string => Boolean(part));
+      if (entries.length > 0) {
+        const parsedHops = Number.parseInt(process.env.TRUST_PROXY_HOPS || '1', 10);
+        const trustedHops = Number.isFinite(parsedHops)
+          ? Math.min(10, Math.max(1, parsedHops))
+          : 1;
+        const idx = Math.max(0, entries.length - trustedHops);
+        return entries[idx];
+      }
     }
-    const realIp = req.headers.get('x-real-ip');
+
+    const realIp = sanitizeIpLiteral(req.headers.get('x-real-ip'));
     if (realIp) {
-      return realIp.trim();
+      return realIp;
     }
   }
   return '127.0.0.1';
 }
 
-// --- Brute-Force Protection (In-Memory Rate Limiter) ---
+// --- Brute-Force Protection (Bounded In-Memory Rate Limiter) ---
 const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_IP_MAX_ATTEMPTS = 20;
+const LOGIN_NIPP_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
 const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 menit
+const MAX_RATE_LIMIT_ENTRIES = 10_000;
 
 interface RateLimitMemoryEntry {
   count: number;
   firstFailedAt: number;
   lockedUntil: number;
+  auditLoggedForLockout?: boolean;
 }
 
 const loginAttemptsMap = new Map<string, RateLimitMemoryEntry>();
+
+function isSharedFallbackIp(ip: string): boolean {
+  if (isTrustProxyEnabled()) return false;
+  const normalized = ip.trim().toLowerCase();
+  return normalized === '127.0.0.1' || normalized === '::1' || normalized === 'unknown' || normalized === '';
+}
+
+function evictRateLimitEntriesIfNeeded(now: number): void {
+  if (loginAttemptsMap.size < MAX_RATE_LIMIT_ENTRIES) return;
+  for (const [k, entry] of loginAttemptsMap.entries()) {
+    if (entry.lockedUntil <= now && now - entry.firstFailedAt > LOGIN_WINDOW_MS) {
+      loginAttemptsMap.delete(k);
+    }
+  }
+  while (loginAttemptsMap.size >= MAX_RATE_LIMIT_ENTRIES) {
+    const oldestKey = loginAttemptsMap.keys().next().value;
+    if (!oldestKey) break;
+    loginAttemptsMap.delete(oldestKey);
+  }
+}
 
 function getRateLimitKey(ip: string, nipp: string): string {
   return `${ip.trim().toLowerCase()}::${nipp.trim().toLowerCase()}`;
 }
 
-/** Per-IP bucket prevents spreading attempts across many NIPP values from one address. */
+/** Per-IP bucket prevents spreading attempts across many NIPP values from one real client IP. */
 function getIpRateLimitKey(ip: string): string {
   return `ip::${ip.trim().toLowerCase()}`;
 }
 
-const LOGIN_IP_MAX_ATTEMPTS = 20;
+/** IP-independent per-NIPP bucket protects any single account even when IP headers vary or proxy is disabled. */
+function getNippRateLimitKey(nipp: string): string {
+  return `nipp::${nipp.trim().toLowerCase()}`;
+}
 
 export interface RateLimitResult {
   allowed: boolean;
   retryAfterSeconds: number;
   remainingAttempts: number;
+  /** True only on the first blocked attempt of a lockout window to prevent 429 DB audit-log flooding. */
+  shouldAuditLockout: boolean;
 }
 
 function evaluateRateLimit(key: string, maxAttempts: number): RateLimitResult {
@@ -507,61 +604,97 @@ function evaluateRateLimit(key: string, maxAttempts: number): RateLimitResult {
   const entry = loginAttemptsMap.get(key);
 
   if (!entry) {
-    return { allowed: true, retryAfterSeconds: 0, remainingAttempts: maxAttempts };
+    return { allowed: true, retryAfterSeconds: 0, remainingAttempts: maxAttempts, shouldAuditLockout: false };
   }
 
   if (entry.lockedUntil > now) {
     const retryAfterSeconds = Math.max(1, Math.ceil((entry.lockedUntil - now) / 1000));
-    return { allowed: false, retryAfterSeconds, remainingAttempts: 0 };
+    const shouldAuditLockout = !entry.auditLoggedForLockout;
+    if (shouldAuditLockout) {
+      entry.auditLoggedForLockout = true;
+      loginAttemptsMap.set(key, entry);
+    }
+    return { allowed: false, retryAfterSeconds, remainingAttempts: 0, shouldAuditLockout };
   }
 
   if (now - entry.firstFailedAt > LOGIN_WINDOW_MS) {
     loginAttemptsMap.delete(key);
-    return { allowed: true, retryAfterSeconds: 0, remainingAttempts: maxAttempts };
+    return { allowed: true, retryAfterSeconds: 0, remainingAttempts: maxAttempts, shouldAuditLockout: false };
   }
 
   const remaining = Math.max(0, maxAttempts - entry.count);
-  return { allowed: true, retryAfterSeconds: 0, remainingAttempts: remaining };
+  return { allowed: true, retryAfterSeconds: 0, remainingAttempts: remaining, shouldAuditLockout: false };
 }
 
 export function checkLoginRateLimit(ip: string, nipp: string): RateLimitResult {
-  // A blocked IP blocks regardless of which NIPP is attempted.
-  const ipResult = evaluateRateLimit(getIpRateLimitKey(ip), LOGIN_IP_MAX_ATTEMPTS);
-  if (!ipResult.allowed) {
-    return ipResult;
+  const sharedFallback = isSharedFallbackIp(ip);
+
+  // SA-07: Only apply the per-IP spray bucket when client IPs are genuinely distinguishable.
+  // Under default TRUST_PROXY=false, getClientIp() collapses all callers to 127.0.0.1;
+  // locking ip::127.0.0.1 would deny login globally to every legitimate user.
+  let ipRemaining = LOGIN_IP_MAX_ATTEMPTS;
+  if (!sharedFallback) {
+    const ipResult = evaluateRateLimit(getIpRateLimitKey(ip), LOGIN_IP_MAX_ATTEMPTS);
+    if (!ipResult.allowed) {
+      return ipResult;
+    }
+    ipRemaining = ipResult.remainingAttempts;
   }
+
   const pairResult = evaluateRateLimit(getRateLimitKey(ip, nipp), LOGIN_MAX_ATTEMPTS);
   if (!pairResult.allowed) {
     return pairResult;
   }
+
+  const nippResult = evaluateRateLimit(getNippRateLimitKey(nipp), LOGIN_NIPP_MAX_ATTEMPTS);
+  if (!nippResult.allowed) {
+    return nippResult;
+  }
+
   return {
     allowed: true,
     retryAfterSeconds: 0,
-    remainingAttempts: Math.min(pairResult.remainingAttempts, ipResult.remainingAttempts),
+    remainingAttempts: Math.min(pairResult.remainingAttempts, nippResult.remainingAttempts, ipRemaining),
+    shouldAuditLockout: false,
   };
 }
 
 function bumpRateLimit(key: string, maxAttempts: number): void {
   const now = Date.now();
+  evictRateLimitEntriesIfNeeded(now);
   const existing = loginAttemptsMap.get(key);
 
   if (!existing || now - existing.firstFailedAt > LOGIN_WINDOW_MS) {
-    loginAttemptsMap.set(key, { count: 1, firstFailedAt: now, lockedUntil: 0 });
+    loginAttemptsMap.set(key, { count: 1, firstFailedAt: now, lockedUntil: 0, auditLoggedForLockout: false });
     return;
   }
 
   const nextCount = existing.count + 1;
   const lockedUntil = nextCount >= maxAttempts ? now + LOGIN_LOCKOUT_MS : 0;
-  loginAttemptsMap.set(key, { ...existing, count: nextCount, lockedUntil });
+  loginAttemptsMap.set(key, {
+    ...existing,
+    count: nextCount,
+    lockedUntil,
+    auditLoggedForLockout: lockedUntil > 0 ? existing.auditLoggedForLockout : false,
+  });
 }
 
 export function recordLoginFailure(ip: string, nipp: string): void {
   bumpRateLimit(getRateLimitKey(ip, nipp), LOGIN_MAX_ATTEMPTS);
-  bumpRateLimit(getIpRateLimitKey(ip), LOGIN_IP_MAX_ATTEMPTS);
+  bumpRateLimit(getNippRateLimitKey(nipp), LOGIN_NIPP_MAX_ATTEMPTS);
+  if (!isSharedFallbackIp(ip)) {
+    bumpRateLimit(getIpRateLimitKey(ip), LOGIN_IP_MAX_ATTEMPTS);
+  }
 }
 
 export function resetLoginRateLimit(ip: string, nipp: string): void {
   loginAttemptsMap.delete(getRateLimitKey(ip, nipp));
-  // The IP bucket is intentionally NOT reset on success: it limits spraying across accounts.
+  loginAttemptsMap.delete(getNippRateLimitKey(nipp));
+  // The per-IP bucket (when active under TRUST_PROXY=true) is intentionally NOT reset on success.
+}
+
+/** Test-only helper to clear in-memory login rate limit buckets. */
+export function clearAllLoginRateLimitsForTest(): void {
+  loginAttemptsMap.clear();
 }
 

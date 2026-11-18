@@ -156,15 +156,15 @@ export async function commitValidatedImportRecords(params: {
       }
     }
 
-    const recordId =
-      r.id && r.id.trim().length > 0
-        ? r.id.trim()
-        : buildRecordKey({
-            year: r.year,
-            month: r.month,
-            branchCode: matchedBranch.code,
-            indicatorCode: matchedIndicator.code,
-          });
+    // SA-05: Always derive recordId server-side from validated natural keys so
+    // a caller cannot supply another branch's or department's record.id to hijack
+    // or overwrite existing rows via ON CONFLICT (id) DO UPDATE.
+    const recordId = buildRecordKey({
+      year: r.year,
+      month: r.month,
+      branchCode: matchedBranch.code,
+      indicatorCode: matchedIndicator.code,
+    });
 
     sanitizedRecords.push({
       id: recordId,
@@ -211,6 +211,14 @@ export async function commitValidatedImportRecords(params: {
       createdCount += 1;
       rowsToWrite.push(record);
       continue;
+    }
+
+    if (existing.branch_id !== record.branch_id || existing.department_id !== record.department_id) {
+      return {
+        success: false,
+        status: 403,
+        error: `Akses ditolak: rekaman [${record.id}] terdaftar pada cabang/departemen yang berbeda.`,
+      };
     }
 
     const changed = hasValueChanged(

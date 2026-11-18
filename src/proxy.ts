@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isTrustProxyEnabled } from '@/lib/auth';
 import { resolveRequestSession, hasPermission, type Permission } from '@/lib/rbac';
 import { getRequestId, REQUEST_ID_HEADER } from '@/lib/logger';
 
@@ -13,6 +14,7 @@ const PROTECTED_API_RULES: Array<{
   methods?: string[];
   permission?: Permission;
 }> = [
+  { pattern: /^\/api\/master\/target-versions(\/|$)/, methods: ['POST'], permission: 'master_data:manage' },
   { pattern: /^\/api\/master(\/|$)/, methods: ['GET'], permission: 'master_data:read' },
   { pattern: /^\/api\/system-params(\/|$)/, methods: ['POST', 'PUT', 'DELETE'], permission: 'system_params:manage' },
   { pattern: /^\/api\/system-params(\/|$)/, methods: ['GET'], permission: 'system_params:read' },
@@ -30,7 +32,7 @@ const PROTECTED_API_RULES: Array<{
   { pattern: /^\/api\/import\/commit(\/|$)/, methods: ['POST'], permission: 'import:write' },
   { pattern: /^\/api\/import\/validate(\/|$)/, methods: ['POST'], permission: 'import:write' },
   { pattern: /^\/api\/import\/sheets-sync(\/|$)/, methods: ['POST'], permission: 'import:write' },
-  { pattern: /^\/api\/import\/drive-sync(\/|$)/, methods: ['GET', 'POST'], permission: 'import:write' },
+  { pattern: /^\/api\/import\/drive-sync(\/|$)/, methods: ['GET', 'POST'], permission: 'system_params:manage' },
   { pattern: /^\/api\/templates(\/|$)/, methods: ['GET'], permission: 'templates:read' },
   { pattern: /^\/api\/templates(\/|$)/, methods: ['POST', 'PUT', 'DELETE'], permission: 'templates:manage' },
   { pattern: /^\/api\/audit(\/|$)/, methods: ['GET'], permission: 'audit_logs:read' },
@@ -66,7 +68,8 @@ export async function proxy(request: NextRequest) {
 
   // --- CSRF defense for state-changing requests -------------------------------
   // Cookies are SameSite, but they are still sent on top-level same-site navigations
-  // and older browsers; explicitly verify the request origin for every mutation.
+  // and older browsers; explicitly verify scheme + host of Origin (and Referer
+  // fallback) for every mutation (NV-03).
   const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
   if (MUTATING_METHODS.has(method)) {
     const origin = request.headers.get('origin');
@@ -76,16 +79,28 @@ export async function proxy(request: NextRequest) {
       .map((entry) => entry.trim())
       .filter(Boolean);
 
-    if (origin) {
-      let originHost = '';
+    const forwardedProto = isTrustProxyEnabled()
+      ? request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase()
+      : undefined;
+    const expectedProto =
+      forwardedProto === 'https' || forwardedProto === 'http'
+        ? `${forwardedProto}:`
+        : request.nextUrl.protocol || 'http:';
+
+    const isTrustedOriginUrl = (candidate: string): boolean => {
       try {
-        originHost = new URL(origin).host;
+        const parsed = new URL(candidate);
+        if (trustedOrigins.some((trusted) => trusted === parsed.origin)) {
+          return true;
+        }
+        return parsed.host === requestHost && parsed.protocol === expectedProto;
       } catch {
-        originHost = '';
+        return false;
       }
-      const isTrusted =
-        originHost === requestHost || trustedOrigins.some((trusted) => trusted === origin);
-      if (!isTrusted) {
+    };
+
+    if (origin) {
+      if (!isTrustedOriginUrl(origin)) {
         return withRequestId(
           NextResponse.json(
             {
@@ -107,6 +122,20 @@ export async function proxy(request: NextRequest) {
               success: false,
               error: 'Permintaan ditolak: cross-site request tidak diizinkan.',
               message: 'Permintaan ditolak: cross-site request tidak diizinkan.',
+              requestId,
+            },
+            { status: 403 }
+          )
+        );
+      }
+      const referer = request.headers.get('referer');
+      if (referer && !isTrustedOriginUrl(referer)) {
+        return withRequestId(
+          NextResponse.json(
+            {
+              success: false,
+              error: 'Permintaan ditolak: referer tidak tepercaya (CSRF).',
+              message: 'Permintaan ditolak: referer tidak tepercaya (CSRF).',
               requestId,
             },
             { status: 403 }
@@ -145,9 +174,34 @@ export async function proxy(request: NextRequest) {
     );
   }
 
+  // SA-09: Enforce server-side must_change_password so accounts carrying temporary
+  // or admin-reset credentials cannot bypass the client modal and call APIs directly.
+  if (session.must_change_password) {
+    const isAllowedWhileMustChange =
+      (pathname === '/api/users/password' && method === 'POST') ||
+      (pathname === '/api/users/me' && method === 'GET') ||
+      (pathname === '/api/users/logout' && method === 'POST');
+    if (!isAllowedWhileMustChange) {
+      return withRequestId(
+        NextResponse.json(
+          {
+            success: false,
+            code: 'PASSWORD_CHANGE_REQUIRED',
+            error: 'Kata sandi sementara wajib diganti terlebih dahulu sebelum mengakses layanan API.',
+            message: 'Kata sandi sementara wajib diganti terlebih dahulu sebelum mengakses layanan API.',
+            requestId,
+          },
+          { status: 403 }
+        )
+      );
+    }
+  }
+
+  const effectiveMethod = method === 'HEAD' ? 'GET' : method;
+
   for (const rule of PROTECTED_API_RULES) {
     if (rule.pattern.test(pathname)) {
-      if (!rule.methods || rule.methods.includes(method)) {
+      if (!rule.methods || rule.methods.includes(effectiveMethod)) {
         if (rule.permission && !hasPermission(session.role, rule.permission)) {
           return withRequestId(
             NextResponse.json(
@@ -165,9 +219,11 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Default deny: every protected API route must be declared above. An endpoint
-  // added without an explicit policy is rejected instead of silently allowed.
-  const isDeclaredRoute = PROTECTED_API_RULES.some((rule) => rule.pattern.test(pathname));
+  // SA-16: Default deny enforces BOTH path AND HTTP method so undeclared methods
+  // on declared paths cannot bypass proxy-level authorization.
+  const isDeclaredRoute = PROTECTED_API_RULES.some(
+    (rule) => rule.pattern.test(pathname) && (!rule.methods || rule.methods.includes(effectiveMethod))
+  );
   if (!isDeclaredRoute) {
     return withRequestId(
       NextResponse.json(

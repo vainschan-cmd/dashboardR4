@@ -73,7 +73,7 @@ describe('Executive BOD Briefing & PDF Exporter (FEAT-06)', () => {
     expect(html).toContain('Bulan 9 Tahun 2026');
     expect(html).toContain('Direktur Utama');
     expect(html).toContain('Pelabuhan Makassar');
-    expect(html).toContain('window.print()');
+    expect(html).not.toContain('onclick=');
     expect(html).toContain('@media print');
   });
 });

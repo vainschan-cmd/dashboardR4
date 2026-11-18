@@ -279,8 +279,8 @@ describe('resolveReadBranchScope', () => {
     expect(resolveReadBranchScope(actor('admin_regional'), 'R04')).toBe('R04');
   });
 
-  it('membiarkan PIC cabang pusat (R99) memilih cabang', () => {
-    expect(resolveReadBranchScope(actor('pic_cabang', { branch_id: 'R99' }), 'R04')).toBe('R04');
+  it('menolak PIC cabang dengan penugasan R99 (fail-closed SA-12)', () => {
+    expect(resolveReadBranchScope(actor('pic_cabang', { branch_id: 'R99' }), 'R04')).toBe('NONE');
   });
 
   it('menormalkan input menjadi huruf besar', () => {

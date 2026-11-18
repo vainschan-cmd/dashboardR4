@@ -3,7 +3,7 @@ import { fetchGoogleSheetData, validateGoogleSheetsTarget } from '@/lib/googleSh
 import { validateSpreadsheetRows } from '@/lib/validator';
 import { dbQueries } from '@/lib/db';
 import { getClientIp } from '@/lib/auth';
-import { requireAuth, enforceDepartmentFilterForRead } from '@/lib/rbac';
+import { requireAuth, enforceDepartmentFilterForRead, hasPermission } from '@/lib/rbac';
 import { sheetsSyncSchema, parseWithSchema } from '@/lib/validation';
 
 export async function POST(req: NextRequest) {
@@ -50,6 +50,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const currentCfg = await dbQueries.getGoogleSheetsConfig();
+    const canManageGlobalConfig = hasPermission(auth.session.role, 'system_params:manage');
+
+    // SA-21: Non-admin roles cannot point the server's Google Sheets API key at
+    // arbitrary external spreadsheets or poison the global integration config.
+    if (
+      !canManageGlobalConfig &&
+      currentCfg.spreadsheet_id &&
+      currentCfg.spreadsheet_id.trim().length > 0 &&
+      targetCheck.spreadsheetId !== currentCfg.spreadsheet_id.trim()
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Akses ditolak: hanya Super Admin yang dapat mengubah Spreadsheet ID Google Sheets korporat.',
+          error: 'Spreadsheet ID tidak sesuai dengan konfigurasi resmi administrator.',
+        },
+        { status: 403 }
+      );
+    }
+
     const fetchResult = await fetchGoogleSheetData(
       targetCheck.spreadsheetId,
       targetCheck.sheetName,
@@ -78,13 +100,14 @@ export async function POST(req: NextRequest) {
       session: auth.session,
     });
 
-    // Update integration config metadata
-    const currentCfg = await dbQueries.getGoogleSheetsConfig();
-    currentCfg.spreadsheet_id = fetchResult.spreadsheetId;
-    currentCfg.sheet_name = targetCheck.sheetName || currentCfg.sheet_name;
-    currentCfg.range = targetCheck.range || currentCfg.range;
-    currentCfg.last_sync_at = new Date().toISOString();
-    await dbQueries.saveGoogleSheetsConfig(currentCfg);
+    // Update global integration config metadata only for authorized Super Admin
+    if (canManageGlobalConfig) {
+      currentCfg.spreadsheet_id = fetchResult.spreadsheetId;
+      currentCfg.sheet_name = targetCheck.sheetName || currentCfg.sheet_name;
+      currentCfg.range = targetCheck.range || currentCfg.range;
+      currentCfg.last_sync_at = new Date().toISOString();
+      await dbQueries.saveGoogleSheetsConfig(currentCfg);
+    }
 
     // Audit log using verified server session identity
     await dbQueries.createAuditLog({

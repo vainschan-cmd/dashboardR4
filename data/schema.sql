@@ -47,10 +47,12 @@ CREATE TABLE IF NOT EXISTS users (
     department_id VARCHAR(64) REFERENCES departments(id) ON DELETE SET NULL,
     active BOOLEAN DEFAULT TRUE,
     must_change_password BOOLEAN DEFAULT FALSE,
+    token_version INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 CREATE INDEX IF NOT EXISTS idx_users_nipp ON users (nipp);
