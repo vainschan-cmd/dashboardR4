@@ -46,8 +46,11 @@ CREATE TABLE IF NOT EXISTS users (
     branch_id VARCHAR(64),
     department_id VARCHAR(64) REFERENCES departments(id) ON DELETE SET NULL,
     active BOOLEAN DEFAULT TRUE,
+    must_change_password BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 CREATE INDEX IF NOT EXISTS idx_users_nipp ON users (nipp);
@@ -171,7 +174,7 @@ CREATE TABLE IF NOT EXISTS equipment_catalog (
     active BOOLEAN DEFAULT TRUE
 );
 
--- 11. Modul Finansial (Laba Rugi Normalisasi 9 Field: Pendapatan, Beban, Laba Usaha, Laba Bersih per Entitas & Eliminasi)
+-- 11. Modul Finansial (Wide Format Konsolidasi per Cabang & Entitas)
 CREATE TABLE IF NOT EXISTS module_finansial (
     id VARCHAR(160) PRIMARY KEY,
     monthly_record_id VARCHAR(160),
@@ -180,8 +183,13 @@ CREATE TABLE IF NOT EXISTS module_finansial (
     branch_code VARCHAR(32) NOT NULL,
     branch_name VARCHAR(255) NOT NULL,
     rekening VARCHAR(128) NOT NULL,
-    entitas VARCHAR(64) NOT NULL,
-    realisasi DOUBLE PRECISION DEFAULT 0,
+    cabang_rp DOUBLE PRECISION DEFAULT 0,
+    pmt_rp DOUBLE PRECISION DEFAULT 0,
+    ptp_rp DOUBLE PRECISION DEFAULT 0,
+    psl_rp DOUBLE PRECISION DEFAULT 0,
+    pjm_rp DOUBLE PRECISION DEFAULT 0,
+    eliminasi_rp DOUBLE PRECISION DEFAULT 0,
+    konsolidasi_rp DOUBLE PRECISION DEFAULT 0,
     rka DOUBLE PRECISION,
     yoy DOUBLE PRECISION,
     source_type VARCHAR(32) DEFAULT 'labarugi_xlsx',
@@ -195,7 +203,6 @@ CREATE TABLE IF NOT EXISTS module_finansial (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mod_fin_branch_period ON module_finansial (branch_code, year, month);
-CREATE INDEX IF NOT EXISTS idx_mod_fin_entitas ON module_finansial (year, month, branch_code, entitas, rekening);
 CREATE INDEX IF NOT EXISTS idx_mod_fin_status ON module_finansial (verification_status);
 CREATE INDEX IF NOT EXISTS idx_mod_fin_rec_id ON module_finansial (monthly_record_id);
 
@@ -366,8 +373,27 @@ CREATE TABLE IF NOT EXISTS auth_rate_limits (
     updated_at BIGINT NOT NULL
 );
 
--- 19. View Konsolidasi Finansial Entitas
-CREATE OR REPLACE VIEW v_module_finansial_entitas AS SELECT * FROM module_finansial;
+-- 19. Modul Finansial per Entitas (Long Format) & View Konsolidasi
+CREATE TABLE IF NOT EXISTS module_finansial_entitas (
+    id VARCHAR(160) PRIMARY KEY,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+    branch_code VARCHAR(32) NOT NULL,
+    branch_name VARCHAR(255) NOT NULL,
+    rekening VARCHAR(128) NOT NULL,
+    entitas VARCHAR(64) NOT NULL,
+    realisasi DOUBLE PRECISION NOT NULL DEFAULT 0,
+    rka DOUBLE PRECISION,
+    yoy DOUBLE PRECISION,
+    source_type VARCHAR(32) DEFAULT 'labarugi_xlsx',
+    verification_status VARCHAR(32) DEFAULT 'verified',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_mfe_lookup ON module_finansial_entitas (year, month, rekening, entitas, branch_code);
+CREATE INDEX IF NOT EXISTS idx_mfe_status ON module_finansial_entitas (verification_status);
+
+CREATE OR REPLACE VIEW v_module_finansial_entitas AS SELECT * FROM module_finansial_entitas;
 
 -- 20. Manajemen Isu Strategis & Program Prioritas Regional 4
 CREATE TABLE IF NOT EXISTS isu_strategis (
@@ -395,4 +421,19 @@ CREATE INDEX IF NOT EXISTS idx_isu_strategis_cabang ON isu_strategis(cabang_code
 CREATE INDEX IF NOT EXISTS idx_isu_strategis_prioritas ON isu_strategis(prioritas);
 CREATE INDEX IF NOT EXISTS idx_isu_strategis_status ON isu_strategis(status);
 CREATE INDEX IF NOT EXISTS idx_isu_strategis_kategori ON isu_strategis(kategori);
+
+-- 21. Riwayat Versi Target KPI (DATA-06 / FEAT-08)
+CREATE TABLE IF NOT EXISTS kpi_target_versions (
+    id VARCHAR(64) PRIMARY KEY,
+    indicator_id VARCHAR(64) NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    target_value NUMERIC(18, 4) NOT NULL,
+    effective_from DATE NOT NULL,
+    notes TEXT,
+    created_by VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT uq_indicator_version UNIQUE (indicator_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_kpi_target_ver_ind ON kpi_target_versions (indicator_id, effective_from DESC);
 
