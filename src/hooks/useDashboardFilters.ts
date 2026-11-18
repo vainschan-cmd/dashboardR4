@@ -4,6 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@/lib/types';
 import { isGovernanceTab, isValidTab } from '@/lib/tabs';
 import type { SignInEvent } from './useDashboardSession';
+import {
+  type SavedView,
+  DEFAULT_SAVED_VIEWS,
+  addSavedView,
+  deleteSavedView,
+  findSavedView,
+} from '@/lib/savedViews';
+
+export type { SavedView };
 
 /**
  * Tab, branch, and period filters for the dashboard shell (`CODE-02`).
@@ -39,6 +48,58 @@ export function useDashboardFilters({ currentUser, signIn, isBod }: DashboardFil
   const [activeTab, setActiveTab] = useState<string>('beranda');
   const [selectedTerminal, setSelectedTerminal] = useState<string>('ALL');
   const [selectedPeriod, setSelectedPeriod] = useState<string>(DEFAULT_PERIOD);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
+    if (typeof window === 'undefined') return [...DEFAULT_SAVED_VIEWS];
+    try {
+      const stored = localStorage.getItem('portsight_saved_views');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // Ignore
+    }
+    return [...DEFAULT_SAVED_VIEWS];
+  });
+
+  const saveCurrentView = useCallback((name: string) => {
+    setSavedViews((prev) => {
+      const updated = addSavedView(prev, {
+        name,
+        tab: activeTab,
+        branch: selectedTerminal,
+        period: selectedPeriod,
+      });
+      try {
+        localStorage.setItem('portsight_saved_views', JSON.stringify(updated));
+      } catch {
+        // Ignore
+      }
+      return updated;
+    });
+  }, [activeTab, selectedTerminal, selectedPeriod]);
+
+  const applyView = useCallback((viewId: string) => {
+    const view = findSavedView(savedViews, viewId);
+    if (!view) return;
+    if (isValidTab(view.tab)) setActiveTab(view.tab);
+    if (view.branch && (!currentUser || currentUser.role !== 'pic_cabang' || currentUser.branch_id === view.branch)) {
+      setSelectedTerminal(view.branch);
+    }
+    if (view.period) setSelectedPeriod(view.period);
+  }, [savedViews, currentUser]);
+
+  const deleteView = useCallback((viewId: string) => {
+    setSavedViews((prev) => {
+      const updated = deleteSavedView(prev, viewId);
+      try {
+        localStorage.setItem('portsight_saved_views', JSON.stringify(updated));
+      } catch {
+        // Ignore
+      }
+      return updated;
+    });
+  }, []);
 
   // Initial deep link + browser back/forward.
   useEffect(() => {
@@ -123,6 +184,10 @@ export function useDashboardFilters({ currentUser, signIn, isBod }: DashboardFil
     setSelectedPeriod,
     isPicCabang,
     navigateToTab,
+    savedViews,
+    saveCurrentView,
+    applyView,
+    deleteView,
   };
 }
 

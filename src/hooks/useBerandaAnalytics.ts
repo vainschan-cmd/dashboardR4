@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { User, UserRole } from '@/lib/types';
 import type { BerandaSummaryResponse } from '@/lib/berandaSummary';
+import { clientCache } from '@/lib/clientCache';
 
 export interface UseBerandaAnalyticsParams {
   selectedTerminal: string;
@@ -109,18 +110,25 @@ export function useBerandaAnalytics({
           params.set('branchCode', picBranchId);
         }
 
-        const res = await fetch(`/api/beranda-summary?${params.toString()}`, {
-          method: 'GET',
-          signal: controller.signal,
-          cache: 'no-store',
-        });
+        const cacheKey = `/api/beranda-summary?${params.toString()}`;
+        const data = await clientCache.fetchWithCache(
+          cacheKey,
+          async () => {
+            const res = await fetch(cacheKey, {
+              method: 'GET',
+              signal: controller.signal,
+              cache: 'no-store',
+            });
 
-        if (!res.ok) {
-          const errBody = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(errBody?.error || `HTTP ${res.status}`);
-        }
+            if (!res.ok) {
+              const errBody = (await res.json().catch(() => null)) as { error?: string } | null;
+              throw new Error(errBody?.error || `HTTP ${res.status}`);
+            }
 
-        const data = (await res.json()) as BerandaSummaryResponse;
+            return (await res.json()) as BerandaSummaryResponse;
+          },
+          { staleTimeMs: 60_000, force: reloadTick > 0 }
+        );
         if (!isActive) return;
 
         hasLoadedOnceRef.current = true;
@@ -207,6 +215,7 @@ export function useBerandaAnalytics({
   }, [isPicCabang, onSelectTerminal, selectedTerminal]);
 
   const refresh = useCallback(() => {
+    clientCache.invalidate('/api/beranda-summary');
     setReloadTick((t) => t + 1);
   }, []);
 

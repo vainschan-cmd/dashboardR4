@@ -26,6 +26,8 @@ import {
   ShieldCheck,
   Lock,
   AlertCircle,
+  LayoutDashboard,
+  BarChart2,
 } from 'lucide-react';
 import type { User, UserRole } from '@/lib/types';
 import { getMonthNameId } from '@/lib/finansialHelpers';
@@ -53,7 +55,6 @@ interface PortSightBerandaProps {
   onOpenDrilldown?: (item: Record<string, unknown>) => void;
   currentUser?: User | null;
   userRole: UserRole;
-  comparisonMode?: string;
   onOpenComparisonModal?: () => void;
 }
 
@@ -438,6 +439,25 @@ export default function PortSightBeranda({
   });
 
   const [branchSearch, setBranchSearch] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'all' | 'cards' | 'charts'>(() => {
+    if (typeof window === 'undefined') return 'all';
+    try {
+      const saved = localStorage.getItem('portsight_beranda_view_mode');
+      if (saved === 'cards' || saved === 'charts' || saved === 'all') return saved;
+    } catch {
+      // Ignore
+    }
+    return 'all';
+  });
+
+  const handleViewModeChange = (mode: 'all' | 'cards' | 'charts') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('portsight_beranda_view_mode', mode);
+    } catch {
+      // Ignore
+    }
+  };
 
   const availableYears = useMemo(
     () => summary?.filters.availableYears ?? [2025, 2026],
@@ -595,6 +615,91 @@ export default function PortSightBeranda({
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          {/* Mode Tampilan Beranda (UX-11) */}
+          <div
+            role="radiogroup"
+            aria-label="Mode Tampilan Beranda"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: 'var(--bg-inner)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 8,
+              padding: 2,
+              gap: 2,
+            }}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={viewMode === 'all'}
+              onClick={() => handleViewModeChange('all')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 8px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: viewMode === 'all' ? 'var(--accent-blue)' : 'transparent',
+                color: viewMode === 'all' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+              }}
+              title="Tampilan Terpadu (Kartu Metrik + Grafik Bento)"
+            >
+              <LayoutDashboard size={12} />
+              <span>Semua</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={viewMode === 'cards'}
+              onClick={() => handleViewModeChange('cards')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 8px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: viewMode === 'cards' ? 'var(--accent-blue)' : 'transparent',
+                color: viewMode === 'cards' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+              }}
+              title="Fokus Kartu Metrik Keuangan Utama"
+            >
+              <Banknote size={12} />
+              <span>Kartu Metrik</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={viewMode === 'charts'}
+              onClick={() => handleViewModeChange('charts')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 8px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: viewMode === 'charts' ? 'var(--accent-blue)' : 'transparent',
+                color: viewMode === 'charts' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+              }}
+              title="Fokus Grafik Bento Analisis Cabang & Entitas"
+            >
+              <BarChart2 size={12} />
+              <span>Grafik Terpadu</span>
+            </button>
+          </div>
+
           {!isBodViewer && summary?.verificationSummary && (
             <button
               type="button"
@@ -859,7 +964,8 @@ export default function PortSightBeranda({
         {/* RIGHT DASHBOARD CONTENT */}
         <div className="beranda-main-area">
           {/* TOP 4 KPI CARDS */}
-          <section className="beranda-kpi-grid" aria-label="KPI Keuangan Area">
+          {(viewMode === 'all' || viewMode === 'cards') && (
+            <section className="beranda-kpi-grid" aria-label="KPI Keuangan Area">
             {/* 1. Laba Area */}
             <div className="beranda-kpi-card">
               <div
@@ -1001,8 +1107,10 @@ export default function PortSightBeranda({
               </div>
             </div>
           </section>
+        )}
 
-          {/* 5 CHARTS BENTO GRID */}
+        {/* 5 CHARTS BENTO GRID */}
+        {(viewMode === 'all' || viewMode === 'charts') && (
           <section className="beranda-charts-bento" aria-label="Grafik Ringkasan Keuangan">
             {/* LEFT COLUMN: Top 10 Laba + Top 10 Pendapatan */}
             <div className="beranda-chart-stack-col">
@@ -1416,6 +1524,7 @@ export default function PortSightBeranda({
               </div>
             </div>
           </section>
+        )}
         </div>
       </div>
     </div>

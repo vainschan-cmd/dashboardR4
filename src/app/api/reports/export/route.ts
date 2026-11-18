@@ -8,6 +8,7 @@ import {
   enforceVerificationFilterForRead,
 } from '@/lib/rbac';
 import { exportRecordsToExcel, generateTemplateWorkbook } from '@/lib/excelExporter';
+import { generateExecutiveBriefingHtml } from '@/lib/executiveBriefingGenerator';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, { requiredPermission: 'reports:export' });
@@ -58,6 +59,35 @@ export async function GET(req: NextRequest) {
       year,
       verified_only,
     });
+
+    const format = (searchParams.get('format') || '').toLowerCase();
+    if (format === 'pdf' || format === 'briefing' || type === 'briefing') {
+      const allBranches = await dbQueries.getBranches();
+      const briefingHtml = generateExecutiveBriefingHtml({
+        records,
+        branches: allBranches,
+        month,
+        year,
+        generatedBy: auth.session.name || auth.session.username,
+      });
+
+      await dbQueries.createAuditLog({
+        user_id: auth.session.sub,
+        user_name: auth.session.name,
+        user_role: auth.session.role,
+        action: 'EXPORT',
+        entity: 'REPORT',
+        details: `Ekspor ringkasan eksekutif BOD (format briefing/PDF): ${records.length} baris data (Cabang: ${branch_id || 'ALL'}).`,
+        ip_address: getClientIp(req),
+      });
+
+      return new NextResponse(briefingHtml, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': 'inline; filename="Executive_Briefing_BOD_Regional4.html"',
+        },
+      });
+    }
 
     const buffer = exportRecordsToExcel(records, 'Laporan_Kinerja_Pelabuhan');
     const periodStr = month && year ? `_${year}_${month}` : year ? `_${year}` : '';

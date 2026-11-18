@@ -17,6 +17,7 @@ import {
   X,
   PlusCircle,
   KeyRound,
+  Bell,
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
 import {
@@ -63,6 +64,7 @@ export default function PortSightHeader({
   isMobileMenuOpen = false,
 }: PortSightHeaderProps) {
   const [, setAdminMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isNavbarCollapsed, setIsNavbarCollapsed] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -404,6 +406,113 @@ export default function PortSightHeader({
               <Shield size={11} color="var(--accent-cyan)" aria-hidden="true" />
               <span className="sr-only">Hak akses: </span>
               <span>{getRoleLabel()}</span>
+            </div>
+
+            {/* Notifikasi Verifikasi & Revisi (FEAT-02) */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="btn-dark"
+                style={{ padding: '4px 8px', fontSize: '12px', position: 'relative' }}
+                title="Notifikasi Verifikasi & Status Data"
+                aria-label={`Notifikasi: ${pendingCount} menunggu verifikasi`}
+              >
+                <Bell size={12} aria-hidden="true" />
+                {pendingCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '-3px',
+                      right: '-3px',
+                      minWidth: '13px',
+                      height: '13px',
+                      borderRadius: 'var(--radius-pill)',
+                      backgroundColor: 'var(--status-alert-border)',
+                      color: 'var(--text-on-alert)',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 2px',
+                    }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Daftar notifikasi verifikasi"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    width: '280px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: 'var(--card-shadow)',
+                    padding: '12px',
+                    zIndex: 50,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '8px',
+                      borderBottom: '1px solid var(--border-subtle)',
+                      paddingBottom: '6px',
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
+                      Pemberitahuan Verifikasi
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setNotificationsOpen(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '2px',
+                      }}
+                      aria-label="Tutup panel notifikasi"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+
+                  {pendingCount > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        Terdapat <strong>{pendingCount} data</strong> yang menunggu proses verifikasi atau tindak lanjut revisi pada periode aktif.
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => {
+                          setActiveTab('verification');
+                          setNotificationsOpen(false);
+                        }}
+                        style={{ fontSize: '11px', padding: '4px 8px', width: '100%', justifyContent: 'center' }}
+                      >
+                        Buka Modul Verifikasi
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '8px 0' }}>
+                      Tidak ada rekaman pending verifikasi saat ini. Seluruh data konsisten dan terverifikasi.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <button

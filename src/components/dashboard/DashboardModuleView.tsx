@@ -49,7 +49,6 @@ export interface DashboardModuleViewProps {
   currentUser: User;
   canManageUsers: boolean;
   isBod: boolean;
-  comparisonMode: string;
 
   branches: Branch[];
   departments: Department[];
@@ -82,7 +81,6 @@ export default function DashboardModuleView(props: DashboardModuleViewProps) {
     currentUser,
     canManageUsers,
     isBod,
-    comparisonMode,
     branches,
     departments,
     indicators,
@@ -118,7 +116,6 @@ export default function DashboardModuleView(props: DashboardModuleViewProps) {
           onOpenDrilldown={onOpenDrilldown}
           currentUser={currentUser}
           userRole={userRole}
-          comparisonMode={comparisonMode}
           onOpenComparisonModal={onOpenComparisonModal}
         />
       );

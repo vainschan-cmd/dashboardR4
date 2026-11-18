@@ -19,6 +19,8 @@ const contentSecurityPolicy = [
 const nextConfig: NextConfig = {
   /* config options here */
   devIndicators: false,
+  // Enable gzip/brotli compression for all text/JSON responses (PERF-07)
+  compress: true,
   // Do not advertise the framework/version to clients.
   poweredByHeader: false,
   // Dev-only convenience. Wildcards cover local tunnels instead of pinning

@@ -58,14 +58,36 @@ export async function GET(req: NextRequest) {
     });
     const total = await dbQueries.countMonthlyRecords(filters);
 
+    // Field selection / DTO projection (PERF-07)
+    const rawFields = searchParams.get('fields');
+    const requestedFields = rawFields
+      ? rawFields
+          .split(',')
+          .map((f) => f.trim())
+          .filter(Boolean)
+      : null;
+
+    const projectedRecords = requestedFields
+      ? records.map((r) => {
+          const projected: Record<string, unknown> = {};
+          const recordMap = r as unknown as Record<string, unknown>;
+          for (const f of requestedFields) {
+            if (f in recordMap) {
+              projected[f] = recordMap[f];
+            }
+          }
+          return projected;
+        })
+      : records;
+
     return NextResponse.json({
       success: true,
-      count: records.length,
+      count: projectedRecords.length,
       total,
       limit: parsed.data.limit,
       offset: parsed.data.offset,
-      hasMore: parsed.data.offset + records.length < total,
-      records,
+      hasMore: parsed.data.offset + projectedRecords.length < total,
+      records: projectedRecords,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Gagal memuat rekaman bulanan.';

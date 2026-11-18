@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/rbac';
 import { resolvePeriodRange } from '@/lib/period';
 import { logError } from '@/lib/logger';
 import { resolveReadBranchScope, resolveVerifiedOnly } from '@/lib/policy';
-import { buildBranchSummaries, consolidateSummaries } from '@/lib/dashboardSummary';
+import { buildBranchSummariesAsync, consolidateSummaries } from '@/lib/dashboardSummary';
 import { getCanonicalBranchCode } from '@/lib/constants';
 
 /**
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     const summaries =
       scopedBranch === 'NONE'
         ? []
-        : buildBranchSummaries({
+        : await buildBranchSummariesAsync({
             startYear: range.startYear,
             startMonth: range.startMonth,
             endYear: range.endYear,

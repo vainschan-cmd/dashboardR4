@@ -53,7 +53,6 @@ export default function DashboardHome() {
   const [drilldownItem, setDrilldownItem] = useState<DrilldownItem | null>(null);
   const [manualInputModalOpen, setManualInputModalOpen] = useState(false);
   const [manualInputDefaultModule, setManualInputDefaultModule] = useState<ModuleType>('finansial');
-  const [comparisonMode] = useState('all');
   const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
 
   // Escape closes the drill-down; every other overlay handles its own keys.
@@ -187,7 +186,6 @@ export default function DashboardHome() {
             currentUser={currentUser}
             canManageUsers={canManageUsers}
             isBod={isBod}
-            comparisonMode={comparisonMode}
             branches={data.branches}
             departments={data.departments}
             indicators={data.indicators}

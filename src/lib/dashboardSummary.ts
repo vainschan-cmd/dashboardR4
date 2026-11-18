@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { getDb } from './db';
+import { query as pgQuery } from './db/connection';
 import { getBranchByCode, OFFICIAL_BRANCHES } from './constants';
 import { resolveDataStatus, type DataStatus } from './dataStatus';
 import type { VerificationStatus } from './types';
@@ -272,6 +273,26 @@ export function buildBranchSummaries(query: SummaryQuery): BranchSummary[] {
     )
     .all(...period.params, ...bParams, ...period.params, ...bParams) as Array<Record<string, unknown>>;
 
+  return assembleBranchSummaries(
+    codes,
+    finansialRows,
+    opkomRows,
+    equipmentRows,
+    rfuFallbackRows,
+    utilisationRows,
+    statusRows
+  );
+}
+
+function assembleBranchSummaries(
+  codes: string[] | undefined,
+  finansialRows: Array<Record<string, unknown>>,
+  opkomRows: Array<Record<string, unknown>>,
+  equipmentRows: Array<Record<string, unknown>>,
+  rfuFallbackRows: Array<Record<string, unknown>>,
+  utilisationRows: Array<Record<string, unknown>>,
+  statusRows: Array<Record<string, unknown>>
+): BranchSummary[] {
   const statusMap = new Map<string, { statuses: VerificationStatus[]; rowCount: number }>();
   for (const row of statusRows) {
     const code = String(row.code || '').toUpperCase();
@@ -394,6 +415,113 @@ export function buildBranchSummaries(query: SummaryQuery): BranchSummary[] {
   }
 
   return summaries;
+}
+
+export async function buildBranchSummariesAsync(query: SummaryQuery): Promise<BranchSummary[]> {
+  const codes = query.branchCodes && query.branchCodes.length > 0 ? query.branchCodes : undefined;
+  const singleMonth = query.startYear === query.endYear && query.startMonth === query.endMonth;
+  const period = periodPredicate('', query, singleMonth);
+  const periodKpi = periodPredicate('r', query, singleMonth);
+  const bParams = codes ?? [];
+  const verified = Boolean(query.verifiedOnly);
+  const verifiedFin = verified ? " AND verification_status = 'verified'" : '';
+
+  function toPgSql(sql: string): string {
+    let count = 0;
+    return sql.replace(/\?/g, () => `$${++count}`);
+  }
+
+  const finansialRanked = singleMonth
+    ? ''
+    : `, ranked AS (
+         SELECT scoped.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY branch_code, category
+                  ORDER BY year DESC, month DESC, id ASC
+                ) AS rn
+           FROM scoped
+       )`;
+  const finansialSource = singleMonth ? 'scoped' : 'ranked';
+  const finansialRankFilter = singleMonth ? '' : ' WHERE rn = 1';
+
+  const finSql = toPgSql(`WITH scoped AS (
+       SELECT branch_code, rekening, konsolidasi_rp,
+              ROUND(rka::numeric, 1) AS rka, ROUND(yoy::numeric, 1) AS yoy,
+              year, month, id,
+              ${CATEGORY_SQL} AS category
+         FROM module_finansial
+        WHERE 1 = 1${period.clause}${branchClause(codes)}${verifiedFin}
+     )${finansialRanked}
+     SELECT branch_code AS code,
+            SUM(CASE WHEN LOWER(rekening) LIKE '%pendapatan%' THEN konsolidasi_rp ELSE 0 END) AS revenue,
+            COUNT(CASE WHEN LOWER(rekening) LIKE '%pendapatan%' THEN 1 END) AS revenue_rows,
+            ROUND(AVG(CASE WHEN LOWER(rekening) LIKE '%pendapatan%' THEN rka END), 1) AS revenue_rka,
+            ROUND(AVG(CASE WHEN LOWER(rekening) LIKE '%pendapatan%' THEN yoy END), 1) AS revenue_yoy,
+            SUM(CASE WHEN LOWER(rekening) = 'laba usaha' THEN konsolidasi_rp ELSE 0 END) AS profit,
+            COUNT(CASE WHEN LOWER(rekening) = 'laba usaha' THEN 1 END) AS profit_rows
+       FROM ${finansialSource}${finansialRankFilter}
+      GROUP BY branch_code`);
+
+  const opkomSql = toPgSql(`SELECT branch_code AS code,
+            SUM(CASE WHEN satuan = 'Rp' THEN jumlah_rp ELSE 0 END) AS revenue_fallback,
+            COUNT(CASE WHEN satuan = 'Rp' THEN 1 END) AS revenue_fallback_rows,
+            SUM(CASE WHEN UPPER(satuan) LIKE '%TEUS%' THEN jumlah_rp ELSE 0 END) AS teus,
+            COUNT(CASE WHEN UPPER(satuan) LIKE '%TEUS%' THEN 1 END) AS teus_rows,
+            SUM(CASE WHEN UPPER(satuan) LIKE '%TON%' THEN jumlah_rp ELSE 0 END) AS ton,
+            COUNT(CASE WHEN UPPER(satuan) LIKE '%TON%' THEN 1 END) AS ton_rows,
+            ROUND(AVG(ROUND(rka::numeric, 1)), 1) AS avg_rka,
+            ROUND(AVG(ROUND(yoy::numeric, 1)), 1) AS avg_yoy,
+            COUNT(*) AS row_count
+       FROM module_opkom
+      WHERE 1 = 1${period.clause}${branchClause(codes)}${verifiedFin}
+      GROUP BY branch_code`);
+
+  const rfuFallbackSql = toPgSql(`SELECT UPPER(b.code) AS code, AVG(r.realization) AS rfu
+       FROM monthly_records r
+       JOIN branches b ON r.branch_id = b.id
+      WHERE r.indicator_id = 'kpi_rfu'${periodKpi.clause}
+            ${branchClause(codes, 'UPPER(b.code)')}${verified ? " AND r.verification_status = 'verified'" : ''}
+      GROUP BY UPPER(b.code)`);
+
+  const utilisasiSql = toPgSql(`WITH ranked AS (
+       SELECT branch_code, COALESCE(bor, 0) AS bor,
+              ROW_NUMBER() OVER (
+                PARTITION BY branch_code
+                ORDER BY year DESC, month DESC, id ASC
+              ) AS rn
+         FROM module_utilisasi
+        WHERE 1 = 1${period.clause}${branchClause(codes)}${verifiedFin}
+     )
+     SELECT branch_code AS code, bor FROM ranked WHERE rn = 1`);
+
+  const statusSql = toPgSql(`SELECT code, verification_status AS status, SUM(n) AS n FROM (
+       SELECT branch_code AS code, COALESCE(verification_status, 'pending_verification') AS verification_status, COUNT(*) AS n
+         FROM module_opkom WHERE 1 = 1${period.clause}${branchClause(codes)}
+        GROUP BY branch_code, verification_status
+       UNION ALL
+       SELECT branch_code AS code, COALESCE(verification_status, 'pending_verification') AS verification_status, COUNT(*) AS n
+         FROM module_finansial WHERE 1 = 1${period.clause}${branchClause(codes)}
+        GROUP BY branch_code, verification_status
+     ) sub
+     GROUP BY code, status`);
+
+  const [finRes, opkomRes, rfuRes, utilRes, statusRes] = await Promise.all([
+    pgQuery(finSql, [...period.params, ...bParams]),
+    pgQuery(opkomSql, [...period.params, ...bParams]),
+    pgQuery(rfuFallbackSql, [...periodKpi.params, ...bParams]),
+    pgQuery(utilisasiSql, [...period.params, ...bParams]),
+    pgQuery(statusSql, [...period.params, ...bParams, ...period.params, ...bParams]),
+  ]);
+
+  return assembleBranchSummaries(
+    codes,
+    finRes.rows as Array<Record<string, unknown>>,
+    opkomRes.rows as Array<Record<string, unknown>>,
+    [],
+    rfuRes.rows as Array<Record<string, unknown>>,
+    utilRes.rows as Array<Record<string, unknown>>,
+    statusRes.rows as Array<Record<string, unknown>>
+  );
 }
 
 /** Consolidate per-branch summaries into the headline totals the cards show. */

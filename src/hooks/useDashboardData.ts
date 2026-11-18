@@ -13,6 +13,7 @@ import type {
   User,
 } from '@/lib/types';
 import { resolvePeriodRange } from '@/lib/period';
+import { clientCache } from '@/lib/clientCache';
 
 /**
  * Master data, user list, and verification counters for the dashboard shell
@@ -54,15 +55,23 @@ export function useDashboardData({
     !!currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'admin_regional');
 
   const reload = useCallback(
-    async (signal?: AbortSignal) => {
+    async (signal?: AbortSignal, force = false) => {
       try {
-        const [resMaster, resUsers] = await Promise.all([
-          fetch('/api/master', { credentials: 'include', signal }),
-          canReadUsers ? fetch('/api/users', { credentials: 'include', signal }) : Promise.resolve(null),
-        ]);
+        if (force) {
+          clientCache.invalidate('/api/master');
+          clientCache.invalidate('/api/users');
+        }
 
-        const dataMaster = await resMaster.json();
-        if (dataMaster.success) {
+        const dataMaster = await clientCache.fetchWithCache(
+          '/api/master',
+          async () => {
+            const res = await fetch('/api/master', { credentials: 'include', signal });
+            return await res.json();
+          },
+          { staleTimeMs: 60_000, force }
+        );
+
+        if (dataMaster?.success) {
           setBranches(dataMaster.branches || []);
           setDepartments(dataMaster.departments || []);
           setIndicators(dataMaster.indicators || []);
@@ -73,9 +82,17 @@ export function useDashboardData({
           if (dataMaster.credentials) setCredentials(dataMaster.credentials);
         }
 
-        if (resUsers && resUsers.ok) {
-          const dataUsers = await resUsers.json();
-          setUsersList(dataUsers.success ? dataUsers.users || [] : []);
+        if (canReadUsers) {
+          const dataUsers = await clientCache.fetchWithCache(
+            '/api/users',
+            async () => {
+              const res = await fetch('/api/users', { credentials: 'include', signal });
+              if (res.ok) return await res.json();
+              return { success: false, users: [] };
+            },
+            { staleTimeMs: 60_000, force }
+          );
+          setUsersList(dataUsers?.success ? dataUsers.users || [] : []);
         } else {
           setUsersList([]);
         }

@@ -196,7 +196,7 @@ export async function GET(req: NextRequest) {
 
     const rawFinRows = (
       await query(
-        'SELECT * FROM module_finansial ORDER BY year DESC, month DESC, branch_code ASC, rekening ASC, entitas ASC'
+        'SELECT * FROM v_module_finansial_entitas ORDER BY year DESC, month DESC, branch_code ASC, rekening ASC, entitas ASC'
       )
     ).rows as any[];
 
