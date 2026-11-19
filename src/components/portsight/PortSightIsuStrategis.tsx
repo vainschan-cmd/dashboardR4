@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Target,
   AlertTriangle,
@@ -20,9 +20,16 @@ import {
   Loader2,
   AlertCircle,
   Save,
+  Kanban,
+  Table as TableIcon,
+  LayoutGrid,
+  Clock,
+  FilterX,
+  User,
 } from 'lucide-react';
 import { User as UserType, UserRole } from '@/lib/types';
 import { OFFICIAL_BRANCHES, getSelectedBranchLabel } from '@/lib/constants';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export interface IsuStrategisItem {
   id: string;
@@ -77,6 +84,76 @@ const EMPTY_FORM: FormState = {
   dampak: '',
 };
 
+const ISU_CATEGORIES: Array<'ALL' | IsuStrategisItem['kategori']> = [
+  'ALL',
+  'Operasional',
+  'Finansial',
+  'Fasilitas',
+  'Komersial',
+  'HSSE',
+  'SDM',
+];
+
+const KANBAN_COLUMNS: Array<{ status: IsuStrategisItem['status']; label: string; accentColor: string }> = [
+  { status: 'Open', label: 'Open', accentColor: 'var(--text-muted)' },
+  { status: 'On Progress', label: 'On Progress', accentColor: 'var(--status-alert-text)' },
+  { status: 'Monitoring', label: 'Monitoring', accentColor: 'var(--series-purple-text)' },
+  { status: 'Resolved', label: 'Resolved', accentColor: 'var(--status-good-text)' },
+];
+
+function parseTargetDate(str: string): Date | null {
+  if (!str) return null;
+  const direct = new Date(str);
+  if (!isNaN(direct.getTime())) return direct;
+
+  const idMonths: Record<string, number> = {
+    jan: 0, januari: 0,
+    feb: 1, februari: 1,
+    mar: 2, maret: 2,
+    apr: 3, april: 3,
+    mei: 4, may: 4,
+    jun: 5, juni: 5,
+    jul: 6, juli: 6,
+    agu: 7, agustus: 7, ags: 7,
+    sep: 8, september: 8,
+    okt: 9, oktober: 9,
+    nov: 10, november: 10,
+    des: 11, desember: 11, dec: 11,
+  };
+  const parts = str.trim().split(/\s+/);
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const mStr = parts[1].toLowerCase().replace(/[^a-z]/g, '');
+    const year = parseInt(parts[2], 10);
+    if (!isNaN(day) && !isNaN(year) && idMonths[mStr] !== undefined) {
+      return new Date(year, idMonths[mStr], day);
+    }
+  }
+  return null;
+}
+
+function getItemDueStatus(targetSelesai: string, status: string): { isOverdue: boolean; isDueSoon: boolean; daysDiff: number | null } {
+  if (status === 'Resolved') {
+    return { isOverdue: false, isDueSoon: false, daysDiff: null };
+  }
+  const date = parseTargetDate(targetSelesai);
+  if (!date) {
+    return { isOverdue: false, isDueSoon: false, daysDiff: null };
+  }
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  const diffTime = date.getTime() - now.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { isOverdue: true, isDueSoon: false, daysDiff: Math.abs(diffDays) };
+  } else if (diffDays <= 7) {
+    return { isOverdue: false, isDueSoon: true, daysDiff: diffDays };
+  }
+  return { isOverdue: false, isDueSoon: false, daysDiff: diffDays };
+}
+
 interface PortSightIsuStrategisProps {
   selectedTerminal?: string;
   selectedPeriod?: string;
@@ -96,11 +173,16 @@ export default function PortSightIsuStrategis({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // View Mode: 'board' (Kanban) | 'table' (Matriks) | 'grid' (Kartu Prioritas)
+  const [viewMode, setViewMode] = useState<'board' | 'table' | 'grid'>('board');
+
   // Filter & Search State
   const [selectedKategori, setSelectedKategori] = useState<string>('ALL');
   const [selectedPrioritas, setSelectedPrioritas] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activeKpiFilter, setActiveKpiFilter] = useState<'all' | 'p0' | 'progress' | 'resolved' | 'overdue' | null>(null);
+  const [dismissAttentionAlert, setDismissAttentionAlert] = useState<boolean>(false);
 
   // Modals & Forms State
   const [detailModalItem, setDetailModalItem] = useState<IsuStrategisItem | null>(null);
@@ -116,6 +198,15 @@ export default function PortSightIsuStrategis({
 
   // Notification Toast State
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Focus Trap Refs for Modals
+  const detailDialogRef = useRef<HTMLDivElement>(null);
+  const formDialogRef = useRef<HTMLDivElement>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(detailDialogRef, Boolean(detailModalItem), () => setDetailModalItem(null));
+  useFocusTrap(formDialogRef, formModalOpen, () => !submitting && setFormModalOpen(false));
+  useFocusTrap(deleteDialogRef, Boolean(deleteConfirmItem), () => !deleting && setDeleteConfirmItem(null));
 
   const isBod = (currentUser?.role || userRole) === 'viewer';
 
@@ -178,12 +269,42 @@ export default function PortSightIsuStrategis({
     ? 'Konsolidasi Regional 4'
     : getSelectedBranchLabel(selectedTerminal);
 
-  // Filtered dataset
-  const filteredData = useMemo(() => {
+  // Base scope items (scoped by branch if terminal is selected)
+  const scopedItems = useMemo(() => {
     return items.filter((item) => {
-      // Cabang match
       if (!isAll && item.cabangCode !== selectedTerminal && item.cabangCode !== 'R99') {
         return false;
+      }
+      return true;
+    });
+  }, [items, isAll, selectedTerminal]);
+
+  // Direksi Attention Checks (P0 uncompleted & Overdue items)
+  const criticalPendingCount = useMemo(() => {
+    return scopedItems.filter((i) => i.prioritas === 'P0' && i.status !== 'Resolved').length;
+  }, [scopedItems]);
+
+  const overdueItemsCount = useMemo(() => {
+    return scopedItems.filter((i) => getItemDueStatus(i.targetSelesai, i.status).isOverdue).length;
+  }, [scopedItems]);
+
+  // Category counts based on scoped dataset
+  const categoryCounts = useMemo(() => {
+    const map: Record<string, number> = { ALL: scopedItems.length };
+    for (const item of scopedItems) {
+      map[item.kategori] = (map[item.kategori] || 0) + 1;
+    }
+    return map;
+  }, [scopedItems]);
+
+  // Filtered dataset
+  const filteredData = useMemo(() => {
+    return scopedItems.filter((item) => {
+      // Overdue KPI filter
+      if (activeKpiFilter === 'overdue') {
+        if (!getItemDueStatus(item.targetSelesai, item.status).isOverdue) {
+          return false;
+        }
       }
       // Kategori filter
       if (selectedKategori !== 'ALL' && item.kategori !== selectedKategori) {
@@ -210,7 +331,7 @@ export default function PortSightIsuStrategis({
       }
       return true;
     });
-  }, [items, isAll, selectedTerminal, selectedKategori, selectedPrioritas, selectedStatus, searchQuery]);
+  }, [scopedItems, activeKpiFilter, selectedKategori, selectedPrioritas, selectedStatus, searchQuery]);
 
   // Summary Metrics
   const totalIsu = filteredData.length;
@@ -220,6 +341,47 @@ export default function PortSightIsuStrategis({
   const avgProgres = totalIsu > 0
     ? Math.round(filteredData.reduce((acc, curr) => acc + curr.progres, 0) / totalIsu)
     : 0;
+
+  // Interactive KPI Click-to-Filter Handlers
+  const handleKpiCardClick = (filterType: 'all' | 'p0' | 'progress' | 'resolved') => {
+    if (activeKpiFilter === filterType) {
+      // Reset filter
+      setActiveKpiFilter(null);
+      setSelectedPrioritas('ALL');
+      setSelectedStatus('ALL');
+      return;
+    }
+
+    setActiveKpiFilter(filterType);
+    if (filterType === 'all') {
+      setSelectedPrioritas('ALL');
+      setSelectedStatus('ALL');
+    } else if (filterType === 'p0') {
+      setSelectedPrioritas('P0');
+      setSelectedStatus('ALL');
+    } else if (filterType === 'progress') {
+      setSelectedPrioritas('ALL');
+      setSelectedStatus('On Progress');
+    } else if (filterType === 'resolved') {
+      setSelectedPrioritas('ALL');
+      setSelectedStatus('Resolved');
+    }
+  };
+
+  const resetAllFilters = () => {
+    setSelectedKategori('ALL');
+    setSelectedPrioritas('ALL');
+    setSelectedStatus('ALL');
+    setSearchQuery('');
+    setActiveKpiFilter(null);
+  };
+
+  const isFilterActive =
+    selectedKategori !== 'ALL' ||
+    selectedPrioritas !== 'ALL' ||
+    selectedStatus !== 'ALL' ||
+    Boolean(searchQuery.trim()) ||
+    activeKpiFilter !== null;
 
   // Open Add Form
   const handleOpenAdd = () => {
@@ -404,12 +566,12 @@ export default function PortSightIsuStrategis({
         </div>
       )}
 
-      {/* 1. Header Banner & Filter Strip */}
+      {/* 1. Header Banner */}
       <section className="isu-header-card">
         <div className="isu-header-top-row">
           <div className="isu-header-main">
             <div className="isu-header-icon-wrap">
-              <Target size={24} color="var(--accent-blue)" aria-hidden="true" />
+              <Target size={22} color="var(--accent-blue)" aria-hidden="true" />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -433,7 +595,7 @@ export default function PortSightIsuStrategis({
               disabled={loading}
               className="btn-dark"
               style={{
-                height: '38px',
+                height: '36px',
                 padding: '0 12px',
                 fontSize: '12px',
                 display: 'flex',
@@ -445,7 +607,7 @@ export default function PortSightIsuStrategis({
               aria-label="Segarkan data isu strategis"
             >
               <RotateCw size={13} className={loading ? 'animate-spin' : ''} />
-              <span className="hidden-on-mobile">Segarkan</span>
+              <span>Segarkan</span>
             </button>
 
             {!isBod && (
@@ -454,7 +616,7 @@ export default function PortSightIsuStrategis({
                 onClick={handleOpenAdd}
                 className="btn-primary"
                 style={{
-                  height: '38px',
+                  height: '36px',
                   padding: '0 14px',
                   fontSize: '12px',
                   fontWeight: 700,
@@ -464,7 +626,6 @@ export default function PortSightIsuStrategis({
                   borderRadius: 'var(--radius-md)',
                   backgroundColor: 'var(--accent-blue)',
                   color: 'var(--text-on-accent)',
-                  boxShadow: '0 2px 6px rgba(2, 132, 199, 0.35)',
                   cursor: 'pointer',
                 }}
                 title="Tambah Isu Strategis Baru ke Database PostgreSQL"
@@ -475,11 +636,206 @@ export default function PortSightIsuStrategis({
             )}
           </div>
         </div>
+      </section>
 
-        {/* Global Action / Search Row */}
-        <div className="isu-filter-toolbar">
+      {/* Database Error Banner */}
+      {error && (
+        <div className="isu-error-banner" role="alert">
+          <AlertCircle size={18} color="var(--status-danger-text)" />
+          <div style={{ flex: 1 }}>
+            <strong style={{ fontSize: '13px' }}>Gagal Mengambil Data dari PostgreSQL:</strong>
+            <p style={{ margin: '2px 0 0 0', fontSize: '12px' }}>{error}</p>
+          </div>
+          <button type="button" onClick={fetchData} className="btn-dark" style={{ padding: '4px 10px', fontSize: '11px' }}>
+            Coba Lagi
+          </button>
+        </div>
+      )}
+
+      {/* 2. Interactive KPI Summary Cards (Click-to-Filter) */}
+      <section className="isu-kpi-grid" aria-label="Ringkasan Metrik Isu Strategis">
+        {/* Card 1: Total Isu */}
+        <div
+          className={`isu-kpi-card ${activeKpiFilter === 'all' ? 'is-active-filter' : ''}`}
+          onClick={() => handleKpiCardClick('all')}
+          title="Klik untuk menyaring semua isu"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleKpiCardClick('all');
+            }
+          }}
+        >
+          {activeKpiFilter === 'all' && <span className="isu-kpi-active-tag">Filter Aktif</span>}
+          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(2, 132, 199, 0.12)' }}>
+            <Target size={20} color="var(--accent-blue)" />
+          </div>
+          <div className="isu-kpi-content">
+            <span className="isu-kpi-label">Total Isu Terdaftar</span>
+            <div className="isu-kpi-value-row">
+              <span className="isu-kpi-val">{loading ? '-' : totalIsu}</span>
+              <span className="isu-kpi-unit">Isu Aktif</span>
+            </div>
+            <span className="isu-kpi-subtext">Klik untuk tampilkan semua</span>
+          </div>
+        </div>
+
+        {/* Card 2: P0 Kritis */}
+        <div
+          className={`isu-kpi-card danger ${activeKpiFilter === 'p0' ? 'is-active-filter' : ''}`}
+          onClick={() => handleKpiCardClick('p0')}
+          title="Klik untuk menyaring Isu Kritis P0 Direksi"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleKpiCardClick('p0');
+            }
+          }}
+        >
+          {activeKpiFilter === 'p0' && <span className="isu-kpi-active-tag">Filter Aktif</span>}
+          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)' }}>
+            <AlertTriangle size={20} color="var(--status-danger-text)" />
+          </div>
+          <div className="isu-kpi-content">
+            <span className="isu-kpi-label">Isu Kritis (P0 - Direksi)</span>
+            <div className="isu-kpi-value-row">
+              <span className="isu-kpi-val" style={{ color: 'var(--status-danger-text)' }}>
+                {loading ? '-' : countKritis}
+              </span>
+              <span className="isu-kpi-unit">Urgent Action</span>
+            </div>
+            <span className="isu-kpi-subtext">Memerlukan atensi manajemen</span>
+          </div>
+        </div>
+
+        {/* Card 3: Dalam Penanganan */}
+        <div
+          className={`isu-kpi-card warning ${activeKpiFilter === 'progress' ? 'is-active-filter' : ''}`}
+          onClick={() => handleKpiCardClick('progress')}
+          title="Klik untuk menyaring Isu On Progress"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleKpiCardClick('progress');
+            }
+          }}
+        >
+          {activeKpiFilter === 'progress' && <span className="isu-kpi-active-tag">Filter Aktif</span>}
+          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>
+            <RotateCw size={20} color="var(--status-alert-text)" />
+          </div>
+          <div className="isu-kpi-content">
+            <span className="isu-kpi-label">Dalam Penanganan Aktif</span>
+            <div className="isu-kpi-value-row">
+              <span className="isu-kpi-val" style={{ color: 'var(--status-alert-text)' }}>
+                {loading ? '-' : countOnProgress}
+              </span>
+              <span className="isu-kpi-unit">On Progress</span>
+            </div>
+            <span className="isu-kpi-subtext">Rencana aksi sedang berjalan</span>
+          </div>
+        </div>
+
+        {/* Card 4: Progres Rata-Rata / Resolved */}
+        <div
+          className={`isu-kpi-card success ${activeKpiFilter === 'resolved' ? 'is-active-filter' : ''}`}
+          onClick={() => handleKpiCardClick('resolved')}
+          title="Klik untuk menyaring Isu Tuntas / Resolved"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleKpiCardClick('resolved');
+            }
+          }}
+        >
+          {activeKpiFilter === 'resolved' && <span className="isu-kpi-active-tag">Filter Aktif</span>}
+          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)' }}>
+            <CheckCircle2 size={20} color="var(--status-good-text)" />
+          </div>
+          <div className="isu-kpi-content">
+            <span className="isu-kpi-label">Progres Rata-Rata</span>
+            <div className="isu-kpi-value-row">
+              <span className="isu-kpi-val" style={{ color: 'var(--status-good-text)' }}>
+                {loading ? '-' : `${avgProgres}%`}
+              </span>
+              <span className="isu-kpi-unit">Terselesaikan</span>
+            </div>
+            <div className="isu-kpi-mini-bar-bg">
+              <div className="isu-kpi-mini-bar-fill" style={{ width: `${avgProgres}%` }} />
+            </div>
+            <span className="isu-kpi-subtext" style={{ marginTop: '4px' }}>
+              {countResolved} isu tuntas / monitoring
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Direksi Attention Alert Banner (Only if P0 open or Overdue items exist) */}
+      {!dismissAttentionAlert && (criticalPendingCount > 0 || overdueItemsCount > 0) && (
+        <section className="isu-attention-banner" aria-label="Perhatian Direksi">
+          <div className="isu-attention-content">
+            <AlertTriangle size={22} color="var(--status-danger-text)" style={{ flexShrink: 0 }} />
+            <div>
+              <h4 className="isu-attention-title">PERHATIAN DIREKSI / BOD ACTION REQUIRED</h4>
+              <p className="isu-attention-desc">
+                Terdapat{' '}
+                {criticalPendingCount > 0 && (
+                  <strong>{criticalPendingCount} Isu Kritis P0 yang belum tuntas</strong>
+                )}
+                {criticalPendingCount > 0 && overdueItemsCount > 0 && ' dan '}
+                {overdueItemsCount > 0 && (
+                  <strong>{overdueItemsCount} Isu yang telah melewati target batas waktu</strong>
+                )}
+                . Segera evaluasi mitigasi risiko pada unit terkait.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedPrioritas('P0');
+                setSelectedStatus('ALL');
+                setActiveKpiFilter('p0');
+              }}
+              className="isu-attention-action-btn"
+            >
+              <span>Fokus Isu Kritis P0</span>
+              <ChevronRight size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissAttentionAlert(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                padding: '4px',
+              }}
+              title="Tutup banner peringatan"
+              aria-label="Tutup banner perhatian direksi"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* 4. Filter Toolbar & Category Chips Row */}
+      <section className="isu-toolbar-strip" aria-label="Toolbar Filter Isu Strategis">
+        {/* Row 1: Search, Priority, Status & View Mode Switcher */}
+        <div className="isu-toolbar-main-row">
           <div className="isu-search-box">
-            <Search size={15} color="var(--text-muted)" aria-hidden="true" />
+            <Search size={14} color="var(--text-muted)" aria-hidden="true" />
             <input
               type="text"
               placeholder="Cari judul isu, kode, PIC, atau cabang..."
@@ -500,27 +856,14 @@ export default function PortSightIsuStrategis({
             )}
           </div>
 
-          <div className="isu-dropdown-filters">
-            {/* Filter Kategori */}
-            <select
-              value={selectedKategori}
-              onChange={(e) => setSelectedKategori(e.target.value)}
-              className="isu-select-control"
-              aria-label="Filter Berdasarkan Kategori"
-            >
-              <option value="ALL">Semua Kategori</option>
-              <option value="Operasional">Operasional</option>
-              <option value="Finansial">Finansial</option>
-              <option value="Fasilitas">Fasilitas & Teknik</option>
-              <option value="Komersial">Komersial</option>
-              <option value="HSSE">HSSE & Keselamatan</option>
-              <option value="SDM">SDM & Organisasi</option>
-            </select>
-
+          <div className="isu-toolbar-right-controls">
             {/* Filter Prioritas */}
             <select
               value={selectedPrioritas}
-              onChange={(e) => setSelectedPrioritas(e.target.value)}
+              onChange={(e) => {
+                setSelectedPrioritas(e.target.value);
+                setActiveKpiFilter(null);
+              }}
               className="isu-select-control"
               aria-label="Filter Berdasarkan Tingkat Prioritas"
             >
@@ -533,7 +876,10 @@ export default function PortSightIsuStrategis({
             {/* Filter Status */}
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setActiveKpiFilter(null);
+              }}
               className="isu-select-control"
               aria-label="Filter Berdasarkan Status Penanganan"
             >
@@ -543,297 +889,445 @@ export default function PortSightIsuStrategis({
               <option value="Monitoring">Monitoring</option>
               <option value="Resolved">Resolved</option>
             </select>
-          </div>
-        </div>
-      </section>
 
-      {/* Database Error Banner */}
-      {error && (
-        <div className="isu-error-banner" role="alert">
-          <AlertCircle size={18} color="var(--status-danger-text)" />
-          <div style={{ flex: 1 }}>
-            <strong style={{ fontSize: '13px' }}>Gagal Mengambil Data dari PostgreSQL:</strong>
-            <p style={{ margin: '2px 0 0 0', fontSize: '12px' }}>{error}</p>
-          </div>
-          <button type="button" onClick={fetchData} className="btn-dark" style={{ padding: '4px 10px', fontSize: '11px' }}>
-            Coba Lagi
-          </button>
-        </div>
-      )}
-
-      {/* 2. KPI Summary Cards Grid (4 Metrik) */}
-      <section className="isu-kpi-grid">
-        <div className="isu-kpi-card">
-          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(2, 132, 199, 0.12)' }}>
-            <Target size={20} color="var(--accent-blue)" />
-          </div>
-          <div className="isu-kpi-content">
-            <span className="isu-kpi-label">Total Isu Terdaftar</span>
-            <div className="isu-kpi-value-row">
-              <span className="isu-kpi-val">{loading ? '-' : totalIsu}</span>
-              <span className="isu-kpi-unit">Isu Aktif</span>
-            </div>
-            <span className="isu-kpi-subtext">Tersebar di unit operasional</span>
-          </div>
-        </div>
-
-        <div className="isu-kpi-card danger">
-          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)' }}>
-            <AlertTriangle size={20} color="var(--status-danger-text)" />
-          </div>
-          <div className="isu-kpi-content">
-            <span className="isu-kpi-label">Isu Kritis (P0 - Direksi)</span>
-            <div className="isu-kpi-value-row">
-              <span className="isu-kpi-val" style={{ color: 'var(--status-danger-text)' }}>
-                {loading ? '-' : countKritis}
-              </span>
-              <span className="isu-kpi-unit">Urgent Action</span>
-            </div>
-            <span className="isu-kpi-subtext">Memerlukan atensi manajemen</span>
-          </div>
-        </div>
-
-        <div className="isu-kpi-card warning">
-          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>
-            <RotateCw size={20} color="var(--status-alert-text)" />
-          </div>
-          <div className="isu-kpi-content">
-            <span className="isu-kpi-label">Dalam Penanganan Aktif</span>
-            <div className="isu-kpi-value-row">
-              <span className="isu-kpi-val" style={{ color: 'var(--status-alert-text)' }}>
-                {loading ? '-' : countOnProgress}
-              </span>
-              <span className="isu-kpi-unit">On Progress</span>
-            </div>
-            <span className="isu-kpi-subtext">Rencana aksi sedang berjalan</span>
-          </div>
-        </div>
-
-        <div className="isu-kpi-card success">
-          <div className="isu-kpi-icon-wrap" style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)' }}>
-            <CheckCircle2 size={20} color="var(--status-good-text)" />
-          </div>
-          <div className="isu-kpi-content">
-            <span className="isu-kpi-label">Progres Penyelesaian Rata-Rata</span>
-            <div className="isu-kpi-value-row">
-              <span className="isu-kpi-val" style={{ color: 'var(--status-good-text)' }}>
-                {loading ? '-' : `${avgProgres}%`}
-              </span>
-              <span className="isu-kpi-unit">Terselesaikan</span>
-            </div>
-            <div className="isu-kpi-mini-bar-bg">
-              <div className="isu-kpi-mini-bar-fill" style={{ width: `${avgProgres}%` }} />
-            </div>
-            <span className="isu-kpi-subtext" style={{ marginTop: '4px' }}>
-              {countResolved} isu dalam tahap tuntas / monitoring
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Priority Issue Cards (Mobile & Desktop Cards Grid) */}
-      <section className="isu-section-container">
-        <div className="isu-section-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <TrendingUp size={16} color="var(--accent-blue)" />
-            <h3 className="isu-section-title">Daftar Isu Prioritas & Rencana Mitigasi</h3>
-          </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {loading ? 'Memuat data...' : `Menampilkan ${filteredData.length} dari ${items.length} Isu`}
-          </span>
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-            <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
-            <p style={{ margin: 0, fontSize: '13px' }}>Mengambil data isu strategis dari PostgreSQL...</p>
-          </div>
-        ) : filteredData.length === 0 ? (
-          <div className="isu-empty-card">
-            <Target size={32} color="var(--text-muted)" style={{ margin: '0 auto 8px auto' }} />
-            <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', color: 'var(--text-title)' }}>Tidak Ada Isu Ditemukan</h4>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Tidak ada data isu strategis yang cocok dengan filter atau kata pencarian Anda.
-            </p>
-          </div>
-        ) : (
-          <div className="isu-cards-grid">
-            {filteredData.map((item) => (
-              <article
-                key={item.id}
-                className={`isu-card-item ${item.prioritas === 'P0' ? 'priority-p0-glow' : ''}`}
-                onClick={() => setDetailModalItem(item)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setDetailModalItem(item);
-                  }
+            {/* Reset Filters Button */}
+            {isFilterActive && (
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="btn-dark"
+                style={{
+                  height: '36px',
+                  padding: '0 10px',
+                  fontSize: '11.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--status-danger-text)',
+                  borderColor: 'rgba(239, 68, 68, 0.3)',
                 }}
+                title="Kembalikan semua filter ke kondisi awal"
               >
-                <div className="isu-card-top-row">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                    <span className={`isu-badge ${getPriorityBadgeClass(item.prioritas)}`}>
-                      {item.prioritas === 'P0' ? 'P0 • Kritis' : item.prioritas === 'P1' ? 'P1 • Tinggi' : 'P2 • Sedang'}
-                    </span>
-                    <span className="isu-badge badge-kategori">{item.kategori}</span>
-                    <span className={`isu-badge ${getStatusBadgeClass(item.status)}`}>{item.status}</span>
-                  </div>
-                  <span className="isu-code-tag">{item.kode}</span>
-                </div>
+                <FilterX size={13} />
+                <span>Reset</span>
+              </button>
+            )}
 
-                <h4 className="isu-card-heading">{item.judul}</h4>
-                <p className="isu-card-desc">{item.akarMasalah}</p>
-
-                <div className="isu-progress-section">
-                  <div className="isu-progress-labels">
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Kemajuan Tindak Lanjut</span>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-blue)' }}>{item.progres}%</span>
-                  </div>
-                  <div className="isu-progress-bar-bg">
-                    <div
-                      className="isu-progress-bar-fill"
-                      style={{
-                        width: `${item.progres}%`,
-                        backgroundColor: item.progres >= 80 ? 'var(--status-good-text)' : item.progres >= 50 ? 'var(--accent-blue)' : 'var(--status-alert-text)',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="isu-card-footer">
-                  <div className="isu-card-meta-item">
-                    <Building size={12} color="var(--text-muted)" />
-                    <span>{item.cabangName}</span>
-                  </div>
-                  <div className="isu-card-meta-item">
-                    <Calendar size={12} color="var(--text-muted)" />
-                    <span>Target: {item.targetSelesai}</span>
-                  </div>
-                  <div className="isu-card-click-hint">
-                    <span>Lihat Detail</span>
-                    <ChevronRight size={13} />
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* 4. Detailed Data Table (Scrollable on HP with Responsive Wrap) */}
-      <section className="isu-table-card">
-        <div className="isu-section-header" style={{ marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Layers size={16} color="var(--accent-blue)" />
-            <h3 className="isu-section-title">Matriks Monitoring Tindak Lanjut Regional 4</h3>
+            {/* View Mode Switcher Toggle */}
+            <div className="isu-view-switcher" role="radiogroup" aria-label="Mode Tampilan Isu Strategis">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={viewMode === 'board'}
+                onClick={() => setViewMode('board')}
+                className={`isu-view-btn ${viewMode === 'board' ? 'is-active' : ''}`}
+                title="Tampilan Kanban Board Alur Kerja"
+              >
+                <Kanban size={13} />
+                <span>Board</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={viewMode === 'table'}
+                onClick={() => setViewMode('table')}
+                className={`isu-view-btn ${viewMode === 'table' ? 'is-active' : ''}`}
+                title="Tampilan Tabel Matriks Rinci"
+              >
+                <TableIcon size={13} />
+                <span>Matriks</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={viewMode === 'grid'}
+                onClick={() => setViewMode('grid')}
+                className={`isu-view-btn ${viewMode === 'grid' ? 'is-active' : ''}`}
+                title="Tampilan Kartu Ringkas"
+              >
+                <LayoutGrid size={13} />
+                <span>Kartu</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="isu-table-scroll-container">
-          <table className="card-table isu-table" aria-label="Tabel rincian isu strategis">
-            <thead>
-              <tr>
-                <th style={{ width: '40px', textAlign: 'center' }}>No</th>
-                <th style={{ width: '130px' }}>Kode Isu</th>
-                <th style={{ width: '150px' }}>Cabang / Entitas</th>
-                <th style={{ width: '110px' }}>Kategori</th>
-                <th>Judul & Akar Permasalahan</th>
-                <th style={{ width: '90px', textAlign: 'center' }}>Prioritas</th>
-                <th style={{ width: '110px', textAlign: 'center' }}>Status</th>
-                <th style={{ width: '140px' }}>Progres</th>
-                <th style={{ width: '100px' }}>Target</th>
-                <th style={{ width: '110px', textAlign: 'center' }}>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.length === 0 ? (
-                <tr>
-                  <td data-label="Informasi" colSpan={10} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                    Tidak ada isu strategis yang sesuai dengan kriteria filter saat ini.
-                  </td>
-                </tr>
-              ) : (
-                filteredData.map((item, idx) => (
-                  <tr key={item.id} onClick={() => setDetailModalItem(item)} style={{ cursor: 'pointer' }}>
-                    <td data-label="No" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px' }}>{idx + 1}</td>
-                    <td data-label="Kode Isu" style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600 }}>{item.kode}</td>
-                    <td data-label="Cabang">
-                      <span style={{ fontWeight: 600, fontSize: '12px' }}>{item.cabangName}</span>
-                    </td>
-                    <td data-label="Kategori">
-                      <span className="isu-badge badge-kategori" style={{ fontSize: '10px' }}>{item.kategori}</span>
-                    </td>
-                    <td data-label="Judul & Akar Masalah">
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-title)' }}>
-                          {item.judul}
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.3 }}>
-                          {item.akarMasalah}
-                        </span>
+        {/* Row 2: Category Chips Filter */}
+        <div className="isu-category-chips-row">
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginRight: '4px' }}>
+            Kategori:
+          </span>
+          {ISU_CATEGORIES.map((cat) => {
+            const count = categoryCounts[cat] ?? 0;
+            const isActive = selectedKategori === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedKategori(cat)}
+                className={`isu-category-chip ${isActive ? 'is-active' : ''}`}
+              >
+                <span>{cat === 'ALL' ? 'Semua Kategori' : cat}</span>
+                <span className="isu-category-chip-count">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 5. Main Content Area According to View Mode */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+          <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px auto' }} />
+          <p style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>Mengambil data isu strategis dari PostgreSQL...</p>
+        </div>
+      ) : filteredData.length === 0 ? (
+        <div className="isu-empty-card">
+          <Target size={34} color="var(--text-muted)" style={{ margin: '0 auto 10px auto' }} />
+          <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', color: 'var(--text-title)' }}>Tidak Ada Isu Ditemukan</h4>
+          <p style={{ margin: '0 0 14px 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            Tidak ada isu strategis yang cocok dengan kriteria filter aktif Anda.
+          </p>
+          {isFilterActive && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="btn-primary"
+              style={{
+                padding: '6px 14px',
+                fontSize: '12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '6px',
+              }}
+            >
+              <FilterX size={13} />
+              <span>Reset Semua Filter</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* VIEW MODE A: KANBAN BOARD */}
+          {viewMode === 'board' && (
+            <section className="isu-kanban-board" aria-label="Kanban Board Isu Strategis">
+              {KANBAN_COLUMNS.map((col) => {
+                const colItems = filteredData.filter((i) => i.status === col.status);
+                return (
+                  <div key={col.status} className="isu-kanban-col">
+                    <div className="isu-kanban-col-head" style={{ borderTop: `3px solid ${col.accentColor}` }}>
+                      <div className="isu-kanban-col-title">
+                        <span>{col.label}</span>
                       </div>
-                    </td>
-                    <td data-label="Prioritas" style={{ textAlign: 'center' }}>
-                      <span className={`isu-badge ${getPriorityBadgeClass(item.prioritas)}`} style={{ fontSize: '10px' }}>
-                        {item.prioritas}
-                      </span>
-                    </td>
-                    <td data-label="Status" style={{ textAlign: 'center' }}>
-                      <span className={`isu-badge ${getStatusBadgeClass(item.status)}`} style={{ fontSize: '10px' }}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td data-label="Progres">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div className="isu-table-mini-bar-bg">
+                      <span className="isu-kanban-badge-count">{colItems.length}</span>
+                    </div>
+
+                    <div className="isu-kanban-col-body">
+                      {colItems.length === 0 ? (
+                        <div className="isu-kanban-empty">
+                          <span>Tidak ada isu pada tahap {col.label}</span>
+                        </div>
+                      ) : (
+                        colItems.map((item) => {
+                          const dueStatus = getItemDueStatus(item.targetSelesai, item.status);
+                          return (
+                            <article
+                              key={item.id}
+                              className={`isu-kanban-card ${item.prioritas === 'P0' ? 'p0-glow' : ''}`}
+                              onClick={() => setDetailModalItem(item)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setDetailModalItem(item);
+                                }
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                                  <span className={`isu-badge ${getPriorityBadgeClass(item.prioritas)}`}>
+                                    {item.prioritas}
+                                  </span>
+                                  <span className="isu-badge badge-kategori" style={{ fontSize: '10px' }}>
+                                    {item.kategori}
+                                  </span>
+                                </div>
+                                <span className="isu-code-tag">{item.kode}</span>
+                              </div>
+
+                              <h4 className="isu-kanban-card-title">{item.judul}</h4>
+                              <p className="isu-kanban-card-desc">{item.akarMasalah}</p>
+
+                              {/* Progress Bar */}
+                              <div className="isu-progress-section">
+                                <div className="isu-progress-labels">
+                                  <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Progres</span>
+                                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-blue-text)', fontFamily: 'var(--font-jetbrains), monospace', fontVariantNumeric: 'tabular-nums' }}>
+                                    {item.progres}%
+                                  </span>
+                                </div>
+                                <div className="isu-progress-bar-bg">
+                                  <div
+                                    className="isu-progress-bar-fill"
+                                    style={{
+                                      width: `${item.progres}%`,
+                                      backgroundColor:
+                                        item.progres >= 80
+                                          ? 'var(--status-good-text)'
+                                          : item.progres >= 50
+                                          ? 'var(--accent-blue)'
+                                          : 'var(--status-alert-text)',
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Footer */}
+                              <div className="isu-kanban-card-footer">
+                                <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                  {item.cabangName}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  {dueStatus.isOverdue ? (
+                                    <span className="badge-overdue" title={`Terlambat ${dueStatus.daysDiff} hari`}>
+                                      <Clock size={10} />
+                                      <span>Overdue ({dueStatus.daysDiff}h)</span>
+                                    </span>
+                                  ) : dueStatus.isDueSoon ? (
+                                    <span className="badge-duesoon" title={`Jatuh tempo dalam ${dueStatus.daysDiff} hari`}>
+                                      <Clock size={10} />
+                                      <span>{dueStatus.daysDiff}h lagi</span>
+                                    </span>
+                                  ) : (
+                                    <span>{item.targetSelesai}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          )}
+
+          {/* VIEW MODE B: DETAILED DATA TABLE */}
+          {viewMode === 'table' && (
+            <section className="isu-table-card" aria-label="Tabel Matriks Isu Strategis">
+              <div className="isu-section-header" style={{ marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Layers size={16} color="var(--accent-blue)" />
+                  <h3 className="isu-section-title">Matriks Monitoring Tindak Lanjut Regional 4</h3>
+                </div>
+                <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                  Menampilkan {filteredData.length} dari {items.length} Isu
+                </span>
+              </div>
+
+              <div className="isu-table-scroll-container">
+                <table className="card-table isu-table" aria-label="Tabel rincian isu strategis">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px', textAlign: 'center' }}>No</th>
+                      <th style={{ width: '120px' }}>Kode Isu</th>
+                      <th style={{ width: '150px' }}>Cabang / Entitas</th>
+                      <th style={{ width: '110px' }}>Kategori</th>
+                      <th>Judul & Akar Masalah</th>
+                      <th style={{ width: '90px', textAlign: 'center' }}>Prioritas</th>
+                      <th style={{ width: '110px', textAlign: 'center' }}>Status</th>
+                      <th style={{ width: '130px' }}>Progres</th>
+                      <th style={{ width: '130px' }}>Target & Batas Waktu</th>
+                      <th style={{ width: '100px', textAlign: 'center' }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.map((item, idx) => {
+                      const dueStatus = getItemDueStatus(item.targetSelesai, item.status);
+                      return (
+                        <tr key={item.id} onClick={() => setDetailModalItem(item)} style={{ cursor: 'pointer' }}>
+                          <td data-label="No" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px' }}>
+                            {idx + 1}
+                          </td>
+                          <td data-label="Kode Isu" style={{ fontFamily: 'var(--font-jetbrains), monospace', fontSize: '11px', fontWeight: 700 }}>
+                            {item.kode}
+                          </td>
+                          <td data-label="Cabang">
+                            <span style={{ fontWeight: 600, fontSize: '12px' }}>{item.cabangName}</span>
+                          </td>
+                          <td data-label="Kategori">
+                            <span className="isu-badge badge-kategori" style={{ fontSize: '10px' }}>{item.kategori}</span>
+                          </td>
+                          <td data-label="Judul & Akar Masalah">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text-title)' }}>
+                                {item.judul}
+                              </span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.3 }}>
+                                {item.akarMasalah}
+                              </span>
+                            </div>
+                          </td>
+                          <td data-label="Prioritas" style={{ textAlign: 'center' }}>
+                            <span className={`isu-badge ${getPriorityBadgeClass(item.prioritas)}`} style={{ fontSize: '10px' }}>
+                              {item.prioritas}
+                            </span>
+                          </td>
+                          <td data-label="Status" style={{ textAlign: 'center' }}>
+                            <span className={`isu-badge ${getStatusBadgeClass(item.status)}`} style={{ fontSize: '10px' }}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td data-label="Progres">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <div className="isu-table-mini-bar-bg">
+                                <div
+                                  className="isu-table-mini-bar-fill"
+                                  style={{ width: `${item.progres}%` }}
+                                />
+                              </div>
+                              <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'var(--font-jetbrains), monospace', fontVariantNumeric: 'tabular-nums' }}>
+                                {item.progres}%
+                              </span>
+                            </div>
+                          </td>
+                          <td data-label="Target Selesai" style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span>{item.targetSelesai}</span>
+                              {dueStatus.isOverdue && (
+                                <span className="badge-overdue" style={{ fontSize: '9.5px', padding: '1px 5px' }}>
+                                  Overdue {dueStatus.daysDiff}h
+                                </span>
+                              )}
+                              {dueStatus.isDueSoon && (
+                                <span className="badge-duesoon" style={{ fontSize: '9.5px', padding: '1px 5px' }}>
+                                  {dueStatus.daysDiff}h lagi
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td data-label="Aksi" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                              <button
+                                type="button"
+                                className="btn-dark"
+                                onClick={() => setDetailModalItem(item)}
+                                style={{ padding: '3px 7px', fontSize: '11px', borderRadius: '4px' }}
+                                title="Detail Isu"
+                              >
+                                Detail
+                              </button>
+                              {!isBod && (
+                                <button
+                                  type="button"
+                                  className="btn-dark"
+                                  onClick={() => handleOpenEdit(item)}
+                                  style={{ padding: '3px 7px', fontSize: '11px', borderRadius: '4px' }}
+                                  title="Edit Isu"
+                                >
+                                  <Edit3 size={11} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* VIEW MODE C: PRIORITY CARDS GRID */}
+          {viewMode === 'grid' && (
+            <section className="isu-section-container" aria-label="Grid Kartu Isu Strategis">
+              <div className="isu-cards-grid">
+                {filteredData.map((item) => {
+                  const dueStatus = getItemDueStatus(item.targetSelesai, item.status);
+                  return (
+                    <article
+                      key={item.id}
+                      className={`isu-card-item ${item.prioritas === 'P0' ? 'priority-p0-glow' : ''}`}
+                      onClick={() => setDetailModalItem(item)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setDetailModalItem(item);
+                        }
+                      }}
+                    >
+                      <div className="isu-card-top-row">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span className={`isu-badge ${getPriorityBadgeClass(item.prioritas)}`}>
+                            {item.prioritas === 'P0' ? 'P0 • Kritis' : item.prioritas === 'P1' ? 'P1 • Tinggi' : 'P2 • Sedang'}
+                          </span>
+                          <span className="isu-badge badge-kategori">{item.kategori}</span>
+                          <span className={`isu-badge ${getStatusBadgeClass(item.status)}`}>{item.status}</span>
+                        </div>
+                        <span className="isu-code-tag">{item.kode}</span>
+                      </div>
+
+                      <h4 className="isu-card-heading">{item.judul}</h4>
+                      <p className="isu-card-desc">{item.akarMasalah}</p>
+
+                      <div className="isu-progress-section">
+                        <div className="isu-progress-labels">
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Kemajuan Tindak Lanjut</span>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-blue-text)', fontFamily: 'var(--font-jetbrains), monospace', fontVariantNumeric: 'tabular-nums' }}>
+                            {item.progres}%
+                          </span>
+                        </div>
+                        <div className="isu-progress-bar-bg">
                           <div
-                            className="isu-table-mini-bar-fill"
-                            style={{ width: `${item.progres}%` }}
+                            className="isu-progress-bar-fill"
+                            style={{
+                              width: `${item.progres}%`,
+                              backgroundColor:
+                                item.progres >= 80
+                                  ? 'var(--status-good-text)'
+                                  : item.progres >= 50
+                                  ? 'var(--accent-blue)'
+                                  : 'var(--status-alert-text)',
+                            }}
                           />
                         </div>
-                        <span style={{ fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                          {item.progres}%
-                        </span>
                       </div>
-                    </td>
-                    <td data-label="Target Selesai" style={{ fontSize: '11px', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                      {item.targetSelesai}
-                    </td>
-                    <td data-label="Aksi" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                        <button
-                          type="button"
-                          className="btn-dark"
-                          onClick={() => setDetailModalItem(item)}
-                          style={{ padding: '3px 6px', fontSize: '11px', borderRadius: '4px' }}
-                          title="Detail Isu"
-                        >
-                          Detail
-                        </button>
-                        {!isBod && (
-                          <button
-                            type="button"
-                            className="btn-dark"
-                            onClick={() => handleOpenEdit(item)}
-                            style={{ padding: '3px 6px', fontSize: '11px', borderRadius: '4px' }}
-                            title="Edit Isu"
-                          >
-                            <Edit3 size={11} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
-      {/* 5. Detail Modal Isu Strategis */}
+                      <div className="isu-card-footer">
+                        <div className="isu-card-meta-item">
+                          <Building size={12} color="var(--text-muted)" />
+                          <span>{item.cabangName}</span>
+                        </div>
+                        <div className="isu-card-meta-item">
+                          <Calendar size={12} color="var(--text-muted)" />
+                          <span>Target: {item.targetSelesai}</span>
+                          {dueStatus.isOverdue && (
+                            <span className="badge-overdue" style={{ marginLeft: 4 }}>Overdue</span>
+                          )}
+                        </div>
+                        <div className="isu-card-click-hint">
+                          <span>Lihat Detail</span>
+                          <ChevronRight size={13} />
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* 6. Redesigned Detail Modal (Executive Briefing Format) */}
       {detailModalItem && (
         <div
           className="modal-overlay"
@@ -841,28 +1335,30 @@ export default function PortSightIsuStrategis({
           onClick={() => setDetailModalItem(null)}
         >
           <div
+            ref={detailDialogRef}
             className="modal-content"
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-isu-title"
-            style={{ maxWidth: '620px', padding: '24px', borderRadius: 'var(--radius-lg)' }}
+            style={{ maxWidth: '780px', padding: '24px', borderRadius: 'var(--radius-lg)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', paddingBottom: '14px', borderBottom: '1px solid var(--border-subtle)' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
                   <span className={`isu-badge ${getPriorityBadgeClass(detailModalItem.prioritas)}`}>
-                    {detailModalItem.prioritas === 'P0' ? 'P0 • Kritis' : detailModalItem.prioritas === 'P1' ? 'P1 • Tinggi' : 'P2 • Sedang'}
+                    {detailModalItem.prioritas === 'P0' ? 'P0 • Kritis (Direksi)' : detailModalItem.prioritas === 'P1' ? 'P1 • Tinggi' : 'P2 • Sedang'}
                   </span>
                   <span className="isu-badge badge-kategori">{detailModalItem.kategori}</span>
                   <span className={`isu-badge ${getStatusBadgeClass(detailModalItem.status)}`}>
                     {detailModalItem.status}
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <span style={{ fontFamily: 'var(--font-jetbrains), monospace', fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>
                     [{detailModalItem.kode}]
                   </span>
                 </div>
-                <h3 id="modal-isu-title" style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--text-title)', lineHeight: 1.4 }}>
+                <h3 id="modal-isu-title" style={{ fontSize: '17px', fontWeight: 800, margin: 0, color: 'var(--text-title)', lineHeight: 1.35 }}>
                   {detailModalItem.judul}
                 </h3>
               </div>
@@ -871,115 +1367,144 @@ export default function PortSightIsuStrategis({
                 onClick={() => setDetailModalItem(null)}
                 className="btn-dark"
                 style={{ padding: '6px', borderRadius: '50%', cursor: 'pointer' }}
-                aria-label="Tutup dialog"
+                aria-label="Tutup dialog detail"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '13px', lineHeight: 1.5 }}>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Lokasi Unit / Cabang
-                </span>
-                <p style={{ margin: '2px 0 0 0', fontWeight: 600, color: 'var(--text-main)' }}>
-                  {detailModalItem.cabangName} ({detailModalItem.cabangCode})
-                </p>
-              </div>
-
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Akar Permasalahan
-                </span>
-                <p style={{ margin: '2px 0 0 0', color: 'var(--text-secondary)' }}>
-                  {detailModalItem.akarMasalah}
-                </p>
-              </div>
-
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-blue)', textTransform: 'uppercase' }}>
-                  Rencana Tindak Lanjut & Mitigasi
-                </span>
-                <p style={{ margin: '2px 0 0 0', color: 'var(--text-main)', backgroundColor: 'var(--bg-inner)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--accent-blue)' }}>
-                  {detailModalItem.tindakLanjut}
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            {/* Modal Body: 2-Column Executive Briefing Grid */}
+            <div className="isu-modal-grid-2" style={{ fontSize: '13px', lineHeight: 1.5 }}>
+              {/* Left Column: Problem Analysis */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    PIC Penanggung Jawab
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Building size={12} />
+                    <span>Lokasi Unit / Cabang</span>
                   </span>
-                  <p style={{ margin: '2px 0 0 0', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {detailModalItem.pic}
+                  <p style={{ margin: '3px 0 0 0', fontWeight: 700, color: 'var(--text-title)' }}>
+                    {detailModalItem.cabangName} ({detailModalItem.cabangCode})
                   </p>
                 </div>
+
                 <div>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Target Batas Waktu
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                    Akar Permasalahan (Root Cause)
                   </span>
-                  <p style={{ margin: '2px 0 0 0', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {detailModalItem.targetSelesai}
+                  <p style={{ margin: '3px 0 0 0', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-inner)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    {detailModalItem.akarMasalah}
+                  </p>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                    Target Dampak Positif / Capaian
+                  </span>
+                  <p style={{ margin: '3px 0 0 0', color: 'var(--text-secondary)' }}>
+                    {detailModalItem.dampak}
                   </p>
                 </div>
               </div>
 
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Kemajuan Realisasi
+              {/* Right Column: Action Plan & Timeline */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-blue-text)', textTransform: 'uppercase', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <TrendingUp size={12} />
+                    <span>Rencana Tindak Lanjut & Mitigasi</span>
                   </span>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent-blue)' }}>
-                    {detailModalItem.progres}%
-                  </span>
+                  <p style={{ margin: '3px 0 0 0', color: 'var(--text-main)', backgroundColor: 'var(--bg-inner)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--accent-blue)', borderTop: '1px solid var(--border-subtle)', borderRight: '1px solid var(--border-subtle)', borderBottom: '1px solid var(--border-subtle)' }}>
+                    {detailModalItem.tindakLanjut}
+                  </p>
                 </div>
-                <div className="isu-progress-bar-bg" style={{ height: '8px' }}>
-                  <div
-                    className="isu-progress-bar-fill"
-                    style={{ width: `${detailModalItem.progres}%`, height: '8px' }}
-                  />
-                </div>
-              </div>
 
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Target Dampak Positif
-                </span>
-                <p style={{ margin: '2px 0 0 0', color: 'var(--text-secondary)' }}>
-                  {detailModalItem.dampak}
-                </p>
-              </div>
-
-              {/* Quick Status Pill Actions */}
-              {!isBod && (
-                <div style={{ marginTop: '4px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
-                    Ubah Status Penanganan Cepat:
-                  </span>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {(['Open', 'On Progress', 'Monitoring', 'Resolved'] as const).map((st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => handleQuickStatusChange(detailModalItem, st)}
-                        className={`isu-badge ${getStatusBadgeClass(st)}`}
-                        style={{
-                          cursor: 'pointer',
-                          padding: '4px 10px',
-                          border: detailModalItem.status === st ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
-                          opacity: detailModalItem.status === st ? 1 : 0.65,
-                          transform: detailModalItem.status === st ? 'scale(1.05)' : 'none',
-                        }}
-                      >
-                        {st}
-                      </button>
-                    ))}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <User size={11} />
+                      <span>PIC Penanggung Jawab</span>
+                    </span>
+                    <p style={{ margin: '3px 0 0 0', fontWeight: 700, color: 'var(--text-main)' }}>
+                      {detailModalItem.pic}
+                    </p>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Calendar size={11} />
+                      <span>Target Selesai</span>
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                      <p style={{ margin: 0, fontWeight: 700, color: 'var(--text-main)' }}>
+                        {detailModalItem.targetSelesai}
+                      </p>
+                      {(() => {
+                        const due = getItemDueStatus(detailModalItem.targetSelesai, detailModalItem.status);
+                        if (due.isOverdue) return <span className="badge-overdue" style={{ fontSize: '9px' }}>Overdue</span>;
+                        if (due.isDueSoon) return <span className="badge-duesoon" style={{ fontSize: '9px' }}>{due.daysDiff}h lagi</span>;
+                        return null;
+                      })()}
+                    </div>
                   </div>
                 </div>
-              )}
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                      Kemajuan Realisasi
+                    </span>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent-blue-text)', fontFamily: 'var(--font-jetbrains), monospace', fontVariantNumeric: 'tabular-nums' }}>
+                      {detailModalItem.progres}%
+                    </span>
+                  </div>
+                  <div className="isu-progress-bar-bg" style={{ height: '8px' }}>
+                    <div
+                      className="isu-progress-bar-fill"
+                      style={{
+                        width: `${detailModalItem.progres}%`,
+                        height: '8px',
+                        backgroundColor:
+                          detailModalItem.progres >= 80
+                            ? 'var(--status-good-text)'
+                            : detailModalItem.progres >= 50
+                            ? 'var(--accent-blue)'
+                            : 'var(--status-alert-text)',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Status Pill Actions */}
+                {!isBod && (
+                  <div style={{ marginTop: '2px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
+                    <span style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+                      Ubah Status Cepat:
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {(['Open', 'On Progress', 'Monitoring', 'Resolved'] as const).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => handleQuickStatusChange(detailModalItem, st)}
+                          className={`isu-badge ${getStatusBadgeClass(st)}`}
+                          style={{
+                            cursor: 'pointer',
+                            padding: '4px 10px',
+                            border: detailModalItem.status === st ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
+                            opacity: detailModalItem.status === st ? 1 : 0.65,
+                            transform: detailModalItem.status === st ? 'scale(1.04)' : 'none',
+                          }}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginTop: '20px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+            {/* Modal Footer Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginTop: '20px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {!isBod && (
                   <>
@@ -987,7 +1512,7 @@ export default function PortSightIsuStrategis({
                       type="button"
                       className="btn-dark"
                       onClick={() => handleOpenEdit(detailModalItem)}
-                      style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                      style={{ padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}
                     >
                       <Edit3 size={13} />
                       <span>Edit Data</span>
@@ -997,7 +1522,7 @@ export default function PortSightIsuStrategis({
                       className="btn-dark"
                       onClick={() => setDeleteConfirmItem(detailModalItem)}
                       style={{
-                        padding: '6px 12px',
+                        padding: '7px 12px',
                         fontSize: '12px',
                         display: 'flex',
                         alignItems: 'center',
@@ -1023,7 +1548,7 @@ export default function PortSightIsuStrategis({
                       onNavigateTab(target);
                       setDetailModalItem(null);
                     }}
-                    style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                    style={{ padding: '7px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}
                   >
                     <span>Buka Modul Terkait</span>
                     <ArrowUpRight size={13} />
@@ -1033,7 +1558,7 @@ export default function PortSightIsuStrategis({
                   type="button"
                   className="btn-primary"
                   onClick={() => setDetailModalItem(null)}
-                  style={{ padding: '6px 16px', fontSize: '12px' }}
+                  style={{ padding: '7px 18px', fontSize: '12px' }}
                 >
                   Tutup
                 </button>
@@ -1043,7 +1568,7 @@ export default function PortSightIsuStrategis({
         </div>
       )}
 
-      {/* 6. Form Modal: Tambah & Edit Isu Strategis */}
+      {/* 7. Form Modal: Tambah & Edit Isu Strategis */}
       {formModalOpen && (
         <div
           className="modal-overlay"
@@ -1051,6 +1576,7 @@ export default function PortSightIsuStrategis({
           onClick={() => !submitting && setFormModalOpen(false)}
         >
           <div
+            ref={formDialogRef}
             className="modal-content isu-form-modal"
             role="dialog"
             aria-modal="true"
@@ -1233,11 +1759,11 @@ export default function PortSightIsuStrategis({
                 </div>
               </div>
 
-              {/* Progres Slider & Dampak */}
+              {/* Progres Slider */}
               <div className="form-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label className="form-label" htmlFor="form-progres">Kemajuan / Progres Penyelesaian</label>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent-blue)' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent-blue-text)', fontFamily: 'var(--font-jetbrains), monospace', fontVariantNumeric: 'tabular-nums' }}>
                     {formData.progres}%
                   </span>
                 </div>
@@ -1310,7 +1836,7 @@ export default function PortSightIsuStrategis({
         </div>
       )}
 
-      {/* 7. Dialog Konfirmasi Hapus */}
+      {/* 8. Dialog Konfirmasi Hapus */}
       {deleteConfirmItem && (
         <div
           className="modal-overlay"
@@ -1318,6 +1844,7 @@ export default function PortSightIsuStrategis({
           onClick={() => !deleting && setDeleteConfirmItem(null)}
         >
           <div
+            ref={deleteDialogRef}
             className="modal-content"
             role="alertdialog"
             aria-modal="true"
@@ -1353,9 +1880,10 @@ export default function PortSightIsuStrategis({
                   fontSize: '12px',
                   fontWeight: 700,
                   borderRadius: '6px',
-                  backgroundColor: '#b91c1c',
-                  color: 'var(--text-on-accent)',
-                  border: 'none',
+                  backgroundColor: 'var(--status-danger-bg)',
+                  borderColor: 'var(--status-danger-border)',
+                  color: 'var(--status-danger-text)',
+                  border: '1px solid var(--status-danger-border)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',

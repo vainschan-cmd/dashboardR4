@@ -9,11 +9,12 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend
 } from 'recharts';
 import { Gauge, Ship, Layers, Warehouse, Search, PlusCircle } from 'lucide-react';
 import { isBranchMatch } from '@/lib/constants';
+import { CHART_METRIC_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from '@/lib/chartPalette';
 import { formatPercent } from '@/lib/formatters';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
 import LoadingState from '@/components/ui/LoadingState';
 
 interface UtilisasiItem {
@@ -177,23 +178,30 @@ export default function PortSightUtilisasi({ selectedTerminal = 'ALL', onOpenMan
           <span style={{ fontSize: '12px', color: 'var(--accent-blue-text)', fontWeight: 700 }}>Sumber: Sheet utilisasi (input_data.xlsx)</span>
         </div>
 
-        <div style={{ height: '260px', width: '100%' }}>
+        <div style={{ height: '250px', width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+            <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 16 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+              <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+              <YAxis domain={[0, 100]} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
+                contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
                 formatter={(val: unknown) => [`${String(val ?? '')}%`, '']}
               />
-              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Bar dataKey="BOR" fill="var(--accent-cyan)" radius={[3, 3, 0, 0]} name="BOR (Dermaga)" />
-              <Bar dataKey="YOR" fill="var(--status-good-text)" radius={[3, 3, 0, 0]} name="YOR (Lapangan)" />
-              <Bar dataKey="SOR" fill="var(--status-alert-text)" radius={[3, 3, 0, 0]} name="SOR (Gudang)" />
+              <Bar dataKey="BOR" fill={CHART_METRIC_COLORS.primary} radius={[3, 3, 0, 0]} name="BOR (Dermaga)" />
+              <Bar dataKey="YOR" fill={CHART_METRIC_COLORS.positive} radius={[3, 3, 0, 0]} name="YOR (Lapangan)" />
+              <Bar dataKey="SOR" fill={CHART_METRIC_COLORS.warning} radius={[3, 3, 0, 0]} name="SOR (Gudang)" />
             </BarChart>
           </ResponsiveContainer>
         </div>
+        <ChartInlineLegend
+          compact
+          items={[
+            { label: 'BOR (Dermaga)', color: CHART_METRIC_COLORS.primary },
+            { label: 'YOR (Lapangan)', color: CHART_METRIC_COLORS.positive },
+            { label: 'SOR (Gudang)', color: CHART_METRIC_COLORS.warning },
+          ]}
+        />
       </div>
 
       {/* Table Section */}

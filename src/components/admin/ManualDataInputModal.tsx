@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   PlusCircle,
@@ -32,6 +32,7 @@ import {
   PERALATAN_KONDISI_LIST,
 } from '@/lib/peralatanHelpers';
 import { User } from '@/lib/types';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export type ModuleType = 'finansial' | 'opkom' | 'kinerja' | 'utilisasi' | 'peralatan' | 'fasilitas';
 
@@ -101,6 +102,8 @@ function ManualDataInputForm({
   currentUser,
   onSuccess,
 }: ManualDataInputModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, isOpen, onClose);
   const [activeModule, setActiveModule] = useState<ModuleType>(defaultModule);
 
   // Common fields
@@ -290,6 +293,10 @@ function ManualDataInputForm({
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-input-modal-title"
         className="modal-content"
         style={{ maxWidth: '680px', width: '100%', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
@@ -312,7 +319,7 @@ function ManualDataInputForm({
               <PlusCircle size={20} />
             </div>
             <div>
-              <h3 className="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+              <h3 id="manual-input-modal-title" className="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
                 Input Data Manual Operasional & Keuangan
               </h3>
               <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-muted)' }}>
@@ -321,7 +328,9 @@ function ManualDataInputForm({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Tutup modal input manual"
             style={{
               background: 'transparent',
               border: 'none',

@@ -10,6 +10,8 @@ import {
   Link as LinkIcon,
   RefreshCw,
   Clock,
+  PlusCircle,
+  Printer,
 } from 'lucide-react';
 import { Branch, Department, ImportBatch, UserRole, ValidationSummary, ValidationErrorItem, MonthlyRecord } from '@/lib/types';
 import { formatNumber } from '@/lib/formatters';
@@ -20,6 +22,9 @@ interface ImportCenterProps {
   userRole: UserRole;
   username: string;
   onImportSuccess: () => void;
+  onOpenManualInput?: () => void;
+  onExportExcel?: () => void;
+  onPrint?: () => void;
 }
 
 export default function ImportCenter({
@@ -27,11 +32,15 @@ export default function ImportCenter({
   userRole,
   username,
   onImportSuccess,
+  onOpenManualInput,
+  onExportExcel,
+  onPrint,
 }: ImportCenterProps) {
   const [activeTab, setActiveTab] = useState<'upload' | 'gsheets' | 'template' | 'history'>('upload');
 
   // Upload state
   const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [selectedDeptId, setSelectedDeptId] = useState<string>(departments[0]?.id || '');
   const [isValidating, setIsValidating] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -56,6 +65,17 @@ export default function ImportCenter({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+      setValidationResult(null);
+      setMessage(null);
+    }
+  };
+
+  const handleDropFile = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) {
+      setFile(dropped);
       setValidationResult(null);
       setMessage(null);
     }
@@ -261,21 +281,102 @@ export default function ImportCenter({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div className="card">
-        <div className="card-header">
+        <div className="card-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h2 className="card-title" style={{ fontSize: '16px' }}>
               <FileSpreadsheet size={20} color="var(--accent-blue-text)" />
-              <span>Pusat Impor Data Kinerja & Integrasi Google Sheets</span>
+              <span>Pusat Penginputan &amp; Ekspor Data Kinerja</span>
             </h2>
             <p className="card-subtitle">
-              Sistem input data berkala pelabuhan melalui file spreadsheet (.xlsx/.csv) dan sinkronisasi langsung Google Sheets API
+              Input data manual, unggah berkas spreadsheet (.xlsx/.csv), sinkronisasi Google Sheets/Drive, serta ekspor &amp; cetak ringkasan
             </p>
           </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {onOpenManualInput && (
+              <button
+                type="button"
+                onClick={onOpenManualInput}
+                className="btn btn-primary"
+                style={{ fontSize: '12px', padding: '7px 12px', gap: '6px' }}
+                title="Input Data Manual (Finance, Opkom, Kinerja, Utilisasi, Peralatan, Fasilitas)"
+              >
+                <PlusCircle size={14} aria-hidden="true" />
+                <span>Input Data Manual</span>
+              </button>
+            )}
+            {onExportExcel && (
+              <button
+                type="button"
+                onClick={onExportExcel}
+                className="btn btn-dark"
+                style={{ fontSize: '12px', padding: '7px 12px', gap: '6px' }}
+                title="Ekspor data kinerja ke Excel (.xlsx)"
+              >
+                <Download size={14} aria-hidden="true" />
+                <span>Ekspor Excel</span>
+              </button>
+            )}
+            {onPrint && (
+              <button
+                type="button"
+                onClick={onPrint}
+                className="btn btn-dark"
+                style={{ fontSize: '12px', padding: '7px 12px', gap: '6px' }}
+                title="Cetak ringkasan laporan"
+              >
+                <Printer size={14} aria-hidden="true" />
+                <span>Cetak Ringkasan</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Quick Entry Pathway Cards (Manual vs Massal Excel) */}
+        {onOpenManualInput && (
+          <div className="gov-pathway-grid" style={{ marginBottom: '18px' }}>
+            <button
+              type="button"
+              onClick={onOpenManualInput}
+              className="gov-pathway-card"
+            >
+              <div className="gov-pathway-icon">
+                <PlusCircle size={18} />
+              </div>
+              <div style={{ textAlign: 'left', minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                  Input Manual Cepat (Per Indikator)
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Cocok untuk pembaruan satuan modul Keuangan, Opkom, Kinerja, Utilisasi, Peralatan, atau Fasilitas.
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('upload')}
+              className={`gov-pathway-card ${activeTab === 'upload' ? 'active' : ''}`}
+            >
+              <div className="gov-pathway-icon">
+                <UploadCloud size={18} />
+              </div>
+              <div style={{ textAlign: 'left', minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
+                  Impor Massal Spreadsheet (.xlsx / .csv)
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Unggah seluruh laporan bulanan cabang sekaligus dengan validasi pratinjau otomatis sebelum kirim.
+                </div>
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Tab navigation */}
         <div className="tabs-nav">
           <button
+            type="button"
             onClick={() => setActiveTab('upload')}
             className={`tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
           >
@@ -283,13 +384,15 @@ export default function ImportCenter({
             <span>Upload File (.xlsx / .csv)</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('gsheets')}
             className={`tab-btn ${activeTab === 'gsheets' ? 'active' : ''}`}
           >
             <LinkIcon size={16} />
-            <span>Google Drive & Sheets API</span>
+            <span>Google Drive &amp; Sheets API</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('template')}
             className={`tab-btn ${activeTab === 'template' ? 'active' : ''}`}
           >
@@ -297,6 +400,7 @@ export default function ImportCenter({
             <span>Unduh Template Resmi</span>
           </button>
           <button
+            type="button"
             onClick={() => {
               setActiveTab('history');
               handleLoadHistory();
@@ -319,17 +423,46 @@ export default function ImportCenter({
         {/* TAB 1: FILE UPLOAD */}
         {activeTab === 'upload' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            {/* Visual 3-Step Import Stepper */}
+            <ol className="gov-stepper" aria-label="Tahapan impor data spreadsheet">
+              <li className={`gov-step ${file ? 'done' : 'active'}`}>
+                <span className="gov-step-num">{file ? <CheckCircle2 size={14} /> : '1'}</span>
+                <div>
+                  <div className="gov-step-title">Pilih Departemen &amp; Berkas</div>
+                  <div className="gov-step-sub">{file ? file.name : 'Tarik atau pilih berkas Excel/CSV'}</div>
+                </div>
+              </li>
+              <li className={`gov-step ${validationResult ? 'done' : file ? 'active' : ''}`}>
+                <span className="gov-step-num">{validationResult ? <CheckCircle2 size={14} /> : '2'}</span>
+                <div>
+                  <div className="gov-step-title">Validasi &amp; Pratinjau Baris</div>
+                  <div className="gov-step-sub">
+                    {validationResult
+                      ? `${validationResult.validRowsCount} baris valid terdeteksi`
+                      : 'Pemeriksaan format & kolom wajib'}
+                  </div>
+                </div>
+              </li>
+              <li className={`gov-step ${validationResult?.isValid ? 'active' : ''}`}>
+                <span className="gov-step-num">3</span>
+                <div>
+                  <div className="gov-step-title">Kirim ke Antrean Verifikasi</div>
+                  <div className="gov-step-sub">Diteruskan ke Admin Regional untuk pengesahan</div>
+                </div>
+              </li>
+            </ol>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               <div className="form-group">
                 <label className="form-label">Pilih Departemen Pelaporan:</label>
                 <select
-                  className="form-input"
+                  className="form-select"
                   value={selectedDeptId}
                   onChange={(e) => setSelectedDeptId(e.target.value)}
                 >
                   {departments.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.code} - {d.name} (PIC: {d.pic_name})
+                      {d.code} — {d.name} (PIC: {d.pic_name})
                     </option>
                   ))}
                 </select>
@@ -349,14 +482,20 @@ export default function ImportCenter({
 
             {/* Drag & Drop Zone */}
             <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDropFile}
               style={{
-                border: '2px dashed var(--border-subtle)',
+                border: `2px dashed ${isDragging ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
                 borderRadius: 'var(--radius-lg)',
-                padding: '36px 20px',
+                padding: '32px 20px',
                 textAlign: 'center',
-                backgroundColor: 'var(--bg-inner)',
+                backgroundColor: isDragging ? 'var(--blue-soft)' : 'var(--bg-inner)',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease',
+                transition: 'border-color 0.2s ease, background-color 0.2s ease',
               }}
               onClick={() => document.getElementById('spreadsheet-file-input')?.click()}
             >
@@ -367,9 +506,9 @@ export default function ImportCenter({
                 style={{ display: 'none' }}
                 onChange={handleFileChange}
               />
-              <UploadCloud size={40} color="var(--accent-blue-text)" style={{ margin: '0 auto 12px' }} />
+              <UploadCloud size={38} color="var(--accent-blue-text)" style={{ margin: '0 auto 10px' }} />
               <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-title)' }}>
-                {file ? file.name : 'Klik untuk memilih file hasil ekspor spreadsheet'}
+                {file ? file.name : 'Tarik berkas ke sini atau klik untuk memilih spreadsheet'}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
                 Mendukung format Microsoft Excel (.xlsx, .xls) dan CSV (.csv) hingga 10MB
@@ -383,12 +522,13 @@ export default function ImportCenter({
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
+                type="button"
                 onClick={handleValidateFile}
                 disabled={!file || isValidating}
                 className="btn btn-primary"
               >
                 {isValidating ? <RefreshCw size={15} className="spin" /> : <CheckCircle2 size={15} />}
-                <span>{isValidating ? 'Memvalidasi Data...' : 'Validasi & Preview Data'}</span>
+                <span>{isValidating ? 'Memvalidasi Data...' : 'Validasi & Pratinjau Data'}</span>
               </button>
             </div>
           </div>
@@ -400,10 +540,10 @@ export default function ImportCenter({
             {/* GOOGLE DRIVE SYNC CARD - regdashr@gmail.com */}
             <div
               style={{
-                border: '1px solid #1e3a5f',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-lg)',
                 padding: '20px',
-                backgroundColor: '#0a192f',
+                backgroundColor: 'var(--bg-inner)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '14px',
@@ -460,7 +600,7 @@ export default function ImportCenter({
             <div
               style={{
                 backgroundColor: 'var(--bg-inner)',
-                border: '1px solid #1e3557',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-md)',
                 padding: '20px',
                 display: 'flex',
@@ -706,7 +846,7 @@ export default function ImportCenter({
               <div className="table-responsive">
                 <table className="card-table data-table">
                   <thead>
-                    <tr style={{ backgroundColor: '#fef2f2' }}>
+                    <tr style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
                       <th scope="col" style={{ color: 'var(--status-danger-text)' }}>Baris #</th>
                       <th scope="col" style={{ color: 'var(--status-danger-text)' }}>Kolom / Atribut</th>
                       <th scope="col" style={{ color: 'var(--status-danger-text)' }}>Nilai Salah</th>

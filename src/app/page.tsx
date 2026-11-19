@@ -122,6 +122,9 @@ export default function DashboardHome() {
         backgroundColor: 'var(--bg-app)',
       }}
     >
+      <a href="#main-content" className="skip-link">
+        Lewati ke konten utama
+      </a>
       <Sidebar
         activeTab={filters.activeTab}
         setActiveTab={filters.setActiveTab}
@@ -156,9 +159,6 @@ export default function DashboardHome() {
           currentUser={currentUser}
           onOpenAuth={session.openAuthModal}
           onLogout={session.handleLogout}
-          onExportExcel={handleExportExcel}
-          onPrint={handlePrint}
-          onOpenManualInput={isBod ? undefined : () => handleOpenManualInput()}
           onOpenPasswordChange={session.openPasswordModal}
           pendingCount={data.pendingCount}
           theme={session.theme}
@@ -167,13 +167,14 @@ export default function DashboardHome() {
           isMobileMenuOpen={isMobileMenuOpen}
         />
 
-        <main className="portsight-main">
+        <main id="main-content" tabIndex={-1} className="portsight-main">
           {showGovernanceSubnav && (
             <GovernanceSubnav
               activeTab={filters.activeTab}
               onSelectTab={filters.setActiveTab}
               canManageUsers={canManageUsers}
               pendingCount={data.pendingCount}
+              userRole={session.userRole}
             />
           )}
 
@@ -200,6 +201,8 @@ export default function DashboardHome() {
             onOpenDrilldown={setDrilldownItem}
             onOpenComparisonModal={() => setIsComparisonModalOpen(true)}
             onOpenManualInput={handleOpenManualInput}
+            onExportExcel={handleExportExcel}
+            onPrint={handlePrint}
             onReload={() => void data.reload()}
             onUpdateSystemParams={data.updateSystemParams}
             onUpdateDbConfig={data.setDbConfig}

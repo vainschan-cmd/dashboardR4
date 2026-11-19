@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { X, BarChart3, Printer, Search, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -19,6 +19,9 @@ import {
   parseRealisasi,
 } from '@/lib/finansialHelpers';
 import { isBranchMatch, getSelectedBranchLabel, parseSelectedBranches } from '@/lib/constants';
+import { CHART_METRIC_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from '@/lib/chartPalette';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import type { FinansialRecord } from '@/lib/types';
 
 interface ComparisonModalProps {
@@ -53,6 +56,8 @@ export default function ComparisonModal({
   const [dataItems, setDataItems] = useState<MetricComparisonItem[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'opkom' | 'finansial' | 'operasional'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, isOpen, onClose);
 
   const branchLabel = useMemo(() => {
     return getSelectedBranchLabel(selectedTerminal);
@@ -226,6 +231,10 @@ export default function ComparisonModal({
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="comparison-modal-title"
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -234,10 +243,10 @@ export default function ComparisonModal({
           maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#0a1628',
-          border: '1px solid #1e3557',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: '14px',
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.5)',
         }}
       >
         {/* Header */}
@@ -245,11 +254,11 @@ export default function ComparisonModal({
           className="modal-header"
           style={{
             padding: '18px 24px',
-            borderBottom: '1px solid #1e3557',
+            borderBottom: '1px solid var(--border-subtle)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
-            backgroundColor: '#0d1f38',
+            backgroundColor: 'var(--bg-inner)',
             borderTopLeftRadius: '14px',
             borderTopRightRadius: '14px',
           }}
@@ -275,7 +284,7 @@ export default function ComparisonModal({
               </span>
               <span
                 style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'var(--bg-subtle)',
                   color: 'var(--text-muted)',
                   padding: '3px 9px',
                   borderRadius: '20px',
@@ -298,7 +307,7 @@ export default function ComparisonModal({
                 Cabang: {branchLabel}
               </span>
             </div>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', margin: 0 }}>
+            <h2 id="comparison-modal-title" style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', margin: 0 }}>
               Matriks Komparasi Realisasi 2026 vs RKAP vs Realisasi 2025
             </h2>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
@@ -308,14 +317,15 @@ export default function ComparisonModal({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
+              type="button"
               onClick={handlePrint}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
                 padding: '6px 12px',
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid #1e3557',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '6px',
                 color: 'var(--text-secondary)',
                 fontSize: '12px',
@@ -328,7 +338,9 @@ export default function ComparisonModal({
               Cetak / PDF
             </button>
             <button
+              type="button"
               onClick={onClose}
+              aria-label="Tutup modal komparasi"
               style={{
                 background: 'none',
                 border: 'none',
@@ -383,6 +395,7 @@ export default function ComparisonModal({
                     ] as const
                   ).map(tab => (
                     <button
+                      type="button"
                       key={tab.id}
                       onClick={() => setCategoryFilter(tab.id)}
                       style={{
@@ -390,9 +403,9 @@ export default function ComparisonModal({
                         fontSize: '11.5px',
                         fontWeight: 600,
                         borderRadius: '6px',
-                        border: categoryFilter === tab.id ? '1px solid var(--accent-cyan)' : '1px solid #1e3557',
-                        backgroundColor: categoryFilter === tab.id ? 'rgba(56, 189, 248, 0.18)' : '#0d1f38',
-                        color: categoryFilter === tab.id ? 'var(--text-on-accent)' : 'var(--text-muted)',
+                        border: categoryFilter === tab.id ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
+                        backgroundColor: categoryFilter === tab.id ? 'var(--accent-blue)' : 'var(--bg-inner)',
+                        color: categoryFilter === tab.id ? 'var(--text-on-accent)' : 'var(--text-secondary)',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
                       }}
@@ -408,13 +421,14 @@ export default function ComparisonModal({
                   <input
                     type="text"
                     placeholder="Cari indikator..."
+                    aria-label="Cari indikator komparasi"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '6px 10px 6px 30px',
-                      backgroundColor: '#0d1f38',
-                      border: '1px solid #1e3557',
+                      backgroundColor: 'var(--bg-inner)',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: '6px',
                       color: 'var(--text-title)',
                       fontSize: '11.5px',
@@ -428,8 +442,8 @@ export default function ComparisonModal({
               {chartData.length > 0 && (
                 <div
                   style={{
-                    backgroundColor: '#0d1f38',
-                    border: '1px solid #1e3557',
+                    backgroundColor: 'var(--bg-inner)',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: '10px',
                     padding: '16px 20px',
                   }}
@@ -438,51 +452,37 @@ export default function ComparisonModal({
                     <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-title)' }}>
                       Visualisasi Perbandingan 3 Dimensi (Miliar Rp)
                     </div>
-                    <div style={{ display: 'flex', gap: '14px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ width: 10, height: 10, backgroundColor: '#64748b', borderRadius: '2px' }} />
-                        Realisasi 2025
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ width: 10, height: 10, backgroundColor: '#f59e0b', borderRadius: '2px' }} />
-                        Target RKAP 2026
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ width: 10, height: 10, backgroundColor: '#38bdf8', borderRadius: '2px' }} />
-                        Realisasi 2026
-                      </span>
-                    </div>
                   </div>
 
                   <div style={{ height: '220px', width: '100%' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
                         <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                         <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#0f223d',
-                            border: '1px solid #1e3557',
-                            borderRadius: '8px',
-                            color: 'var(--text-title)',
-                            fontSize: '12px',
-                          }}
-                        />
-                        <Bar dataKey="Realisasi 2025" fill="#64748b" radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="Target RKAP 2026" fill="var(--status-alert-text)" radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="Realisasi 2026" fill="var(--accent-cyan)" radius={[3, 3, 0, 0]} />
+                        <Tooltip contentStyle={CHART_TOOLTIP_CONTENT_STYLE} />
+                        <Bar dataKey="Realisasi 2025" fill={CHART_METRIC_COLORS.neutral} radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="Target RKAP 2026" fill={CHART_METRIC_COLORS.warning} radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="Realisasi 2026" fill={CHART_METRIC_COLORS.primary} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                  <ChartInlineLegend
+                    compact
+                    items={[
+                      { label: 'Realisasi 2025', color: CHART_METRIC_COLORS.neutral },
+                      { label: 'Target RKAP 2026', color: CHART_METRIC_COLORS.warning },
+                      { label: 'Realisasi 2026', color: CHART_METRIC_COLORS.primary },
+                    ]}
+                  />
                 </div>
               )}
 
               {/* Detailed Comparison Table */}
               <div
                 style={{
-                  backgroundColor: '#0d1f38',
-                  border: '1px solid #1e3557',
+                  backgroundColor: 'var(--bg-inner)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: '10px',
                   overflow: 'hidden',
                 }}
@@ -490,7 +490,7 @@ export default function ComparisonModal({
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }} className="card-table">
                     <thead>
-                      <tr style={{ backgroundColor: '#13284a', borderBottom: '1px solid #1e3557', color: 'var(--text-muted)' }}>
+                      <tr style={{ backgroundColor: 'var(--bg-card)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
                         <th style={{ padding: '10px 14px', fontWeight: 700 }}>Indikator / Rekening</th>
                         <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'center' }}>Satuan</th>
                         <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Realisasi 2025</th>
@@ -526,8 +526,8 @@ export default function ComparisonModal({
                             <tr
                               key={item.id}
                               style={{
-                                borderBottom: '1px solid rgba(30, 53, 87, 0.6)',
-                                backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)',
+                                borderBottom: '1px solid var(--border-subtle)',
+                                backgroundColor: idx % 2 === 0 ? 'transparent' : 'var(--bg-subtle)',
                               }}
                             >
                               <td data-label="Indikator / Rekening" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-title)' }}>
@@ -606,11 +606,11 @@ export default function ComparisonModal({
           className="modal-footer"
           style={{
             padding: '14px 24px',
-            borderTop: '1px solid #1e3557',
+            borderTop: '1px solid var(--border-subtle)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            backgroundColor: '#0d1f38',
+            backgroundColor: 'var(--bg-inner)',
             borderBottomLeftRadius: '14px',
             borderBottomRightRadius: '14px',
           }}
@@ -619,11 +619,12 @@ export default function ComparisonModal({
             Sumber Data: Lembar Kerja Keuangan & Operasional Pelabuhan Terverifikasi
           </div>
           <button
+            type="button"
             onClick={onClose}
             style={{
               padding: '7px 18px',
-              backgroundColor: '#1e3557',
-              border: '1px solid #2d4f7c',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '6px',
               color: 'var(--text-title)',
               fontSize: '12px',

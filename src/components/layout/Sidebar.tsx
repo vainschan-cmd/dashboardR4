@@ -18,14 +18,12 @@ import {
   FileSpreadsheet,
   Sliders,
   History,
-  LogOut,
-  Shield,
   X,
   ChevronRight,
   ChevronLeft,
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
-import { MAIN_NAVIGATION_TABS } from '@/lib/constants';
+import { MAIN_NAVIGATION_TABS, OFFICIAL_BRANCHES } from '@/lib/constants';
 
 interface SidebarProps {
   activeTab: string;
@@ -42,24 +40,33 @@ interface SidebarProps {
   onOpenManualInput?: () => void;
 }
 
+const EXECUTIVE_TAB_IDS = new Set(['beranda', 'isu_strategis']);
+
+const TAB_ICONS: Record<string, React.ElementType> = {
+  beranda: LayoutDashboard,
+  isu_strategis: Target,
+  periode: CalendarRange,
+  keuangan: Wallet,
+  opkom: Ship,
+  kinerja: BarChart3,
+  utilisasi: Activity,
+  peralatan: Wrench,
+  fasilitas: Building2,
+};
+
 export default function Sidebar({
   activeTab,
   setActiveTab,
-  userRole,
   currentUser,
   pendingCount = 0,
   isBod = false,
   canManageUsers = false,
   isOpenMobile = false,
   onCloseMobile,
-  onLogout,
 }: SidebarProps) {
-  // 1. Collapsible Local State (Default: false / Expanded)
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [hoveredTooltip, setHoveredTooltip] = useState<{ label: string; top: number; badge?: number } | null>(null);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
-  // Restore saved collapse preference from localStorage
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
@@ -74,21 +81,6 @@ export default function Sidebar({
     return () => window.clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    if (!showLogoutConfirm) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowLogoutConfirm(false);
-      } else if (e.key === 'Enter' && onLogout) {
-        setShowLogoutConfirm(false);
-        if (onCloseMobile) onCloseMobile();
-        onLogout();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showLogoutConfirm, onLogout, onCloseMobile]);
-
   const handleToggleCollapse = () => {
     setIsCollapsed((prev) => {
       const next = !prev;
@@ -102,7 +94,6 @@ export default function Sidebar({
     setHoveredTooltip(null);
   };
 
-  // Hover Tooltip Handlers for Collapsed Mode
   const handleMouseEnter = (e: React.MouseEvent<HTMLElement>, label: string, badge?: number) => {
     if (!isCollapsed) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -117,24 +108,19 @@ export default function Sidebar({
     setHoveredTooltip(null);
   };
 
-  // Mapping icons to main tabs
-  const tabIcons: Record<string, React.ElementType> = {
-    beranda: LayoutDashboard,
-    isu_strategis: Target,
-    periode: CalendarRange,
-    keuangan: Wallet,
-    opkom: Ship,
-    kinerja: BarChart3,
-    utilisasi: Activity,
-    peralatan: Wrench,
-    fasilitas: Building2,
-  };
+  const executiveTabs = MAIN_NAVIGATION_TABS.filter((tab) => EXECUTIVE_TAB_IDS.has(tab.id));
+  const moduleTabs = MAIN_NAVIGATION_TABS.filter((tab) => !EXECUTIVE_TAB_IDS.has(tab.id));
 
-  const adminMenus = [
+  const governanceMenus = [
+    {
+      id: 'verification',
+      label: 'Verifikasi & Monitoring',
+      icon: CheckCircle2,
+      badge: pendingCount > 0 ? pendingCount : undefined,
+    },
     { id: 'data_records', label: 'Rekaman Data Kinerja', icon: Database },
+    { id: 'import_center', label: 'Penginputan Data', icon: FileSpreadsheet },
     ...(canManageUsers ? [{ id: 'master_data', label: 'Master Data & KPI', icon: Layers }] : []),
-    { id: 'verification', label: 'Verifikasi & Monitoring', icon: CheckCircle2, badge: pendingCount > 0 ? pendingCount : undefined },
-    { id: 'import_center', label: 'Impor Spreadsheet', icon: FileSpreadsheet },
     { id: 'templates', label: 'Pemetaan Template', icon: Sliders },
     { id: 'audit_trail', label: 'Jejak Audit Sistem', icon: History },
   ];
@@ -144,37 +130,71 @@ export default function Sidebar({
     if (onCloseMobile) onCloseMobile();
   };
 
-  const getRoleLabel = () => {
-    if (isBod) return 'BOD / Direksi';
-    switch (userRole) {
-      case 'super_admin': return 'Super Admin';
-      case 'admin_regional': return 'Admin Regional 4';
-      case 'pic_dept_regional': return 'PIC Dept Regional';
-      case 'pic_cabang': return 'PIC Cabang';
-      case 'viewer': return 'Viewer';
-      default: return userRole;
-    }
+  const assignedBranchName =
+    currentUser?.branch_id && currentUser.branch_id !== 'R99'
+      ? OFFICIAL_BRANCHES.find((b) => b.code === currentUser.branch_id)?.name || currentUser.branch_id
+      : 'Regional 4';
+
+  const renderNavItem = (
+    id: string,
+    label: string,
+    Icon: React.ElementType,
+    badge?: number
+  ) => {
+    const isActive = activeTab === id;
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={() => handleSelect(id)}
+        onMouseEnter={(e) => handleMouseEnter(e, label, badge)}
+        onMouseLeave={handleMouseLeave}
+        className={`sidebar-nav-btn ${isActive ? 'active' : ''}`}
+        aria-current={isActive ? 'page' : undefined}
+        aria-label={isCollapsed ? label : undefined}
+        title={isCollapsed ? label : undefined}
+      >
+        <span className="sidebar-icon-wrap">
+          <Icon size={17} className={`sidebar-icon ${isActive ? 'active' : ''}`} aria-hidden="true" />
+          {isCollapsed && badge !== undefined && badge > 0 && (
+            <span className="sidebar-collapsed-dot" aria-hidden="true" />
+          )}
+        </span>
+        {!isCollapsed && <span className="sidebar-nav-label">{label}</span>}
+        {!isCollapsed && badge !== undefined && badge > 0 && (
+          <span className="sidebar-badge" aria-label={`${badge} menunggu`}>
+            {badge}
+          </span>
+        )}
+      </button>
+    );
   };
 
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
       {isOpenMobile && (
         <div
           className="sidebar-backdrop"
           onClick={onCloseMobile}
+          aria-hidden="true"
         />
       )}
 
-      {/* Main Sidebar Component (Collapsible with smooth CSS transition) */}
-      <aside className={`portsight-sidebar ${isOpenMobile ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
-        {/* Brand Header with Trigger Button */}
+      <aside
+        aria-label="Navigasi utama"
+        className={`portsight-sidebar ${isOpenMobile ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}
+      >
+        {/* Brand Header (Single Source of Brand on Desktop) */}
         <div className="sidebar-brand-header">
-          <div
+          <button
+            type="button"
             onClick={() => handleSelect('beranda')}
-            onMouseEnter={(e) => handleMouseEnter(e, 'Summary Pelindo R4')}
+            onMouseEnter={(e) => handleMouseEnter(e, 'PortDash — Pelindo Regional 4')}
             onMouseLeave={handleMouseLeave}
             style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -182,7 +202,9 @@ export default function Sidebar({
               flex: isCollapsed ? 'none' : 1,
               minWidth: 0,
               justifyContent: isCollapsed ? 'center' : 'flex-start',
+              textAlign: 'left',
             }}
+            aria-label="Kembali ke Beranda PortDash"
           >
             <div
               style={{
@@ -194,7 +216,7 @@ export default function Sidebar({
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '3px',
-                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
+                boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)',
                 flexShrink: 0,
                 transition: 'all 0.2s ease',
               }}
@@ -208,123 +230,96 @@ export default function Sidebar({
               />
             </div>
 
-            {/* Sembunyikan Nama Aplikasi 'PortDash' saat Collapsed */}
             {!isCollapsed && (
               <div className="sidebar-brand-text" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span className="brand-title" style={{ fontSize: '14px', fontWeight: 800 }}>PELINDO R4</span>
-                  <span className="brand-accent" style={{ fontSize: '12px', fontWeight: 800 }}>PortDash</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', lineHeight: 1.15 }}>
+                  <span className="brand-title" style={{ fontSize: '13.5px', fontWeight: 800 }}>PELINDO R4</span>
+                  <span className="brand-accent" style={{ fontSize: '11.5px', fontWeight: 800 }}>PortDash</span>
                 </div>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  Regional 4
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--text-muted)',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    marginTop: '2px',
+                  }}
+                >
+                  Executive Dashboard
                 </span>
               </div>
             )}
-          </div>
+          </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {/* 1. Tombol Trigger Panah (< atau >) di Pojok Kanan Atas Sidebar */}
             <button
               type="button"
               className="sidebar-toggle-btn"
               onClick={handleToggleCollapse}
-              title={isCollapsed ? 'Lebarkan Menu Sidebar (>)' : 'Ciutkan Menu Sidebar (<)'}
-              aria-label={isCollapsed ? 'Lebarkan Menu Sidebar' : 'Ciutkan Menu Sidebar'}
-              onMouseEnter={(e) => handleMouseEnter(e, isCollapsed ? 'Lebarkan Menu (>)' : 'Ciutkan Menu (<)')}
+              title={isCollapsed ? 'Lebarkan Sidebar' : 'Ciutkan Sidebar'}
+              aria-label={isCollapsed ? 'Lebarkan Sidebar' : 'Ciutkan Sidebar'}
+              onMouseEnter={(e) => handleMouseEnter(e, isCollapsed ? 'Lebarkan Menu' : 'Ciutkan Menu')}
               onMouseLeave={handleMouseLeave}
             >
-              {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              {isCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronLeft size={14} aria-hidden="true" />}
             </button>
 
-            {/* Close button on mobile */}
             <button
               type="button"
               className="sidebar-close-mobile-btn"
               onClick={onCloseMobile}
-              aria-label="Tutup Menu"
+              aria-label="Tutup Menu Navigasi"
             >
-              <X size={18} />
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
 
-        {/* 2. User Card in Sidebar (Sembunyikan Informasi Profil User saat Collapsed) */}
-        {!isCollapsed && (
-          <div className="sidebar-user-card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-title)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {currentUser?.name?.split(',')[0] || 'Pengguna'}
-              </span>
-              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                [{currentUser?.nipp || '-'}]
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  color: isBod ? 'var(--accent-blue-text)' : 'var(--accent-cyan)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  backgroundColor: 'rgba(2, 132, 199, 0.12)',
-                  padding: '2px 7px',
-                  borderRadius: 'var(--radius-pill)',
-                  border: '1px solid rgba(2, 132, 199, 0.3)',
-                }}
-              >
-                <Shield size={10} />
-                {getRoleLabel()}
-              </span>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {currentUser?.branch_id || 'R99'}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Scrollable Navigation Items */}
-        <nav className="sidebar-nav-scroll">
-          {/* Section Title: Menu Utama Kinerja (Sembunyikan teks saat Collapsed) */}
+        {/* Scrollable Hierarchical Navigation */}
+        <nav className="sidebar-nav-scroll" aria-label="Menu modul dashboard">
+          {/* Group 1: Eksekutif */}
           {!isCollapsed ? (
             <div className="sidebar-section-title">
-              <span>MENU UTAMA KINERJA</span>
+              <span>EKSEKUTIF</span>
             </div>
           ) : (
             <div className="sidebar-collapsed-divider" />
           )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            {MAIN_NAVIGATION_TABS.map((tab) => {
-              const Icon = tabIcons[tab.id] || LayoutDashboard;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleSelect(tab.id)}
-                  onMouseEnter={(e) => handleMouseEnter(e, tab.label)}
-                  onMouseLeave={handleMouseLeave}
-                  className={`sidebar-nav-btn ${isActive ? 'active' : ''}`}
-                  title={isCollapsed ? tab.label : undefined}
-                >
-                  <Icon size={18} className={`sidebar-icon ${isActive ? 'active' : ''}`} />
-                  {/* Sembunyikan Teks Nama Menu saat Collapsed */}
-                  {!isCollapsed && <span className="sidebar-nav-label">{tab.label}</span>}
-                  {!isCollapsed && isActive && <ChevronRight size={13} style={{ marginLeft: 'auto', opacity: 0.8 }} />}
-                </button>
-              );
-            })}
+          <div className="sidebar-nav-group">
+            {executiveTabs.map((tab) =>
+              renderNavItem(tab.id, tab.label, TAB_ICONS[tab.id] || LayoutDashboard)
+            )}
           </div>
 
-          {/* Section: Tata Kelola Data (Hidden for BOD) */}
+          {/* Group 2: Modul Kinerja */}
+          <div style={{ marginTop: isCollapsed ? '8px' : '16px' }}>
+            {!isCollapsed ? (
+              <div className="sidebar-section-title">
+                <span>MODUL KINERJA</span>
+              </div>
+            ) : (
+              <div className="sidebar-collapsed-divider" />
+            )}
+            <div className="sidebar-nav-group">
+              {moduleTabs.map((tab) =>
+                renderNavItem(tab.id, tab.label, TAB_ICONS[tab.id] || LayoutDashboard)
+              )}
+            </div>
+          </div>
+
+          {/* Group 3: Tata Kelola (Non-BOD) */}
           {!isBod && (
-            <div style={{ marginTop: isCollapsed ? '10px' : '16px' }}>
+            <div style={{ marginTop: isCollapsed ? '8px' : '16px' }}>
               {!isCollapsed ? (
-                <div className="sidebar-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>PENGELOLAAN & TATA KELOLA</span>
+                <div
+                  className="sidebar-section-title"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <span>TATA KELOLA</span>
                   {pendingCount > 0 && (
-                    <span style={{ backgroundColor: 'var(--status-alert-text)', color: 'var(--text-on-alert)', fontSize: '12px', fontWeight: 800, padding: '1px 5px', borderRadius: '8px' }}>
+                    <span className="sidebar-section-count" aria-label={`${pendingCount} data menunggu verifikasi`}>
                       {pendingCount}
                     </span>
                   )}
@@ -332,156 +327,63 @@ export default function Sidebar({
               ) : (
                 <div className="sidebar-collapsed-divider" />
               )}
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                {adminMenus.map((adm) => {
-                  const Icon = adm.icon;
-                  const isActive = activeTab === adm.id;
-                  return (
-                    <button
-                      key={adm.id}
-                      onClick={() => handleSelect(adm.id)}
-                      onMouseEnter={(e) => handleMouseEnter(e, adm.label, adm.badge)}
-                      onMouseLeave={handleMouseLeave}
-                      className={`sidebar-nav-btn ${isActive ? 'active' : ''}`}
-                      title={isCollapsed ? adm.label : undefined}
-                    >
-                      <Icon size={18} className={`sidebar-icon ${isActive ? 'active' : ''}`} />
-                      {/* Sembunyikan Teks Nama Menu dan Badge Notifikasi saat Collapsed */}
-                      {!isCollapsed && <span className="sidebar-nav-label">{adm.label}</span>}
-                      {!isCollapsed && adm.badge !== undefined && (
-                        <span className="sidebar-badge">{adm.badge}</span>
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="sidebar-nav-group">
+                {governanceMenus.map((adm) =>
+                  renderNavItem(adm.id, adm.label, adm.icon, adm.badge)
+                )}
               </div>
             </div>
           )}
         </nav>
 
-        {/* Sidebar Footer */}
+        {/* Minimal Status Footer (No Duplicate User Card or Logout Button) */}
         <div className="sidebar-footer">
           {!isCollapsed ? (
-            <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div className="sidebar-simulation-pill">
-                <div className="sidebar-simulation-dot" />
-                <span>DATA SQLITE TERINTEGRASI</span>
+                <div className="sidebar-simulation-dot" aria-hidden="true" />
+                <span>POSTGRESQL TERINTEGRASI</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                <span>Pelindo Regional 4</span>
-                {onLogout && (
-                  <button
-                    type="button"
-                    onClick={() => setShowLogoutConfirm(true)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--status-danger-text)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      padding: '2px 4px',
-                    }}
-                    title="Keluar dari Akun"
-                  >
-                    <LogOut size={12} strokeWidth={1.75} color="var(--status-danger-text)" />
-                    <span>Keluar</span>
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            onLogout && (
-              <button
-                type="button"
-                onClick={() => setShowLogoutConfirm(true)}
-                onMouseEnter={(e) => handleMouseEnter(e, 'Keluar dari Akun')}
-                onMouseLeave={handleMouseLeave}
+              <div
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--status-danger-text)',
-                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px',
-                  borderRadius: 'var(--radius-sm)',
-                  width: '100%',
+                  justifyContent: 'space-between',
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  padding: '0 2px',
                 }}
-                title="Keluar dari Akun"
-                aria-label="Keluar dari Akun"
               >
-                <LogOut size={16} strokeWidth={1.75} color="var(--status-danger-text)" />
-              </button>
-            )
+                <span>Cakupan</span>
+                <strong
+                  style={{
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    maxWidth: '140px',
+                  }}
+                  title={assignedBranchName}
+                >
+                  {assignedBranchName}
+                </strong>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="sidebar-collapsed-status"
+              onMouseEnter={(e) => handleMouseEnter(e, `PostgreSQL Aktif • ${assignedBranchName}`)}
+              onMouseLeave={handleMouseLeave}
+              title={`PostgreSQL Aktif • ${assignedBranchName}`}
+            >
+              <div className="sidebar-simulation-dot" aria-hidden="true" />
+            </div>
           )}
         </div>
       </aside>
 
-      {/* In-App Logout Confirmation Modal (Accessible with Escape & Enter) */}
-      {showLogoutConfirm && (
-        <div
-          className="modal-overlay"
-          style={{ zIndex: 100000 }}
-          onClick={() => setShowLogoutConfirm(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="sidebar-logout-title"
-        >
-          <div
-            className="modal-content"
-            style={{ maxWidth: '380px', padding: '20px', borderRadius: 'var(--radius-md)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <LogOut size={18} strokeWidth={1.75} color="var(--status-danger-text)" />
-              <h4 id="sidebar-logout-title" style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
-                Konfirmasi Keluar Sesi
-              </h4>
-            </div>
-            <p style={{ margin: '0 0 18px 0', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Apakah Anda yakin ingin mengakhiri sesi aktif dan keluar dari akun ini?
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn-dark"
-                onClick={() => setShowLogoutConfirm(false)}
-                style={{ padding: '7px 14px', fontSize: '12px', borderRadius: '6px', cursor: 'pointer' }}
-              >
-                Batal (Esc)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLogoutConfirm(false);
-                  if (onCloseMobile) onCloseMobile();
-                  if (onLogout) onLogout();
-                }}
-                style={{
-                  padding: '7px 14px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  borderRadius: '6px',
-                  backgroundColor: '#ef4444',
-                  color: 'var(--text-title)',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                Keluar (Enter)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Efek Hover Tooltip: Tampil melayang di sisi kanan saat kondisi Collapsed */}
+      {/* Floating Tooltip for Collapsed Mode */}
       {isCollapsed && hoveredTooltip && (
         <div
           className="sidebar-floating-tooltip"
@@ -490,51 +392,26 @@ export default function Sidebar({
             left: '74px',
             top: `${hoveredTooltip.top}px`,
             transform: 'translateY(-50%)',
-            backgroundColor: 'var(--bg-card)',
+            backgroundColor: 'var(--bg-dropdown)',
             color: 'var(--text-title)',
-            border: '1px solid var(--border-focus)',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(56, 189, 248, 0.25)',
+            border: '1px solid var(--border-subtle)',
             padding: '6px 12px',
-            borderRadius: 'var(--radius-sm, 6px)',
+            borderRadius: 'var(--radius-sm)',
             fontSize: '12px',
-            fontWeight: 700,
-            whiteSpace: 'nowrap',
-            zIndex: 99999,
+            fontWeight: 600,
+            boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)',
+            zIndex: 9999,
             pointerEvents: 'none',
+            whiteSpace: 'nowrap',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            animation: 'sidebarTooltipIn 0.15s ease-out forwards',
+            animation: 'sidebarTooltipIn 0.15s ease',
           }}
         >
-          {/* Left Arrow Pointer */}
-          <div
-            style={{
-              position: 'absolute',
-              left: '-5px',
-              top: '50%',
-              transform: 'translateY(-50%) rotate(45deg)',
-              width: '8px',
-              height: '8px',
-              backgroundColor: 'var(--bg-card)',
-              borderLeft: '1px solid var(--border-focus)',
-              borderBottom: '1px solid var(--border-focus)',
-            }}
-          />
-          <span style={{ position: 'relative', zIndex: 1 }}>{hoveredTooltip.label}</span>
+          <span>{hoveredTooltip.label}</span>
           {hoveredTooltip.badge !== undefined && hoveredTooltip.badge > 0 && (
-            <span
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                backgroundColor: 'var(--status-alert-text)',
-                color: 'var(--text-on-alert)',
-                fontSize: '12px',
-                fontWeight: 800,
-                padding: '1px 6px',
-                borderRadius: '10px',
-              }}
-            >
+            <span className="sidebar-badge" style={{ marginLeft: 0 }}>
               {hoveredTooltip.badge}
             </span>
           )}

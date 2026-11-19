@@ -16,6 +16,12 @@ import {
 import { Anchor, Layers, TrendingUp, Search, PlusCircle } from 'lucide-react';
 import { formatRupiahFull, formatPercentDelta } from '@/lib/formatters';
 import { isBranchMatch } from '@/lib/constants';
+import {
+  CHART_METRIC_COLORS,
+  CHART_TOOLTIP_CONTENT_STYLE,
+  COMMODITY_CHART_COLORS,
+} from '@/lib/chartPalette';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
 import LoadingState from '@/components/ui/LoadingState';
 
 interface OpkomItem {
@@ -36,13 +42,7 @@ interface PortSightOpkomProps {
   onOpenManualInput?: () => void;
 }
 
-const COMMODITY_COLORS: Record<string, string> = {
-  'KAPAL': '#38bdf8',
-  'PETIKEMAS': '#f59e0b',
-  'BARANG': '#10b981',
-  'PENUMPANG': '#a855f7',
-  'RUPA-RUPA': '#ec4899',
-};
+const COMMODITY_COLORS: Record<string, string> = COMMODITY_CHART_COLORS;
 
 export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualInput }: PortSightOpkomProps) {
   const [loading, setLoading] = useState(true);
@@ -196,55 +196,56 @@ export default function PortSightOpkom({ selectedTerminal = 'ALL', onOpenManualI
             </div>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Data Resmi input_data.xlsx</span>
           </div>
-          <div style={{ height: '260px', width: '100%' }}>
+          <div style={{ height: '240px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} margin={{ top: 10, right: 15, left: -10, bottom: 25 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-25} textAnchor="end" />
-                <YAxis tick={{ fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} angle={-25} textAnchor="end" />
+                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
+                  contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
                   formatter={(_val: unknown, _name: unknown, item: { payload?: { totalRp?: number } }) => [formatRupiahFull(item.payload?.totalRp || 0), 'Pendapatan']}
                 />
-                <Bar dataKey="revenueM" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenueM" name="Pendapatan Opkom" fill={CHART_METRIC_COLORS.primary} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <ChartInlineLegend
+            compact
+            items={[{ label: 'Pendapatan Opkom (Miliar Rp)', color: CHART_METRIC_COLORS.primary }]}
+          />
         </div>
 
         {/* Commodity Distribution Pie Chart */}
         <div className="dark-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div className="dark-card-title" style={{ margin: 0 }}>
               Distribusi Pendapatan per Komoditas Layanan
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', height: '260px' }}>
-            <div style={{ flex: 1, height: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} innerRadius={55} outerRadius={85} dataKey="value" paddingAngle={3}>
-                    {pieData.map((d, i) => (
-                      <Cell key={i} fill={d.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
-                    formatter={(val: unknown) => [formatRupiahFull(Number(val || 0)), 'Pendapatan']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ width: '180px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
-              {pieData.map(d => (
-                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '2px', backgroundColor: d.color, flexShrink: 0 }} />
-                  <span style={{ color: 'var(--text-secondary)', flex: 1, whiteSpace: 'nowrap' }}>{d.name}</span>
-                  <strong style={{ color: 'var(--text-main)', fontSize: '12px', textAlign: 'right' }}>{formatRupiahFull(d.value)}</strong>
-                </div>
-              ))}
-            </div>
+          <div style={{ height: '240px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} innerRadius={55} outerRadius={88} dataKey="value" paddingAngle={3}>
+                  {pieData.map((d, i) => (
+                    <Cell key={i} fill={d.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+                  formatter={(val: unknown) => [formatRupiahFull(Number(val || 0)), 'Pendapatan']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
+          <ChartInlineLegend
+            compact
+            items={pieData.map((d) => ({
+              label: d.name,
+              color: d.color,
+              meta: `(${totalRevenueRp > 0 ? Math.round((d.value / totalRevenueRp) * 100) : 0}%)`,
+            }))}
+          />
         </div>
       </div>
 

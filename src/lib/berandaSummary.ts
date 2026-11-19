@@ -1,16 +1,12 @@
+import { ENTITY_CHART_COLORS } from '@/lib/chartPalette';
+
 export { formatBebanTriliun } from '@/lib/formatters';
 
 export const BERANDA_ENTITAS_ORDER = ['CABANG', 'PJM', 'PMT', 'PSL', 'PTP'] as const;
 
 export type BerandaEntityKey = (typeof BERANDA_ENTITAS_ORDER)[number];
 
-export const BERANDA_ENTITAS_COLORS: Record<BerandaEntityKey, string> = {
-  CABANG: '#4472c4',
-  PJM: '#ed7d31',
-  PMT: '#a5a5a5',
-  PSL: '#ffc000',
-  PTP: '#70ad47',
-};
+export const BERANDA_ENTITAS_COLORS: Record<BerandaEntityKey, string> = ENTITY_CHART_COLORS;
 
 export interface BerandaBranchOption {
   branchCode: string;

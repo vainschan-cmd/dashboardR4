@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -17,19 +17,25 @@ import {
 } from 'recharts';
 import {
   Banknote,
-  Coins,
+  TrendingUp,
+  TrendingDown,
+  Percent,
   FilterX,
   Search,
   Check,
+  ChevronDown,
+  ArrowRight,
+  GitCompareArrows,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
   Lock,
   AlertCircle,
-  LayoutDashboard,
-  BarChart2,
+  X,
 } from 'lucide-react';
 import type { User, UserRole } from '@/lib/types';
+import { CHART_METRIC_COLORS } from '@/lib/chartPalette';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
 import { getMonthNameId } from '@/lib/finansialHelpers';
 import { formatBebanTriliun, formatRupiahFull } from '@/lib/formatters';
 import {
@@ -175,7 +181,11 @@ function renderPjmNegativeLabel(props: LabelRenderProps) {
         dominantBaseline="central"
         fontSize={10}
         fontWeight={700}
-        style={{ pointerEvents: 'none' }}
+        style={{
+          pointerEvents: 'none',
+          fontFamily: 'var(--beranda-mono)',
+          fontVariantNumeric: 'tabular-nums',
+        }}
       >
         {text}
       </text>
@@ -191,10 +201,64 @@ function renderPjmNegativeLabel(props: LabelRenderProps) {
       dominantBaseline="central"
       fontSize={10}
       fontWeight={700}
-      style={{ pointerEvents: 'none' }}
+      style={{
+        pointerEvents: 'none',
+        fontFamily: 'var(--beranda-mono)',
+        fontVariantNumeric: 'tabular-nums',
+      }}
     >
       {text}
     </text>
+  );
+}
+
+function BerandaSkeleton() {
+  return (
+    <div className="beranda-main-area" aria-busy="true" aria-label="Memuat data ringkasan eksekutif">
+      <div className="beranda-kpi-grid">
+        {[0, 1, 2, 3].map((idx) => (
+          <div key={idx} className="beranda-kpi-card">
+            <div className="beranda-kpi-head">
+              <div className="beranda-skeleton-block" style={{ width: 92, height: 12 }} />
+              <div className="beranda-skeleton-block" style={{ width: 32, height: 32, borderRadius: 9 }} />
+            </div>
+            <div className="beranda-skeleton-block" style={{ width: '68%', height: 28, marginTop: 4 }} />
+            <div className="beranda-skeleton-block" style={{ width: '54%', height: 12, marginTop: 4 }} />
+          </div>
+        ))}
+      </div>
+
+      <div className="beranda-charts-stack">
+        <div className="beranda-charts-row-top">
+          {[0, 1].map((idx) => (
+            <div key={idx} className="beranda-chart-card">
+              <div className="beranda-chart-head">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="beranda-skeleton-block" style={{ width: 180, height: 14 }} />
+                  <div className="beranda-skeleton-block" style={{ width: 120, height: 10 }} />
+                </div>
+                <div className="beranda-skeleton-block" style={{ width: 64, height: 24 }} />
+              </div>
+              <div className="beranda-skeleton-block" style={{ width: '100%', height: 260 }} />
+            </div>
+          ))}
+        </div>
+
+        <div className="beranda-charts-row-bottom">
+          {[300, 260, 280].map((h, idx) => (
+            <div key={idx} className="beranda-chart-card">
+              <div className="beranda-chart-head">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="beranda-skeleton-block" style={{ width: 150, height: 14 }} />
+                  <div className="beranda-skeleton-block" style={{ width: 110, height: 10 }} />
+                </div>
+              </div>
+              <div className="beranda-skeleton-block" style={{ width: '100%', height: h }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -247,7 +311,10 @@ function StackedBranchTooltip({
               />
               {ent}
             </span>
-            <span style={{ fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
+            <span
+              className="beranda-mono-num"
+              style={{ fontWeight: 700, color: 'var(--text-main)' }}
+            >
               {formatBerandaMiliar(row[ent])}
             </span>
           </div>
@@ -264,7 +331,7 @@ function StackedBranchTooltip({
           }}
         >
           <span>Total</span>
-          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatBerandaMiliar(row.total)}</span>
+          <span className="beranda-mono-num">{formatBerandaMiliar(row.total)}</span>
         </div>
       </div>
     </div>
@@ -293,17 +360,20 @@ function BopoTooltip({ active, payload }: CustomTooltipProps<BerandaBopoBranchRo
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
         <span style={{ color: 'var(--text-muted)' }}>BOPO</span>
-        <span style={{ fontWeight: 800, color: 'var(--accent-blue-text)' }}>{formatIdPercent2(row.bopo)}</span>
+        <span className="beranda-mono-num" style={{ fontWeight: 800, color: 'var(--accent-blue-text)' }}>
+          {formatIdPercent2(row.bopo)}
+        </span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11 }}>
         <span style={{ color: 'var(--text-muted)' }}>Pendapatan</span>
-        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+        <span className="beranda-mono-num" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
           {formatBerandaSummaryRupiah(row.pendapatan)}
         </span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11 }}>
         <span style={{ color: 'var(--text-muted)' }}>Beban</span>
         <span
+          className="beranda-mono-num"
           style={{ fontWeight: 600, color: 'var(--text-secondary)' }}
           title={formatRupiahFull(row.beban)}
         >
@@ -335,13 +405,13 @@ function EntityShareTooltip({ active, payload }: CustomTooltipProps<BerandaEntit
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ color: 'var(--text-muted)' }}>Laba Bersih</span>
-        <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+        <span className="beranda-mono-num" style={{ fontWeight: 700, color: 'var(--text-main)' }}>
           {formatBerandaSummaryRupiah(row.totalRealisasi)}
         </span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ color: 'var(--text-muted)' }}>Kontribusi</span>
-        <span style={{ fontWeight: 700, color: 'var(--accent-blue-text)' }}>
+        <span className="beranda-mono-num" style={{ fontWeight: 700, color: 'var(--accent-blue-text)' }}>
           {formatIdPercent2(row.exactPct)} ({row.roundedPct}%)
         </span>
       </div>
@@ -370,48 +440,99 @@ function PjmBottomTooltip({ active, payload }: CustomTooltipProps<BerandaPjmBott
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ color: 'var(--text-muted)' }}>Laba Area PJM</span>
-        <span style={{ fontWeight: 800, color: 'var(--status-danger-text)' }}>{formatBerandaJuta(row.nilaiJt)}</span>
+        <span className="beranda-mono-num" style={{ fontWeight: 800, color: 'var(--status-danger-text)' }}>
+          {formatBerandaJuta(row.nilaiJt)}
+        </span>
       </div>
     </div>
   );
 }
 
-function KpiSubMetrics({ yoy, rka }: { yoy: number | null; rka: number | null }) {
+function getMetricStatusColor(value: number | null, lowerIsBetter = false): string {
+  if (value === null) return 'var(--text-muted)';
+  const isFavorable = lowerIsBetter ? value <= 100 : value >= 100;
+  return isFavorable ? 'var(--status-good-text)' : 'var(--status-danger-text)';
+}
+
+function KpiSubMetrics({
+  yoy,
+  rka,
+  lowerIsBetter = false,
+}: {
+  yoy: number | null;
+  rka: number | null;
+  lowerIsBetter?: boolean;
+}) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 8,
-        fontSize: 12,
-        fontWeight: 600,
-        color: 'var(--text-muted)',
-        marginTop: 2,
-      }}
-    >
+    <div className="beranda-kpi-submetrics">
       <span>
-        YoY:{' '}
-        <span style={{ color: 'var(--status-good-text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          {yoy !== null ? formatIdDecimal2(yoy) : '-'}
-        </span>
+        YoY{' '}
+        <strong
+          style={{
+            color: getMetricStatusColor(yoy, lowerIsBetter),
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {yoy !== null ? `${formatIdDecimal2(yoy)}%` : '-'}
+        </strong>
       </span>
-      <span aria-hidden="true" style={{ color: 'var(--border-subtle)' }}>|</span>
+      <span aria-hidden="true" style={{ color: 'var(--border-subtle)' }}>•</span>
       <span>
-        RKA:{' '}
-        <span style={{ color: 'var(--status-danger-text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          {rka !== null ? formatIdDecimal2(rka) : '-'}
-        </span>
+        RKA{' '}
+        <strong
+          style={{
+            color: getMetricStatusColor(rka, lowerIsBetter),
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {rka !== null ? `${formatIdDecimal2(rka)}%` : '-'}
+        </strong>
       </span>
     </div>
   );
 }
 
+function getBopoBadge(bopoValue: number): {
+  label: string;
+  accent: string;
+  textColor: string;
+  bg: string;
+  border: string;
+} {
+  if (bopoValue <= 75) {
+    return {
+      label: 'Efisien',
+      accent: CHART_METRIC_COLORS.positive,
+      textColor: 'var(--status-good-text)',
+      bg: 'rgba(22, 163, 74, 0.14)',
+      border: 'rgba(22, 163, 74, 0.35)',
+    };
+  }
+  if (bopoValue <= 85) {
+    return {
+      label: 'Moderat',
+      accent: CHART_METRIC_COLORS.warning,
+      textColor: 'var(--status-alert-text)',
+      bg: 'rgba(202, 138, 4, 0.15)',
+      border: 'rgba(202, 138, 4, 0.35)',
+    };
+  }
+  return {
+    label: 'Waspada',
+    accent: CHART_METRIC_COLORS.negative,
+    textColor: 'var(--status-danger-text)',
+    bg: 'rgba(239, 68, 68, 0.14)',
+    border: 'rgba(239, 68, 68, 0.35)',
+  };
+}
+
 export default function PortSightBeranda({
   selectedTerminal,
   onSelectTerminal,
+  onNavigateTab,
   currentUser,
   userRole,
+  onOpenComparisonModal,
 }: PortSightBerandaProps) {
   const {
     tahun,
@@ -439,25 +560,26 @@ export default function PortSightBeranda({
   });
 
   const [branchSearch, setBranchSearch] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'all' | 'cards' | 'charts'>(() => {
-    if (typeof window === 'undefined') return 'all';
-    try {
-      const saved = localStorage.getItem('portsight_beranda_view_mode');
-      if (saved === 'cards' || saved === 'charts' || saved === 'all') return saved;
-    } catch {
-      // Ignore
-    }
-    return 'all';
-  });
+  const [branchMenuOpen, setBranchMenuOpen] = useState<boolean>(false);
+  const branchPopoverRef = useRef<HTMLDivElement>(null);
 
-  const handleViewModeChange = (mode: 'all' | 'cards' | 'charts') => {
-    setViewMode(mode);
-    try {
-      localStorage.setItem('portsight_beranda_view_mode', mode);
-    } catch {
-      // Ignore
-    }
-  };
+  useEffect(() => {
+    if (!branchMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (branchPopoverRef.current && !branchPopoverRef.current.contains(e.target as Node)) {
+        setBranchMenuOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBranchMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [branchMenuOpen]);
 
   const availableYears = useMemo(
     () => summary?.filters.availableYears ?? [2025, 2026],
@@ -493,7 +615,10 @@ export default function PortSightBeranda({
   }, [isPicCabang, summary?.filters.assignedBranchName, activeBranchNames, availableBranches.length]);
 
   const bopoRows = useMemo(
-    () => summary?.charts.bopoPerCabang ?? [],
+    () =>
+      [...(summary?.charts.bopoPerCabang ?? [])].sort(
+        (a, b) => a.bopo - b.bopo || a.nmCbg.localeCompare(b.nmCbg)
+      ),
     [summary]
   );
   const maxBopo = useMemo(() => {
@@ -504,10 +629,13 @@ export default function PortSightBeranda({
     return Math.ceil(max / 10) * 10;
   }, [bopoRows]);
 
-  const bopoChartHeight = Math.max(240, bopoRows.length * 22 + 24);
+  const bopoChartHeight = Math.max(260, bopoRows.length * 23 + 20);
 
   const pjmRows = useMemo(
-    () => summary?.charts.bottom10LabaPjm ?? [],
+    () =>
+      [...(summary?.charts.bottom10LabaPjm ?? [])].sort(
+        (a, b) => a.realisasi - b.realisasi || a.nmCbg.localeCompare(b.nmCbg)
+      ),
     [summary]
   );
   const pjmDomain = useMemo<[number, number]>(() => {
@@ -540,612 +668,408 @@ export default function PortSightBeranda({
     [entityShare]
   );
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Top Status & Context Bar */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 10,
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 12,
-          padding: '10px 14px',
-          boxShadow: 'var(--card-shadow)',
-        }}
-      >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 800,
-              color: 'var(--text-title)',
-            }}
-          >
-            Summary Keuangan Regional 4
-          </span>
-          <span
-            style={{
-              padding: '3px 10px',
-              borderRadius: 9999,
-              fontSize: 11,
-              fontWeight: 700,
-              backgroundColor: 'rgba(59, 130, 246, 0.14)',
-              color: 'var(--accent-blue-text)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-            }}
-          >
-            Tahun {summary?.filters.tahun ?? tahun} • Bulan {summary?.filters.bulan ?? bulan} (
-            {getMonthNameId(summary?.filters.bulan ?? bulan)})
-          </span>
-          <span
-            style={{
-              padding: '3px 10px',
-              borderRadius: 9999,
-              fontSize: 11,
-              fontWeight: 600,
-              backgroundColor: 'var(--bg-inner)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            {activeBranchLabel}
-          </span>
-          {isPicCabang && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '3px 9px',
-                borderRadius: 9999,
-                fontSize: 11,
-                fontWeight: 700,
-                backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                color: 'var(--status-alert-text)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
-              }}
-            >
-              <Lock size={11} /> Akses Terbatas Cabang
-            </span>
-          )}
-        </div>
+  const labaIsNegative = (kpis?.labaArea.value ?? 0) < 0;
+  const bopoBadge = getBopoBadge(kpis?.bopo.value ?? 0);
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          {/* Mode Tampilan Beranda (UX-11) */}
-          <div
-            role="radiogroup"
-            aria-label="Mode Tampilan Beranda"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              backgroundColor: 'var(--bg-inner)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 8,
-              padding: 2,
-              gap: 2,
-            }}
-          >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={viewMode === 'all'}
-              onClick={() => handleViewModeChange('all')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 8px',
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 700,
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: viewMode === 'all' ? 'var(--accent-blue)' : 'transparent',
-                color: viewMode === 'all' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
-              }}
-              title="Tampilan Terpadu (Kartu Metrik + Grafik Bento)"
-            >
-              <LayoutDashboard size={12} />
-              <span>Semua</span>
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={viewMode === 'cards'}
-              onClick={() => handleViewModeChange('cards')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 8px',
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 700,
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: viewMode === 'cards' ? 'var(--accent-blue)' : 'transparent',
-                color: viewMode === 'cards' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
-              }}
-              title="Fokus Kartu Metrik Keuangan Utama"
-            >
-              <Banknote size={12} />
-              <span>Kartu Metrik</span>
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={viewMode === 'charts'}
-              onClick={() => handleViewModeChange('charts')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 8px',
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 700,
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: viewMode === 'charts' ? 'var(--accent-blue)' : 'transparent',
-                color: viewMode === 'charts' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
-              }}
-              title="Fokus Grafik Bento Analisis Cabang & Entitas"
-            >
-              <BarChart2 size={12} />
-              <span>Grafik Terpadu</span>
-            </button>
+  return (
+    <div className="beranda-shell">
+      {/* Unified Horizontal Executive Filter Bar */}
+      <section
+        className="beranda-filter-bar"
+        aria-label="Filter Summary Eksekutif"
+        style={{ position: 'relative', zIndex: 20, marginBottom: '8px' }}
+      >
+        <div className="beranda-filter-row">
+          {/* Left: Period & Branch Selectors */}
+          <div className="beranda-filter-controls">
+            <label className="beranda-select-field">
+              <span className="beranda-field-label">Tahun</span>
+              <select
+                value={tahun}
+                onChange={(e) => setTahun(Number(e.target.value))}
+                className="beranda-select"
+                aria-label="Pilih Tahun"
+              >
+                {availableYears.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="beranda-select-field">
+              <span className="beranda-field-label">Bulan</span>
+              <select
+                value={bulan}
+                onChange={(e) => setBulan(Number(e.target.value))}
+                className="beranda-select"
+                aria-label="Pilih Bulan"
+              >
+                {availableMonths.map((mo) => (
+                  <option key={mo} value={mo}>
+                    {getMonthNameId(mo)} ({mo})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Searchable Multi-Select Branch Dropdown */}
+            <div ref={branchPopoverRef} style={{ position: 'relative' }}>
+              {isPicCabang ? (
+                <span className="beranda-locked-branch" title="Akses dibatasi sesuai cabang penugasan">
+                  <Lock size={12} aria-hidden="true" />
+                  <span>{activeBranchLabel}</span>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setBranchMenuOpen((prev) => !prev)}
+                    className={`beranda-branch-trigger ${branchMenuOpen ? 'active' : ''}`}
+                    aria-haspopup="listbox"
+                    aria-expanded={branchMenuOpen}
+                  >
+                    <span className="beranda-field-label">Cabang</span>
+                    <strong className="beranda-branch-trigger-val">{activeBranchLabel}</strong>
+                    <ChevronDown
+                      size={13}
+                      aria-hidden="true"
+                      style={{
+                        color: 'var(--text-muted)',
+                        transform: branchMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.15s ease',
+                        flexShrink: 0,
+                      }}
+                    />
+                  </button>
+
+                  {branchMenuOpen && (
+                    <div className="beranda-branch-popover" role="dialog" aria-label="Pilih Cabang atau Terminal">
+                      <div className="beranda-branch-popover-head">
+                        <span>Cabang / Terminal</span>
+                        {selectedBranches.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={clearBranches}
+                            className="beranda-clear-btn"
+                          >
+                            <FilterX size={11} aria-hidden="true" /> Reset Cabang
+                          </button>
+                        )}
+                      </div>
+
+                      {availableBranches.length > 5 && (
+                        <div style={{ position: 'relative', padding: '8px 8px 4px' }}>
+                          <Search
+                            size={12}
+                            aria-hidden="true"
+                            style={{
+                              position: 'absolute',
+                              left: 17,
+                              top: 16,
+                              color: 'var(--text-muted)',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={branchSearch}
+                            onChange={(e) => setBranchSearch(e.target.value)}
+                            placeholder="Cari cabang..."
+                            aria-label="Cari nama cabang"
+                            className="beranda-branch-search"
+                          />
+                        </div>
+                      )}
+
+                      <div className="beranda-slicer-list beranda-slicer-scroll" role="listbox" aria-multiselectable="true">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearBranches();
+                            setBranchMenuOpen(false);
+                          }}
+                          className={`beranda-slicer-btn ${selectedBranches.length === 0 ? 'is-active' : ''}`}
+                        >
+                          <span>Semua Cabang ({availableBranches.length})</span>
+                          {selectedBranches.length === 0 && <Check size={13} color="var(--accent-blue-text)" aria-hidden="true" />}
+                        </button>
+
+                        {filteredBranchOptions.map((opt) => {
+                          const isSelected = selectedBranches.includes(opt.nmCbg);
+                          return (
+                            <button
+                              key={opt.nmCbg}
+                              type="button"
+                              onClick={() => toggleBranch(opt.nmCbg)}
+                              className={`beranda-slicer-btn ${isSelected ? 'is-active' : ''}`}
+                            >
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {opt.nmCbg}
+                              </span>
+                              {isSelected && <Check size={13} color="var(--accent-blue-text)" aria-hidden="true" />}
+                            </button>
+                          );
+                        })}
+
+                        {filteredBranchOptions.length === 0 && (
+                          <div style={{ padding: 12, textAlign: 'center', fontSize: 11.5, color: 'var(--text-muted)' }}>
+                            Cabang tidak ditemukan
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
-          {!isBodViewer && summary?.verificationSummary && (
+          {/* Right: Verification Scope, Comparison, Reset & Refresh */}
+          <div className="beranda-filter-actions">
+            {!isBodViewer && summary?.verificationSummary && (
+              <button
+                type="button"
+                onClick={() => setVerifiedOnly(!verifiedOnly)}
+                className={`beranda-tool-btn ${verifiedOnly ? 'is-verified' : ''}`}
+                title="Filter khusus data berstatus terverifikasi"
+              >
+                {verifiedOnly ? (
+                  <span className="beranda-live-dot" aria-hidden="true" />
+                ) : (
+                  <ShieldCheck size={13} aria-hidden="true" />
+                )}
+                <span>{verifiedOnly ? 'Terverifikasi' : 'Semua Status'}</span>
+                {summary.verificationSummary.pending > 0 && (
+                  <span className="beranda-mono-num" style={{ opacity: 0.85 }}>
+                    ({summary.verificationSummary.pending})
+                  </span>
+                )}
+              </button>
+            )}
+
+            {onOpenComparisonModal && (
+              <button
+                type="button"
+                onClick={onOpenComparisonModal}
+                className="beranda-tool-btn"
+                title="Bandingkan Realisasi 2026 vs RKAP & 2025 YoY"
+              >
+                <GitCompareArrows size={13} aria-hidden="true" />
+                <span>Bandingkan</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => setVerifiedOnly(!verifiedOnly)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '5px 10px',
-                borderRadius: 8,
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer',
-                border: verifiedOnly
-                  ? '1px solid rgba(16, 185, 129, 0.45)'
-                  : '1px solid var(--border-subtle)',
-                backgroundColor: verifiedOnly ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-inner)',
-                color: verifiedOnly ? 'var(--status-good-text)' : 'var(--text-secondary)',
-              }}
-              title="Filter khusus data berstatus terverifikasi"
+              onClick={resetFilters}
+              className="beranda-tool-btn"
+              title="Kembalikan filter ke default"
+              aria-label="Reset filter ke default"
             >
-              <ShieldCheck size={13} />
-              {verifiedOnly ? 'Hanya Terverifikasi' : 'Semua Status'}
-              {summary.verificationSummary.pending > 0 && (
-                <span style={{ opacity: 0.8 }}>({summary.verificationSummary.pending} pending)</span>
-              )}
+              <RotateCcw size={13} aria-hidden="true" />
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={resetFilters}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '5px 10px',
-              borderRadius: 8,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-inner)',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            <RotateCcw size={12} /> Reset Default
-          </button>
-
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={refreshing}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '5px 10px',
-              borderRadius: 8,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: refreshing ? 'wait' : 'pointer',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-inner)',
-              color: 'var(--text-title)',
-            }}
-          >
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Muat Ulang
-          </button>
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              className="beranda-tool-btn"
+              title="Muat ulang data Summary"
+              aria-label="Muat ulang data Summary"
+              style={{ cursor: refreshing ? 'wait' : 'pointer' }}
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />
+            </button>
+          </div>
         </div>
-      </div>
+
+        {/* Selected Branch Chips */}
+        {!isPicCabang && selectedBranches.length > 0 && (
+          <div className="beranda-active-chips">
+            <span className="beranda-chips-label">Filter Cabang:</span>
+            {selectedBranches.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => toggleBranch(name)}
+                className="beranda-filter-chip"
+                title={`Hapus filter ${name}`}
+              >
+                <span>{name}</span>
+                <X size={11} aria-hidden="true" />
+              </button>
+            ))}
+            <button type="button" onClick={clearBranches} className="beranda-clear-btn">
+              Hapus Semua
+            </button>
+          </div>
+        )}
+      </section>
 
       {error && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '10px 14px',
-            borderRadius: 10,
-            backgroundColor: 'var(--status-danger-bg)',
-            border: '1px solid var(--status-danger-border)',
-            color: 'var(--status-danger-text)',
-            fontSize: 12,
-            fontWeight: 600,
-          }}
-        >
-          <AlertCircle size={15} />
-          <span>{error}</span>
+        <div role="alert" className="beranda-error-banner">
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={15} aria-hidden="true" />
+            <span>{error}</span>
+          </div>
+          <button type="button" onClick={refresh} className="beranda-drill-btn">
+            Muat Ulang
+          </button>
         </div>
       )}
 
-      {/* Workspace Grid: Left Slicers + Right Dashboard Content */}
-      <div className="beranda-summary-workspace">
-        {/* LEFT SLICERS COLUMN */}
-        <aside className="beranda-slicer-column" aria-label="Filter Summary Keuangan">
-          {/* Slicer: TAHUN */}
-          <div className="beranda-slicer-card">
-            <div className="beranda-slicer-header">
-              <span>TAHUN</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
-                {tahun}
-              </span>
-            </div>
-            <div className="beranda-slicer-list">
-              {availableYears.map((yr) => {
-                const isActive = yr === tahun;
-                return (
-                  <button
-                    key={yr}
-                    type="button"
-                    onClick={() => setTahun(yr)}
-                    className={`beranda-slicer-btn ${isActive ? 'is-active' : ''}`}
-                  >
-                    <span>{yr}</span>
-                    {isActive && <Check size={13} color="var(--accent-blue-text)" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Slicer: BULAN */}
-          <div className="beranda-slicer-card">
-            <div className="beranda-slicer-header">
-              <span>BULAN</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>
-                {getMonthNameId(bulan)}
-              </span>
-            </div>
-            <div className="beranda-slicer-list">
-              {availableMonths.map((mo) => {
-                const isActive = mo === bulan;
-                return (
-                  <button
-                    key={mo}
-                    type="button"
-                    onClick={() => setBulan(mo)}
-                    className={`beranda-slicer-btn ${isActive ? 'is-active' : ''}`}
-                  >
-                    <span>
-                      {mo}{' '}
-                      <span style={{ fontSize: 11, opacity: 0.72, fontWeight: 500 }}>
-                        ({getMonthNameId(mo)})
-                      </span>
-                    </span>
-                    {isActive && <Check size={13} color="var(--accent-blue-text)" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Slicer: NM_CBG */}
-          <div className="beranda-slicer-card">
-            <div className="beranda-slicer-header">
-              <span>NM_CBG</span>
-              {!isPicCabang && selectedBranches.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearBranches}
-                  title="Tampilkan semua cabang"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    padding: '2px 6px',
-                    borderRadius: 6,
-                    border: '1px solid rgba(239, 68, 68, 0.35)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                    color: 'var(--status-danger-text)',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
+      {/* Main Executive Dashboard Area (Full Width) */}
+      {loading && !summary ? (
+        <BerandaSkeleton />
+      ) : (
+      <div
+        className={`beranda-main-area ${loading || refreshing ? 'is-updating' : ''}`}
+        style={{ position: 'relative', zIndex: 10, marginTop: '4px' }}
+      >
+        {/* TOP 4 HARMONIZED KPI CARDS */}
+        <section
+          className="beranda-kpi-grid"
+          aria-label="KPI Keuangan Utama"
+          style={{ position: 'relative', zIndex: 10 }}
+        >
+            {/* 1. Pendapatan (Harbor Cobalt accent hairline) */}
+            <div className="beranda-kpi-card" style={{ borderTop: '2px solid var(--beranda-accent)' }}>
+              <div className="beranda-kpi-head">
+                <span className="beranda-kpi-label">Pendapatan</span>
+                <span
+                  className="beranda-kpi-icon"
+                  style={{ backgroundColor: 'var(--beranda-accent-soft)', color: 'var(--beranda-accent)' }}
                 >
-                  <FilterX size={11} /> Clear
-                </button>
-              )}
-            </div>
-
-            {!isPicCabang && availableBranches.length > 5 && (
-              <div style={{ padding: '6px 6px 2px', position: 'relative' }}>
-                <Search
-                  size={12}
-                  style={{
-                    position: 'absolute',
-                    left: 14,
-                    top: 15,
-                    color: 'var(--text-muted)',
-                    pointerEvents: 'none',
-                  }}
-                />
-                <input
-                  type="text"
-                  value={branchSearch}
-                  onChange={(e) => setBranchSearch(e.target.value)}
-                  placeholder="Cari cabang..."
-                  aria-label="Cari nama cabang"
-                  style={{
-                    width: '100%',
-                    padding: '5px 8px 5px 26px',
-                    borderRadius: 6,
-                    border: '1px solid var(--border-subtle)',
-                    backgroundColor: 'var(--bg-input)',
-                    color: 'var(--text-main)',
-                    fontSize: 11.5,
-                    outline: 'none',
-                  }}
-                />
+                  <TrendingUp size={17} aria-hidden="true" />
+                </span>
               </div>
-            )}
+              <div className="beranda-kpi-value" style={{ color: 'var(--beranda-accent)' }}>
+                {kpis?.pendapatan.formatted ?? 'Rp 0'}
+              </div>
+              <KpiSubMetrics
+                yoy={kpis?.pendapatan.yoy ?? null}
+                rka={kpis?.pendapatan.rka ?? null}
+              />
+            </div>
 
-            <div className="beranda-slicer-list beranda-slicer-scroll">
-              {!isPicCabang && (
-                <button
-                  type="button"
-                  onClick={clearBranches}
-                  className={`beranda-slicer-btn ${selectedBranches.length === 0 ? 'is-active' : ''}`}
-                >
-                  <span>Semua Cabang ({availableBranches.length})</span>
-                  {selectedBranches.length === 0 && <Check size={13} color="var(--accent-blue-text)" />}
-                </button>
-              )}
-
-              {filteredBranchOptions.map((opt) => {
-                const isSelected = isPicCabang
-                  ? true
-                  : selectedBranches.includes(opt.nmCbg);
-                return (
-                  <button
-                    key={opt.nmCbg}
-                    type="button"
-                    disabled={isPicCabang}
-                    onClick={() => toggleBranch(opt.nmCbg)}
-                    className={`beranda-slicer-btn ${isSelected ? 'is-active' : ''}`}
-                  >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {opt.nmCbg}
-                    </span>
-                    {isSelected && <Check size={13} color="var(--accent-blue-text)" />}
-                  </button>
-                );
-              })}
-
-              {filteredBranchOptions.length === 0 && (
-                <div
+            {/* 2. Laba Area (Hijau — atau Merah jika negatif) */}
+            <div
+              className="beranda-kpi-card"
+              style={{
+                borderTop: `2px solid ${labaIsNegative ? CHART_METRIC_COLORS.negative : CHART_METRIC_COLORS.positive}`,
+              }}
+            >
+              <div className="beranda-kpi-head">
+                <span className="beranda-kpi-label">Laba Area</span>
+                <span
+                  className="beranda-kpi-icon"
                   style={{
-                    padding: 12,
-                    textAlign: 'center',
-                    fontSize: 11,
-                    color: 'var(--text-muted)',
+                    backgroundColor: labaIsNegative ? 'rgba(239, 68, 68, 0.12)' : 'rgba(22, 163, 74, 0.12)',
+                    color: labaIsNegative ? 'var(--status-danger-text)' : 'var(--status-good-text)',
                   }}
                 >
-                  Cabang tidak ditemukan
-                </div>
-              )}
-            </div>
-          </div>
-        </aside>
-
-        {/* RIGHT DASHBOARD CONTENT */}
-        <div className="beranda-main-area">
-          {/* TOP 4 KPI CARDS */}
-          {(viewMode === 'all' || viewMode === 'cards') && (
-            <section className="beranda-kpi-grid" aria-label="KPI Keuangan Area">
-            {/* 1. Laba Area */}
-            <div className="beranda-kpi-card">
+                  <Banknote size={17} aria-hidden="true" />
+                </span>
+              </div>
               <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(59, 130, 246, 0.14)',
-                  color: 'var(--accent-blue-text)',
-                  flexShrink: 0,
-                }}
+                className="beranda-kpi-value"
+                style={{ color: labaIsNegative ? 'var(--status-danger-text)' : 'var(--status-good-text)' }}
               >
-                <Banknote size={28} />
+                {kpis?.labaArea.formatted ?? 'Rp 0'}
               </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-title)' }}>
-                  Laba Area
-                </div>
-                <div
-                  style={{
-                    fontSize: 24,
-                    fontWeight: 800,
-                    color: 'var(--accent-blue-text)',
-                    lineHeight: 1.15,
-                    fontVariantNumeric: 'tabular-nums',
-                    marginTop: 2,
-                  }}
-                >
-                  {loading && !kpis ? '...' : kpis?.labaArea.formatted ?? 'Rp 0'}
-                </div>
-                <KpiSubMetrics
-                  yoy={kpis?.labaArea.yoy ?? null}
-                  rka={kpis?.labaArea.rka ?? null}
-                />
-              </div>
+              <KpiSubMetrics
+                yoy={kpis?.labaArea.yoy ?? null}
+                rka={kpis?.labaArea.rka ?? null}
+              />
             </div>
 
-            {/* 2. Pendapatan */}
-            <div className="beranda-kpi-card">
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(112, 173, 71, 0.16)',
-                  color: 'var(--status-good-text)',
-                  flexShrink: 0,
-                }}
-              >
-                <Coins size={28} />
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-title)' }}>
-                  Pendapatan
-                </div>
-                <div
-                  style={{
-                    fontSize: 24,
-                    fontWeight: 800,
-                    color: 'var(--status-good-text)',
-                    lineHeight: 1.15,
-                    fontVariantNumeric: 'tabular-nums',
-                    marginTop: 2,
-                  }}
+            {/* 3. Beban (Merah — lower is better untuk RKA/YoY) */}
+            <div className="beranda-kpi-card" style={{ borderTop: `2px solid ${CHART_METRIC_COLORS.negative}` }}>
+              <div className="beranda-kpi-head">
+                <span className="beranda-kpi-label">Beban</span>
+                <span
+                  className="beranda-kpi-icon"
+                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', color: 'var(--status-danger-text)' }}
                 >
-                  {loading && !kpis ? '...' : kpis?.pendapatan.formatted ?? 'Rp 0'}
-                </div>
-                <KpiSubMetrics
-                  yoy={kpis?.pendapatan.yoy ?? null}
-                  rka={kpis?.pendapatan.rka ?? null}
-                />
+                  <TrendingDown size={17} aria-hidden="true" />
+                </span>
               </div>
+              <div
+                className="beranda-kpi-value"
+                style={{ color: 'var(--status-danger-text)' }}
+                title={
+                  kpis
+                    ? `${formatBebanTriliun(kpis.beban.value, { includeCurrency: false })} (${formatRupiahFull(kpis.beban.value)})`
+                    : 'Rp 0,00 T'
+                }
+              >
+                {kpis?.beban.formatted ?? 'Rp 0,00 T'}
+              </div>
+              <KpiSubMetrics
+                yoy={kpis?.beban.yoy ?? null}
+                rka={kpis?.beban.rka ?? null}
+                lowerIsBetter
+              />
             </div>
 
-            {/* 3. Beban */}
-            <div className="beranda-kpi-card">
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(237, 125, 49, 0.16)',
-                  color: 'var(--accent-orange-text)',
-                  flexShrink: 0,
-                }}
-              >
-                <Coins size={28} />
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-title)' }}>
-                  Beban
-                </div>
-                <div
+            {/* 4. BOPO (Seragam, dengan badge status efisiensi) */}
+            <div className="beranda-kpi-card" style={{ borderTop: `2px solid ${bopoBadge.accent}` }}>
+              <div className="beranda-kpi-head">
+                <span className="beranda-kpi-label">BOPO</span>
+                <span
+                  className="beranda-kpi-badge"
                   style={{
-                    fontSize: 24,
-                    fontWeight: 800,
-                    color: 'var(--accent-orange-text)',
-                    lineHeight: 1.15,
-                    fontVariantNumeric: 'tabular-nums',
-                    marginTop: 2,
+                    backgroundColor: bopoBadge.bg,
+                    border: `1px solid ${bopoBadge.border}`,
+                    color: bopoBadge.textColor,
                   }}
-                  title={
-                    kpis
-                      ? `${formatBebanTriliun(kpis.beban.value, { includeCurrency: false })} (${formatRupiahFull(kpis.beban.value)})`
-                      : 'Rp 0,00 T'
-                  }
                 >
-                  {loading && !kpis ? '...' : kpis?.beban.formatted ?? 'Rp 0,00 T'}
-                </div>
-                <KpiSubMetrics
-                  yoy={kpis?.beban.yoy ?? null}
-                  rka={kpis?.beban.rka ?? null}
-                />
+                  <Percent size={11} aria-hidden="true" />
+                  <span>{bopoBadge.label}</span>
+                </span>
               </div>
-            </div>
-
-            {/* 4. BOPO */}
-            <div className="beranda-kpi-card is-bopo">
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-on-dark-muted)' }}>Bopo</div>
-              <div
-                style={{
-                  fontSize: 28,
-                  fontWeight: 800,
-                  color: 'var(--status-alert-on-dark)',
-                  lineHeight: 1.15,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {loading && !kpis ? '...' : kpis?.bopo.formatted ?? '0,00%'}
+              <div className="beranda-kpi-value" style={{ color: 'var(--text-title)' }}>
+                {kpis?.bopo.formatted ?? '0,00%'}
+              </div>
+              <div className="beranda-kpi-submetrics">
+                <span>Beban / Pendapatan Area</span>
+                <span aria-hidden="true" style={{ color: 'var(--border-subtle)' }}>•</span>
+                <span>Target ≤ 75%</span>
               </div>
             </div>
           </section>
-        )}
 
-        {/* 5 CHARTS BENTO GRID */}
-        {(viewMode === 'all' || viewMode === 'charts') && (
-          <section className="beranda-charts-bento" aria-label="Grafik Ringkasan Keuangan">
-            {/* LEFT COLUMN: Top 10 Laba + Top 10 Pendapatan */}
-            <div className="beranda-chart-stack-col">
+        {/* BALANCED 2-ROW EXECUTIVE BENTO GRID */}
+        <section className="beranda-charts-stack" aria-label="Grafik Ringkasan Keuangan">
+            {/* ROW 1: Top 10 Laba Area & Top 10 Pendapatan Area (Side-by-Side 1fr : 1fr) */}
+            <div className="beranda-charts-row-top">
               {/* Grafik 1: 10 Cabang Terbesar Laba Area */}
               <div className="beranda-chart-card">
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    marginBottom: 4,
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 13.5,
-                      fontWeight: 800,
-                      color: 'var(--text-title)',
-                    }}
+                <div className="beranda-chart-head">
+                  <div>
+                    <h2 className="beranda-chart-title">10 Cabang Terbesar Laba Area</h2>
+                    <span className="beranda-chart-unit">Dalam Miliar Rupiah (Rp)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('keuangan')}
+                    className="beranda-drill-btn"
+                    title="Buka rincian modul Keuangan"
                   >
-                    10 Cabang Terbesar Laba Area
-                  </h3>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>
-                    Miliar (Rp)
-                  </span>
+                    <span>Detail</span>
+                    <ArrowRight size={12} aria-hidden="true" />
+                  </button>
                 </div>
 
-                <div style={{ width: '100%', height: 245 }}>
+                <div style={{ width: '100%', height: 265 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
                       data={top10Laba}
                       stackOffset="sign"
-                      margin={{ top: 6, right: 12, left: 4, bottom: 2 }}
+                      margin={{ top: 6, right: 16, left: 4, bottom: 2 }}
                     >
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -1155,14 +1079,14 @@ export default function PortSightBeranda({
                       <XAxis
                         type="number"
                         tickFormatter={(val) => formatIdDecimal2(Number(val))}
-                        tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                        tick={{ fill: 'var(--text-muted)', fontSize: 10.5 }}
                         axisLine={{ stroke: 'var(--border-subtle)' }}
                         tickLine={false}
                       />
                       <YAxis
                         type="category"
                         dataKey="nmCbg"
-                        width={116}
+                        width={126}
                         interval={0}
                         tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
                         axisLine={false}
@@ -1179,7 +1103,7 @@ export default function PortSightBeranda({
                           dataKey={ent}
                           stackId="laba"
                           fill={BERANDA_ENTITAS_COLORS[ent]}
-                          barSize={12}
+                          barSize={14}
                           isAnimationActive={false}
                         />
                       ))}
@@ -1187,67 +1111,40 @@ export default function PortSightBeranda({
                   </ResponsiveContainer>
                 </div>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center',
-                    gap: 10,
-                    paddingTop: 6,
-                    borderTop: '1px solid var(--border-subtle)',
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {BERANDA_ENTITAS_ORDER.map((ent) => (
-                    <span key={ent} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <span
-                        style={{
-                          width: 9,
-                          height: 9,
-                          borderRadius: 2,
-                          backgroundColor: BERANDA_ENTITAS_COLORS[ent],
-                        }}
-                      />
-                      {ent}
-                    </span>
-                  ))}
-                </div>
+                <ChartInlineLegend
+                  compact
+                  items={BERANDA_ENTITAS_ORDER.map((ent) => ({
+                    label: ent,
+                    color: BERANDA_ENTITAS_COLORS[ent],
+                  }))}
+                />
               </div>
 
               {/* Grafik 2: 10 Cabang Terbesar Pendapatan Area */}
               <div className="beranda-chart-card">
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    marginBottom: 4,
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 13.5,
-                      fontWeight: 800,
-                      color: 'var(--text-title)',
-                    }}
+                <div className="beranda-chart-head">
+                  <div>
+                    <h2 className="beranda-chart-title">10 Cabang Terbesar Pendapatan Area</h2>
+                    <span className="beranda-chart-unit">Dalam Miliar Rupiah (Rp)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('keuangan')}
+                    className="beranda-drill-btn"
+                    title="Buka rincian modul Keuangan"
                   >
-                    10 Cabang Terbesar Pendapatan Area
-                  </h3>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>
-                    Miliar (Rp)
-                  </span>
+                    <span>Detail</span>
+                    <ArrowRight size={12} aria-hidden="true" />
+                  </button>
                 </div>
 
-                <div style={{ width: '100%', height: 245 }}>
+                <div style={{ width: '100%', height: 265 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
                       data={top10Pendapatan}
                       stackOffset="sign"
-                      margin={{ top: 6, right: 12, left: 4, bottom: 2 }}
+                      margin={{ top: 6, right: 16, left: 4, bottom: 2 }}
                     >
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -1257,14 +1154,14 @@ export default function PortSightBeranda({
                       <XAxis
                         type="number"
                         tickFormatter={(val) => formatIdDecimal2(Number(val))}
-                        tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                        tick={{ fill: 'var(--text-muted)', fontSize: 10.5 }}
                         axisLine={{ stroke: 'var(--border-subtle)' }}
                         tickLine={false}
                       />
                       <YAxis
                         type="category"
                         dataKey="nmCbg"
-                        width={116}
+                        width={126}
                         interval={0}
                         tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
                         axisLine={false}
@@ -1280,7 +1177,7 @@ export default function PortSightBeranda({
                           dataKey={ent}
                           stackId="pendapatan"
                           fill={BERANDA_ENTITAS_COLORS[ent]}
-                          barSize={12}
+                          barSize={14}
                           isAnimationActive={false}
                         />
                       ))}
@@ -1288,218 +1185,198 @@ export default function PortSightBeranda({
                   </ResponsiveContainer>
                 </div>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center',
-                    gap: 10,
-                    paddingTop: 6,
-                    borderTop: '1px solid var(--border-subtle)',
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {BERANDA_ENTITAS_ORDER.map((ent) => (
-                    <span key={ent} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <span
-                        style={{
-                          width: 9,
-                          height: 9,
-                          borderRadius: 2,
-                          backgroundColor: BERANDA_ENTITAS_COLORS[ent],
-                        }}
-                      />
-                      {ent}
-                    </span>
-                  ))}
-                </div>
+                <ChartInlineLegend
+                  compact
+                  items={BERANDA_ENTITAS_ORDER.map((ent) => ({
+                    label: ent,
+                    color: BERANDA_ENTITAS_COLORS[ent],
+                  }))}
+                />
               </div>
             </div>
 
-            {/* CENTER COLUMN: BOPO AREA PER CABANG */}
-            <div className="beranda-chart-card beranda-bopo-col">
-              <div className="beranda-bopo-banner">BOPO AREA PER CABANG</div>
-              <div style={{ width: '100%', height: bopoChartHeight }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={bopoRows}
-                    margin={{ top: 4, right: 54, left: 4, bottom: 4 }}
-                  >
-                    <XAxis type="number" domain={[0, maxBopo]} hide />
-                    <YAxis
-                      type="category"
-                      dataKey="nmCbg"
-                      width={118}
-                      interval={0}
-                      tick={{ fill: 'var(--text-secondary)', fontSize: 11, fontWeight: 500 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
-                      content={<BopoTooltip />}
-                    />
-                    <Bar
-                      dataKey="bopo"
-                      fill="#4472c4"
-                      radius={[0, 4, 4, 0]}
-                      barSize={14}
-                      isAnimationActive={false}
-                    >
-                      <LabelList
-                        dataKey="bopo"
-                        position="right"
-                        formatter={(val) => formatIdPercent2(Number(val ?? 0))}
-                        style={{
-                          fill: 'var(--text-main)',
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                        }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* RIGHT COLUMN: % Kontribusi Entitas + 10 Terendah PJM */}
-            <div className="beranda-chart-stack-col">
-              {/* Grafik 4: % KONTRIBUSI LABA AREA PER ENTITAS */}
+            {/* ROW 2: BOPO Area per Cabang (All Branches, Scrollable, Ascending) | Donut | PJM */}
+            <div className="beranda-charts-row-bottom">
+              {/* Grafik 3: BOPO Area per Cabang */}
               <div className="beranda-chart-card">
-                <h3
-                  style={{
-                    margin: '0 0 4px',
-                    fontSize: 13.5,
-                    fontWeight: 800,
-                    color: 'var(--text-title)',
-                    textAlign: 'center',
-                  }}
-                >
-                  % KONTRIBUSI LABA AREA PER ENTITAS
-                </h3>
+                <div className="beranda-chart-head">
+                  <div>
+                    <h2 className="beranda-chart-title">BOPO Area per Cabang</h2>
+                    <span className="beranda-chart-unit">
+                      Seluruh Cabang ({bopoRows.length}) • Urutan Terendah ke Tertinggi (%)
+                    </span>
+                  </div>
+                </div>
 
-                <div style={{ width: '100%', height: 215 }}>
-                  {hasPositiveEntityShare ? (
+                <div className="beranda-bopo-scroll" tabIndex={0} aria-label="Grafik BOPO Area per Cabang">
+                  <div style={{ width: '100%', height: bopoChartHeight }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={entityShare}
-                          dataKey="sliceValue"
-                          nameKey="entitas"
-                          cx="50%"
-                          cy="50%"
-                          startAngle={90}
-                          endAngle={-270}
-                          innerRadius={44}
-                          outerRadius={84}
-                          paddingAngle={1}
-                          labelLine={false}
-                          label={renderPieSliceLabel}
+                      <BarChart
+                        layout="vertical"
+                        data={bopoRows}
+                        margin={{ top: 4, right: 54, left: 4, bottom: 4 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          horizontal={false}
+                          stroke="var(--border-subtle)"
+                        />
+                        <XAxis type="number" domain={[0, maxBopo]} hide />
+                        <YAxis
+                          type="category"
+                          dataKey="nmCbg"
+                          width={120}
+                          interval={0}
+                          tick={{ fill: 'var(--text-secondary)', fontSize: 11, fontWeight: 500 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                          content={<BopoTooltip />}
+                        />
+                        <Bar
+                          dataKey="bopo"
+                          fill={CHART_METRIC_COLORS.primary}
+                          radius={[0, 4, 4, 0]}
+                          barSize={14}
                           isAnimationActive={false}
                         >
-                          {entityShare.map((entry) => (
-                            <Cell
-                              key={entry.entitas}
-                              fill={BERANDA_ENTITAS_COLORS[entry.entitas]}
-                              stroke="var(--bg-card)"
-                              strokeWidth={1.5}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<EntityShareTooltip />} />
-                      </PieChart>
+                          <LabelList
+                            dataKey="bopo"
+                            position="right"
+                            formatter={(val) => formatIdPercent2(Number(val ?? 0))}
+                            style={{
+                              fill: 'var(--text-main)',
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              fontFamily: 'var(--beranda-mono)',
+                            }}
+                          />
+                        </Bar>
+                      </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grafik 4: Kontribusi Laba Area per Entitas (Donut + Center Metric) */}
+              <div className="beranda-chart-card">
+                <div className="beranda-chart-head">
+                  <div>
+                    <h2 className="beranda-chart-title">Kontribusi Laba per Entitas</h2>
+                    <span className="beranda-chart-unit">Proporsi Laba Area (%)</span>
+                  </div>
+                </div>
+
+                <div style={{ position: 'relative', width: '100%', height: 228 }}>
+                  {hasPositiveEntityShare ? (
+                    <>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={entityShare}
+                            dataKey="sliceValue"
+                            nameKey="entitas"
+                            cx="50%"
+                            cy="50%"
+                            startAngle={90}
+                            endAngle={-270}
+                            innerRadius={52}
+                            outerRadius={86}
+                            paddingAngle={1.5}
+                            labelLine={false}
+                            label={renderPieSliceLabel}
+                            isAnimationActive={false}
+                          >
+                            {entityShare.map((entry) => (
+                              <Cell
+                                key={entry.entitas}
+                                fill={BERANDA_ENTITAS_COLORS[entry.entitas]}
+                                stroke="var(--bg-card)"
+                                strokeWidth={1.5}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<EntityShareTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="beranda-donut-center" aria-hidden="true">
+                        <span className="beranda-donut-center-label">Total Laba</span>
+                        <strong className="beranda-donut-center-val">
+                          {kpis?.labaArea.formatted ?? 'Rp 0'}
+                        </strong>
+                      </div>
+                    </>
                   ) : (
-                    <div
-                      style={{
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 12,
-                        color: 'var(--text-muted)',
-                        textAlign: 'center',
-                        padding: 16,
-                      }}
-                    >
-                      Tidak ada kontribusi laba positif pada filter cabang aktif
+                    <div className="beranda-empty-state">
+                      <svg
+                        width="44"
+                        height="44"
+                        viewBox="0 0 44 44"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          cx="22"
+                          cy="22"
+                          r="17"
+                          stroke="var(--border-subtle)"
+                          strokeWidth="2.5"
+                          strokeDasharray="4 4"
+                        />
+                        <circle
+                          cx="22"
+                          cy="22"
+                          r="8"
+                          stroke="var(--text-muted)"
+                          strokeWidth="1.75"
+                        />
+                      </svg>
+                      <p>Tidak ada kontribusi laba positif pada filter cabang aktif.</p>
+                      {!isPicCabang && selectedBranches.length > 0 && (
+                        <button type="button" onClick={clearBranches} className="beranda-drill-btn">
+                          Reset Filter Cabang
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center',
-                    gap: 10,
-                    paddingTop: 6,
-                    borderTop: '1px solid var(--border-subtle)',
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {entityShare.map((entry) => (
-                    <span
-                      key={entry.entitas}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                    >
-                      <span
-                        style={{
-                          width: 9,
-                          height: 9,
-                          borderRadius: 2,
-                          backgroundColor: BERANDA_ENTITAS_COLORS[entry.entitas],
-                        }}
-                      />
-                      {entry.entitas} ({entry.roundedPct}%)
-                    </span>
-                  ))}
-                </div>
+                <ChartInlineLegend
+                  compact
+                  items={entityShare.map((entry) => ({
+                    label: entry.entitas,
+                    color: BERANDA_ENTITAS_COLORS[entry.entitas],
+                    meta: `(${entry.roundedPct}%)`,
+                  }))}
+                />
               </div>
 
               {/* Grafik 5: 10 Cabang Terendah Laba Area PJM */}
-              <div className="beranda-chart-card" style={{ flex: 1 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    marginBottom: 4,
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 13.5,
-                      fontWeight: 800,
-                      color: 'var(--text-title)',
-                    }}
-                  >
-                    10 Cabang Terendah Laba Area PJM
-                  </h3>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>
-                    Juta (Rp)
-                  </span>
+              <div className="beranda-chart-card">
+                <div className="beranda-chart-head">
+                  <div>
+                    <h2 className="beranda-chart-title">10 Cabang Terendah Laba PJM</h2>
+                    <span className="beranda-chart-unit">
+                      Dalam Juta Rupiah (Rp) • Urutan Terendah di Atas
+                    </span>
+                  </div>
                 </div>
 
-                <div style={{ width: '100%', height: 270 }}>
+                <div style={{ width: '100%', height: 300 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
                       data={pjmRows}
-                      margin={{ top: 6, right: 6, left: 86, bottom: 4 }}
+                      margin={{ top: 6, right: 6, left: 86, bottom: 10 }}
                     >
                       <XAxis type="number" domain={pjmDomain} hide />
                       <YAxis
                         type="category"
                         dataKey="nmCbg"
                         orientation="right"
-                        width={92}
+                        width={96}
                         interval={0}
                         tick={{ fill: 'var(--text-secondary)', fontSize: 11, fontWeight: 500 }}
                         axisLine={{ stroke: 'var(--border-subtle)' }}
@@ -1511,7 +1388,7 @@ export default function PortSightBeranda({
                       />
                       <Bar
                         dataKey="nilaiJt"
-                        fill="#c00000"
+                        fill={CHART_METRIC_COLORS.negative}
                         radius={[4, 0, 0, 4]}
                         barSize={16}
                         isAnimationActive={false}
@@ -1524,9 +1401,8 @@ export default function PortSightBeranda({
               </div>
             </div>
           </section>
-        )}
-        </div>
       </div>
+      )}
     </div>
   );
 }

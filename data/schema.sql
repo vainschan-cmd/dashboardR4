@@ -395,7 +395,145 @@ CREATE TABLE IF NOT EXISTS module_finansial_entitas (
 CREATE INDEX IF NOT EXISTS idx_mfe_lookup ON module_finansial_entitas (year, month, rekening, entitas, branch_code);
 CREATE INDEX IF NOT EXISTS idx_mfe_status ON module_finansial_entitas (verification_status);
 
-CREATE OR REPLACE VIEW v_module_finansial_entitas AS SELECT * FROM module_finansial_entitas;
+DROP VIEW IF EXISTS v_module_finansial_entitas CASCADE;
+CREATE VIEW v_module_finansial_entitas AS
+SELECT
+  id || '-CABANG' AS id,
+  monthly_record_id,
+  year,
+  month,
+  branch_code,
+  branch_name,
+  rekening,
+  'CABANG' AS entitas,
+  COALESCE(cabang_rp, 0) AS realisasi,
+  rka,
+  yoy,
+  source_type,
+  verification_status,
+  uploaded_by,
+  uploaded_at,
+  verified_by,
+  verified_at,
+  revision_notes,
+  verified_snapshot_json,
+  konsolidasi_rp
+FROM module_finansial
+UNION ALL
+SELECT
+  id || '-PJM' AS id,
+  monthly_record_id,
+  year,
+  month,
+  branch_code,
+  branch_name,
+  rekening,
+  'PJM' AS entitas,
+  COALESCE(pjm_rp, 0) AS realisasi,
+  rka,
+  yoy,
+  source_type,
+  verification_status,
+  uploaded_by,
+  uploaded_at,
+  verified_by,
+  verified_at,
+  revision_notes,
+  verified_snapshot_json,
+  konsolidasi_rp
+FROM module_finansial
+UNION ALL
+SELECT
+  id || '-PMT' AS id,
+  monthly_record_id,
+  year,
+  month,
+  branch_code,
+  branch_name,
+  rekening,
+  'PMT' AS entitas,
+  COALESCE(pmt_rp, 0) AS realisasi,
+  rka,
+  yoy,
+  source_type,
+  verification_status,
+  uploaded_by,
+  uploaded_at,
+  verified_by,
+  verified_at,
+  revision_notes,
+  verified_snapshot_json,
+  konsolidasi_rp
+FROM module_finansial
+UNION ALL
+SELECT
+  id || '-PSL' AS id,
+  monthly_record_id,
+  year,
+  month,
+  branch_code,
+  branch_name,
+  rekening,
+  'PSL' AS entitas,
+  COALESCE(psl_rp, 0) AS realisasi,
+  rka,
+  yoy,
+  source_type,
+  verification_status,
+  uploaded_by,
+  uploaded_at,
+  verified_by,
+  verified_at,
+  revision_notes,
+  verified_snapshot_json,
+  konsolidasi_rp
+FROM module_finansial
+UNION ALL
+SELECT
+  id || '-PTP' AS id,
+  monthly_record_id,
+  year,
+  month,
+  branch_code,
+  branch_name,
+  rekening,
+  'PTP' AS entitas,
+  COALESCE(ptp_rp, 0) AS realisasi,
+  rka,
+  yoy,
+  source_type,
+  verification_status,
+  uploaded_by,
+  uploaded_at,
+  verified_by,
+  verified_at,
+  revision_notes,
+  verified_snapshot_json,
+  konsolidasi_rp
+FROM module_finansial
+UNION ALL
+SELECT
+  id || '-ELIMINASI' AS id,
+  monthly_record_id,
+  year,
+  month,
+  branch_code,
+  branch_name,
+  rekening,
+  'ELIMINASI' AS entitas,
+  COALESCE(eliminasi_rp, 0) AS realisasi,
+  rka,
+  yoy,
+  source_type,
+  verification_status,
+  uploaded_by,
+  uploaded_at,
+  verified_by,
+  verified_at,
+  revision_notes,
+  verified_snapshot_json,
+  konsolidasi_rp
+FROM module_finansial;
 
 -- 20. Manajemen Isu Strategis & Program Prioritas Regional 4
 CREATE TABLE IF NOT EXISTS isu_strategis (

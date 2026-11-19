@@ -1,9 +1,48 @@
-export type UserRole =
+export type Permission =
+  | 'dashboard:read'
+  | 'records:read'
+  | 'reports:export'
+  | 'manual_input:write'
+  | 'import:write'
+  | 'verification:read'
+  | 'verification:approve'
+  | 'templates:read'
+  | 'templates:manage'
+  | 'users:read'
+  | 'users:manage'
+  | 'master_data:read'
+  | 'master_data:manage'
+  | 'system_params:read'
+  | 'system_params:manage'
+  | 'audit_logs:read';
+
+export type CanonicalRole =
   | 'super_admin'
   | 'admin_regional'
   | 'pic_dept_regional'
   | 'pic_cabang'
   | 'viewer';
+
+export type UserRole =
+  | 'super_admin'
+  | 'admin_regional'
+  | 'pic_dept_regional'
+  | 'pic_cabang'
+  | 'viewer'
+  | (string & {});
+
+export interface RoleDefinition {
+  id: string;
+  name: string;
+  description: string;
+  category: 'system' | 'custom';
+  scope: 'global' | 'regional' | 'cabang';
+  permissions: string[];
+  user_count?: number;
+  is_deletable?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export type VerificationStatus =
   | 'draft'
@@ -55,6 +94,8 @@ export interface EquipmentItem {
   acronym: string;
   category: string;
   active: boolean;
+  unit_count?: number;
+  record_count?: number;
 }
 
 export interface User {

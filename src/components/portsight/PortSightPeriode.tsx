@@ -21,9 +21,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
 } from 'recharts';
 import { OFFICIAL_BRANCHES } from '@/lib/constants';
+import { CHART_METRIC_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from '@/lib/chartPalette';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
 import { formatRupiahFull } from '@/lib/formatters';
 import {
   aggregateFinansialByRekening,
@@ -803,22 +804,26 @@ export default function PortSightPeriode({
             </div>
           </div>
 
-          <div style={{ height: '260px' }}>
+          <div style={{ height: '250px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e3557" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="monthName" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                 <YAxis yAxisId="left" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--status-alert-text)', fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#14233c', border: '1px solid #1e3557', borderRadius: '8px', color: 'var(--text-title)' }}
-                />
-                <Legend />
-                <Bar yAxisId="left" dataKey="pendapatanJt" name="Pendapatan (Juta Rp)" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="volume" name="Volume Opkom" fill="var(--status-alert-text)" radius={[4, 4, 0, 0]} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--accent-orange-text)', fontSize: 11 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_CONTENT_STYLE} />
+                <Bar yAxisId="left" dataKey="pendapatanJt" name="Pendapatan (Juta Rp)" fill={CHART_METRIC_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="right" dataKey="volume" name="Volume Opkom" fill={CHART_METRIC_COLORS.accent} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <ChartInlineLegend
+            compact
+            items={[
+              { label: 'Pendapatan (Juta Rp)', color: CHART_METRIC_COLORS.primary },
+              { label: 'Volume Opkom', color: CHART_METRIC_COLORS.accent },
+            ]}
+          />
         </div>
       )}
 

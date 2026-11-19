@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckCircle2,
   UserPlus,
@@ -11,52 +11,92 @@ import {
   ArrowDownToLine,
   UploadCloud,
   X,
-  Save,
-  Lock,
-  Eye,
-  EyeOff,
   AlertCircle,
   Upload,
+  ShieldCheck,
 } from 'lucide-react';
-import { User, UserRole } from '@/lib/types';
-import { OFFICIAL_BRANCHES } from '@/lib/constants';
-import { checkPasswordStrength, PASSWORD_HINT } from '@/lib/passwordPolicy';
-import AuthModal from '@/components/auth/AuthModal';
+import { User, Department } from '@/lib/types';
+import { CANONICAL_ROLES_METADATA, RoleMetadata } from '@/lib/roleDefinitions';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import UserFormDrawer from './UserFormDrawer';
 
 interface UsersPicTabProps {
   users: User[];
+  departments?: Department[];
   onRefreshUsers?: () => void;
+  currentUser?: User | null;
+  onNavigateToRoles?: () => void;
 }
 
-export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps) {
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+export default function UsersPicTab({
+  users,
+  departments = [],
+  onRefreshUsers,
+  currentUser,
+  onNavigateToRoles,
+}: UsersPicTabProps) {
+  const canManageUsers =
+    !currentUser || currentUser.role === 'super_admin' || currentUser.role === 'admin_regional';
 
-  // Edit user modal state
-  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  // Full role metadata (initialized with canonical system roles, hydrated from /api/roles)
+  const [availableRoles, setAvailableRoles] = useState<RoleMetadata[]>(CANONICAL_ROLES_METADATA);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/roles', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.success && Array.isArray(data.roles) && data.roles.length > 0) {
+          setAvailableRoles(data.roles);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Unified Slide-Over Drawer state (Add / Edit)
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<'add' | 'edit'>('add');
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editNipp, setEditNipp] = useState('');
-  const [editDivisi, setEditDivisi] = useState('');
-  const [editDepartemen, setEditDepartemen] = useState('');
-  const [editRole, setEditRole] = useState<UserRole>('pic_cabang');
-  const [editBranch, setEditBranch] = useState('R99');
-  const [editActive, setEditActive] = useState(true);
-  const [editPassword, setEditPassword] = useState('');
-  const [editConfirmPassword, setEditConfirmPassword] = useState('');
-  const [editRequireChange, setEditRequireChange] = useState(true);
-  const [showEditPassword, setShowEditPassword] = useState(false);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
-  // In-app delete confirmation state (replacing native confirm/alert)
-  const [pendingDeleteUser, setPendingDeleteUser] = useState<{ id: string; name: string } | null>(null);
+  // In-app delete confirmation state
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<{ id: string; name: string } | null>(
+    null
+  );
   const [deleting, setDeleting] = useState(false);
+  const deleteDialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(deleteDialogRef, Boolean(pendingDeleteUser), () => {
+    if (!deleting) setPendingDeleteUser(null);
+  });
 
   // Dual sync state
   const [pullingDrive, setPullingDrive] = useState(false);
   const [pushingDrive, setPushingDrive] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<{
+    message: string;
+    type: 'success' | 'error';
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleOpenAdd = () => {
+    setEditingUser(null);
+    setDrawerMode('add');
+    setDrawerOpen(true);
+  };
+
+  const handleOpenEdit = (u: User) => {
+    setEditingUser(u);
+    setDrawerMode('edit');
+    setDrawerOpen(true);
+  };
+
+  const handleDrawerSuccess = (message: string) => {
+    setSyncStatus({ type: 'success', message });
+    if (onRefreshUsers) onRefreshUsers();
+    setTimeout(() => setSyncStatus(null), 5000);
+  };
 
   const handlePullFromDrive = async () => {
     setPullingDrive(true);
@@ -71,7 +111,9 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
       if (data.success) {
         setSyncStatus({
           type: 'success',
-          message: data.message || `Data berhasil dimuat dari berkas master_user_pic.xlsx (${data.totalUsers} PIC).`,
+          message:
+            data.message ||
+            `Data berhasil dimuat dari berkas master_user_pic.xlsx (${data.totalUsers} PIC).`,
         });
         if (onRefreshUsers) onRefreshUsers();
       } else {
@@ -164,114 +206,14 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
     }
   };
 
-  const handleOpenEdit = (u: User) => {
-    setEditingUser(u);
-    setEditName(u.name);
-    setEditNipp(u.nipp || u.username);
-    setEditDivisi(u.divisi || '');
-    setEditDepartemen(u.departemen || '');
-    setEditRole(u.role || 'pic_cabang');
-    setEditBranch(u.branch_id || 'R99');
-    setEditActive(u.active !== undefined ? Boolean(u.active) : true);
-    setEditPassword('');
-    setEditConfirmPassword('');
-    setEditRequireChange(true);
-    setShowEditPassword(false);
-    setEditError(null);
-    setIsEditUserOpen(true);
-  };
-
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    if (!editName.trim() || !editDivisi.trim() || !editDepartemen.trim()) {
-      setEditError('Kolom Nama, Divisi, dan Departemen wajib diisi.');
-      return;
-    }
-
-    const wantsPasswordReset = editPassword.trim().length > 0;
-    if (wantsPasswordReset) {
-      const strength = checkPasswordStrength(editPassword);
-      if (!strength.valid) {
-        setEditError(strength.error || 'Kata sandi baru belum memenuhi kebijakan keamanan.');
-        return;
-      }
-      if (editPassword !== editConfirmPassword) {
-        setEditError('Konfirmasi kata sandi tidak cocok.');
-        return;
-      }
-    }
-
-    setEditSaving(true);
-    setEditError(null);
-
-    try {
-      const res = await fetch('/api/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingUser.id,
-          name: editName.trim(),
-          nipp: editNipp.trim() || editingUser.nipp,
-          divisi: editDivisi.trim(),
-          departemen: editDepartemen.trim(),
-          role: editRole,
-          branch_id: editBranch,
-          active: editActive,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setEditError(data.error || 'Gagal menyimpan perubahan.');
-        return;
-      }
-
-      // Password reset uses the dedicated endpoint so token_version is bumped,
-      // every existing session is revoked, and the audit trail records it.
-      if (wantsPasswordReset) {
-        const resetRes = await fetch('/api/users/password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: editingUser.id,
-            newPassword: editPassword,
-            requireChangeOnNextLogin: editRequireChange,
-          }),
-        });
-        const resetData = await resetRes.json();
-        if (!resetRes.ok || !resetData.success) {
-          setEditError(
-            resetData.error ||
-              'Data PIC tersimpan, tetapi reset kata sandi gagal. Silakan ulangi reset kata sandi.'
-          );
-          if (onRefreshUsers) onRefreshUsers();
-          return;
-        }
-      }
-
-      setIsEditUserOpen(false);
-      setEditingUser(null);
-      setSyncStatus({
-        type: 'success',
-        message: wantsPasswordReset
-          ? `Data dan kata sandi PIC ${editName} (NIPP: ${editNipp}) telah diperbarui. Semua sesi akun tersebut diakhiri.`
-          : `Data PIC ${editName} (NIPP: ${editNipp}) telah diperbarui dan disinkronkan ke master_user_pic.xlsx.`,
-      });
-      if (onRefreshUsers) onRefreshUsers();
-      setTimeout(() => setSyncStatus(null), 4500);
-    } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : 'Terjadi kesalahan sistem.');
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
   const confirmDeleteUser = async () => {
     if (!pendingDeleteUser) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/users?id=${encodeURIComponent(pendingDeleteUser.id)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/users?id=${encodeURIComponent(pendingDeleteUser.id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
       const data = await res.json();
       if (data.success) {
         setSyncStatus({
@@ -329,24 +271,53 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
           </div>
           <div>
             <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
-              Berkas Master Pengguna & PIC (master_user_pic.xlsx)
+              Berkas Master Pengguna &amp; PIC (master_user_pic.xlsx)
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Tersimpan di direktori lokal <strong>data/master_user_pic.xlsx</strong> | Siap diekspor untuk cadangan eksternal
+              Tersimpan di direktori lokal <strong>data/master_user_pic.xlsx</strong> | Siap
+              diekspor untuk cadangan eksternal
             </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => setIsAddUserOpen(true)}
-            className="btn-primary"
-            style={{ padding: '6px 14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <UserPlus size={14} strokeWidth={1.75} />
-            <span>Tambah PIC Baru</span>
-          </button>
+          {canManageUsers && (
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              className="btn-primary"
+              style={{
+                padding: '6px 14px',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <UserPlus size={14} strokeWidth={1.75} />
+              <span>Tambah PIC Baru</span>
+            </button>
+          )}
+
+          {onNavigateToRoles && (
+            <button
+              type="button"
+              onClick={onNavigateToRoles}
+              className="btn-dark"
+              style={{
+                padding: '6px 12px',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderColor: 'var(--border-subtle)',
+              }}
+              title="Kelola Struktur Peran & Matriks Hak Akses (RBAC)"
+            >
+              <ShieldCheck size={14} style={{ color: 'var(--accent-blue-text)' }} />
+              <span>Kelola Peran &amp; Hak Akses</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -396,7 +367,14 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
             href="/api/users/export"
             download="master_user_pic.xlsx"
             className="btn-dark"
-            style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              textDecoration: 'none',
+            }}
             title="Unduh berkas spreadsheet Excel master PIC"
           >
             <Download size={13} />
@@ -415,7 +393,14 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
             onClick={() => fileInputRef.current?.click()}
             className="btn-dark"
             disabled={pullingDrive || pushingDrive}
-            style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', opacity: 0.85 }}
+            style={{
+              padding: '6px 10px',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              opacity: 0.85,
+            }}
             title="Unggah berkas .xlsx PIC dari komputer"
           >
             <Upload size={12} />
@@ -426,15 +411,26 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
 
       {syncStatus && (
         <div
+          role="status"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             padding: '9px 14px',
-            backgroundColor: syncStatus.type === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-            border: `1px solid ${syncStatus.type === 'success' ? '#10b981' : '#ef4444'}`,
+            backgroundColor:
+              syncStatus.type === 'success'
+                ? 'rgba(16, 185, 129, 0.12)'
+                : 'rgba(239, 68, 68, 0.12)',
+            border: `1px solid ${
+              syncStatus.type === 'success'
+                ? 'var(--status-good-border)'
+                : 'var(--status-danger-border)'
+            }`,
             borderRadius: '6px',
-            color: syncStatus.type === 'success' ? 'var(--status-good-text)' : 'var(--status-danger-text)',
+            color:
+              syncStatus.type === 'success'
+                ? 'var(--status-good-text)'
+                : 'var(--status-danger-text)',
             fontSize: '12px',
           }}
         >
@@ -447,14 +443,20 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
         <table className="card-table data-table">
           <thead>
             <tr>
-              <th scope="col" style={{ width: '120px' }}>NIPP</th>
+              <th scope="col" style={{ width: '120px' }}>
+                NIPP
+              </th>
               <th scope="col">Nama Pegawai</th>
               <th scope="col">Divisi</th>
               <th scope="col">Departemen</th>
               <th scope="col">Hak Akses / Peran</th>
               <th scope="col">Penugasan Cabang</th>
-              <th scope="col" style={{ textAlign: 'center' }}>Status</th>
-              <th scope="col" style={{ textAlign: 'center', width: '120px' }}>Aksi</th>
+              <th scope="col" style={{ textAlign: 'center' }}>
+                Status
+              </th>
+              <th scope="col" style={{ textAlign: 'center', width: '120px' }}>
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -466,28 +468,50 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                 pic_cabang: { label: 'PIC Cabang', badge: 'badge-neutral' },
                 viewer: { label: 'BOD (Viewer)', badge: 'badge-neutral' },
               };
-              const roleInfo = roleLabels[u.role] || { label: u.role, badge: 'badge-neutral' };
+              const customMatch = availableRoles.find((r) => r.id === u.role);
+              const roleInfo = roleLabels[u.role] || {
+                label: customMatch ? customMatch.name : u.role,
+                badge: 'badge-blue',
+              };
 
               return (
                 <tr key={u.id}>
-                  <td data-label="NIPP" className="tabular-nums" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-blue-text)' }}>
+                  <td
+                    data-label="NIPP"
+                    className="tabular-nums"
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      color: 'var(--accent-blue-text)',
+                    }}
+                  >
                     {u.nipp || u.username}
                   </td>
-                  <td data-label="Nama Pegawai" style={{ fontWeight: 600, color: 'var(--text-title)' }}>
+                  <td
+                    data-label="Nama Pegawai"
+                    style={{ fontWeight: 600, color: 'var(--text-title)' }}
+                  >
                     {u.name}
                   </td>
-                  <td data-label="Divisi" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                  <td
+                    data-label="Divisi"
+                    style={{ color: 'var(--text-secondary)', fontSize: '12px' }}
+                  >
                     {u.divisi || '-'}
                   </td>
-                  <td data-label="Departemen" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                  <td
+                    data-label="Departemen"
+                    style={{ color: 'var(--text-secondary)', fontSize: '12px' }}
+                  >
                     {u.departemen || '-'}
                   </td>
                   <td data-label="Hak Akses / Peran">
-                    <span className={`badge ${roleInfo.badge}`}>
-                      {roleInfo.label}
-                    </span>
+                    <span className={`badge ${roleInfo.badge}`}>{roleInfo.label}</span>
                   </td>
-                  <td data-label="Penugasan Cabang" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  <td
+                    data-label="Penugasan Cabang"
+                    style={{ fontSize: '12px', color: 'var(--text-muted)' }}
+                  >
                     {u.branch_id ? u.branch_id : 'Regional 4 (Pusat)'}
                   </td>
                   <td data-label="Status" style={{ textAlign: 'center' }}>
@@ -505,7 +529,14 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                     )}
                   </td>
                   <td data-label="Aksi" style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(u)}
@@ -544,6 +575,7 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                             cursor: 'pointer',
                           }}
                           title={`Hapus pengguna ${u.name}`}
+                          aria-label={`Hapus pengguna ${u.name}`}
                         >
                           <Trash2 size={13} />
                         </button>
@@ -557,8 +589,13 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
             })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                  Belum ada data PIC yang terdaftar. Pilih tombol &ldquo;Tambah PIC Baru&rdquo; untuk mendaftarkan akun.
+                <td
+                  colSpan={8}
+                  data-label="Informasi"
+                  style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}
+                >
+                  Belum ada data PIC yang terdaftar. Pilih tombol &ldquo;Tambah PIC Baru&rdquo;
+                  untuk mendaftarkan akun.
                 </td>
               </tr>
             )}
@@ -570,28 +607,50 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
       {pendingDeleteUser && (
         <div className="modal-overlay" onClick={() => !deleting && setPendingDeleteUser(null)}>
           <div
+            ref={deleteDialogRef}
             className="modal-content"
             role="dialog"
             aria-modal="true"
             aria-label="Konfirmasi Penghapusan Akun PIC"
-            style={{ maxWidth: '420px', width: '100%', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}
+            tabIndex={-1}
+            style={{
+              maxWidth: '420px',
+              width: '100%',
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-subtle)',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', padding: '14px 18px' }}>
-              <h3 className="modal-title" style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>
+            <div
+              className="modal-header"
+              style={{ borderBottom: '1px solid var(--border-subtle)', padding: '14px 18px' }}
+            >
+              <h3
+                className="modal-title"
+                style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}
+              >
                 Konfirmasi Penghapusan Akun PIC
               </h3>
               <button
                 type="button"
                 aria-label="Tutup konfirmasi penghapusan"
                 onClick={() => setPendingDeleteUser(null)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                className="admin-close-btn"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
-            <div className="modal-body" style={{ padding: '18px', fontSize: '12px', color: 'var(--text-main)', lineHeight: 1.5 }}>
-              Apakah Anda yakin ingin menghapus akun PIC <strong>{pendingDeleteUser.name}</strong> dari sistem dan berkas master?
+            <div
+              className="modal-body"
+              style={{
+                padding: '18px',
+                fontSize: '12px',
+                color: 'var(--text-main)',
+                lineHeight: 1.5,
+              }}
+            >
+              Apakah Anda yakin ingin menghapus akun PIC <strong>{pendingDeleteUser.name}</strong>{' '}
+              dari sistem dan berkas master?
             </div>
             <div
               className="modal-footer"
@@ -623,8 +682,8 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
                   fontWeight: 700,
                   borderRadius: '6px',
                   border: 'none',
-                  backgroundColor: '#dc2626',
-                  color: 'var(--text-title)',
+                  backgroundColor: 'var(--status-danger-border)',
+                  color: 'var(--text-on-accent)',
                   cursor: 'pointer',
                 }}
               >
@@ -635,322 +694,20 @@ export default function UsersPicTab({ users, onRefreshUsers }: UsersPicTabProps)
         </div>
       )}
 
-      <AuthModal
-        isOpen={isAddUserOpen}
-        onClose={() => setIsAddUserOpen(false)}
-        currentUser={null}
-        initialMode="register"
-        onLoginSuccess={() => {
-          if (onRefreshUsers) onRefreshUsers();
+      {/* Unified Right Slide-Over Drawer for Add / Edit User */}
+      <UserFormDrawer
+        isOpen={drawerOpen}
+        mode={drawerMode}
+        editingUser={editingUser}
+        existingUsers={users}
+        availableRoles={availableRoles}
+        departments={departments}
+        onClose={() => {
+          setDrawerOpen(false);
+          setEditingUser(null);
         }}
+        onSuccess={handleDrawerSuccess}
       />
-
-      {isEditUserOpen && editingUser && (
-        <div className="modal-overlay" onClick={() => setIsEditUserOpen(false)}>
-          <div
-            className="modal-content"
-            style={{ maxWidth: '580px', width: '100%', overflow: 'hidden', backgroundColor: 'var(--bg-card)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', padding: '16px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(2, 132, 199, 0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--accent-blue-text)',
-                  }}
-                >
-                  <Edit2 size={18} />
-                </div>
-                <div>
-                  <h3 className="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-title)' }}>
-                    Ubah Data Pegawai / PIC
-                  </h3>
-                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-                    NIPP: <strong style={{ color: 'var(--accent-blue-text)' }}>{editingUser.nipp || editingUser.username}</strong> | ID Akun: {editingUser.id}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsEditUserOpen(false)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: '4px',
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form method="post" onSubmit={handleSaveEdit}>
-              <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {editError && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '8px',
-                      padding: '10px 14px',
-                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                      border: '1px solid #ef4444',
-                      borderRadius: '8px',
-                      color: 'var(--status-danger-text)',
-                      fontSize: '12px',
-                    }}
-                  >
-                    <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
-                    <span>{editError}</span>
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
-                      NIPP (Username)
-                    </label>
-                    <input
-                      type="text"
-                      value={editNipp}
-                      onChange={(e) => setEditNipp(e.target.value)}
-                      className="form-control"
-                      style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
-                      Status Akun
-                    </label>
-                    <select
-                      value={editActive ? 'active' : 'inactive'}
-                      onChange={(e) => setEditActive(e.target.value === 'active')}
-                      className="form-control"
-                    >
-                      <option value="active">Aktif (Dapat Masuk & Akses)</option>
-                      <option value="inactive">Nonaktif (Akses Dinonaktifkan)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
-                    Nama Pegawai & Gelar
-                  </label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="form-control"
-                    placeholder="Contoh: Capt. Rudi Hartono, M.Mar."
-                    required
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
-                      Divisi
-                    </label>
-                    <input
-                      type="text"
-                      value={editDivisi}
-                      onChange={(e) => setEditDivisi(e.target.value)}
-                      className="form-control"
-                      placeholder="Contoh: Divisi Operasi & Pelayanan Kapal"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
-                      Departemen
-                    </label>
-                    <input
-                      type="text"
-                      value={editDepartemen}
-                      onChange={(e) => setEditDepartemen(e.target.value)}
-                      className="form-control"
-                      placeholder="Contoh: Departemen Pelayanan Kapal"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
-                      Hak Akses / Peran
-                    </label>
-                    <select
-                      value={editRole}
-                      onChange={(e) => setEditRole(e.target.value as UserRole)}
-                      className="form-control"
-                    >
-                      <option value="super_admin">Super Admin (Akses Penuh)</option>
-                      <option value="admin_regional">Admin Regional 4 (Verifikator Regional)</option>
-                      <option value="pic_dept_regional">PIC Dept Regional (PIC Departemen Pusat)</option>
-                      <option value="pic_cabang">PIC Cabang (PIC Operasional Cabang)</option>
-                      <option value="viewer">BOD / Viewer (Eksekutif Read-Only)</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'block', marginBottom: '6px' }}>
-                      Penugasan Cabang
-                    </label>
-                    <select
-                      value={editBranch}
-                      onChange={(e) => setEditBranch(e.target.value)}
-                      className="form-control"
-                    >
-                      {OFFICIAL_BRANCHES.map((b) => (
-                        <option key={b.code} value={b.code}>
-                          {b.code} - {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ backgroundColor: 'var(--bg-inner)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '10px' }}>
-                    <label
-                      htmlFor="admin-reset-password"
-                      style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <Lock size={13} color="var(--accent-blue)" />
-                      <span>Reset Kata Sandi (Opsional)</span>
-                    </label>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>
-                      Kosongkan bila kata sandi tidak diubah
-                    </span>
-                  </div>
-
-                  {editingUser?.must_change_password && (
-                    <p style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--status-alert-text)' }}>
-                      Akun ini masih wajib mengganti kata sandi pada login berikutnya.
-                    </p>
-                  )}
-
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      id="admin-reset-password"
-                      type={showEditPassword ? 'text' : 'password'}
-                      value={editPassword}
-                      onChange={(e) => setEditPassword(e.target.value)}
-                      className="form-control"
-                      placeholder="Kata sandi baru untuk pengguna ini"
-                      autoComplete="new-password"
-                      aria-describedby="admin-reset-password-hint"
-                      style={{ paddingRight: '36px' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowEditPassword(!showEditPassword)}
-                      aria-label={showEditPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
-                      style={{
-                        position: 'absolute',
-                        right: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                    >
-                      {showEditPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-
-                  {editPassword.trim().length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                      <div>
-                        <label
-                          htmlFor="admin-reset-password-confirm"
-                          style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}
-                        >
-                          Ulangi kata sandi baru
-                        </label>
-                        <input
-                          id="admin-reset-password-confirm"
-                          type={showEditPassword ? 'text' : 'password'}
-                          value={editConfirmPassword}
-                          onChange={(e) => setEditConfirmPassword(e.target.value)}
-                          className="form-control"
-                          autoComplete="new-password"
-                        />
-                      </div>
-                      <label
-                        htmlFor="admin-reset-require-change"
-                        style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}
-                      >
-                        <input
-                          id="admin-reset-require-change"
-                          type="checkbox"
-                          checked={editRequireChange}
-                          onChange={(e) => setEditRequireChange(e.target.checked)}
-                          style={{ marginTop: '2px' }}
-                        />
-                        <span>Minta pengguna mengganti kata sandi ini saat login berikutnya</span>
-                      </label>
-                      <p id="admin-reset-password-hint" style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {PASSWORD_HINT}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div
-                className="modal-footer"
-                style={{
-                  borderTop: '1px solid var(--border-subtle)',
-                  padding: '14px 20px',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: '10px',
-                  backgroundColor: 'var(--bg-inner)',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setIsEditUserOpen(false)}
-                  className="btn-dark"
-                  disabled={editSaving}
-                  style={{ padding: '8px 16px', fontSize: '12px' }}
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={editSaving}
-                  style={{
-                    padding: '8px 18px',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <Save size={14} />
-                  <span>{editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-

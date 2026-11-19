@@ -8,7 +8,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid,
 } from 'recharts';
 import {
@@ -31,6 +30,8 @@ import {
   getSelectedBranchLabel,
   parseSelectedBranches,
 } from '@/lib/constants';
+import { CHART_METRIC_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from '@/lib/chartPalette';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
 import LoadingState from '@/components/ui/LoadingState';
 
 interface KinerjaItem {
@@ -648,63 +649,6 @@ export default function PortSightKinerja({
           </div>
         </div>
 
-        {/* Legend Penjelasan Parameter & Satuan */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap',
-            padding: '8px 12px',
-            backgroundColor: 'var(--bg-inner)',
-            borderRadius: '6px',
-            marginBottom: '14px',
-            fontSize: '12px',
-          }}
-        >
-          <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>Keterangan Satuan:</span>
-          {(chartMetricView === 'ALL' || chartMetricView === 'TSD') && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: '#38bdf8' }} />
-              <span style={{ color: 'var(--text-main)' }}>
-                <strong>TSD</strong>: Ton / Kapal / Hari (Ton/Ship/Day)
-              </span>
-            </div>
-          )}
-          {(chartMetricView === 'ALL' || chartMetricView === 'TGH') && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: '#10b981' }} />
-              <span style={{ color: 'var(--text-main)' }}>
-                <strong>TGH</strong>: Ton / Gang / Jam (Ton/Gang/Hour)
-              </span>
-            </div>
-          )}
-          {chartMetricView === 'WTP' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: '#f59e0b' }} />
-              <span style={{ color: 'var(--text-main)' }}>
-                <strong>WTP</strong>: Waktu Tunggu Pelayanan Pandu (Jam)
-              </span>
-            </div>
-          )}
-          {chartMetricView === 'PETIKEMAS' && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: '#38bdf8' }} />
-                <span style={{ color: 'var(--text-main)' }}>
-                  <strong>BSH</strong>: Box / Ship / Hour
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: '#a855f7' }} />
-                <span style={{ color: 'var(--text-main)' }}>
-                  <strong>BCH</strong>: Box / Crane / Hour
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-
         {/* Tampilan Recharts BarChart */}
         <div style={{ height: '280px', width: '100%' }}>
           {chartGroupedData.length > 0 ? (
@@ -721,20 +665,12 @@ export default function PortSightKinerja({
                   tickFormatter={val => val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--bg-card)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '8px',
-                    color: 'var(--text-main)',
-                  }}
+                  contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
                   formatter={(val: unknown, name: unknown) => {
                     const unit = name === 'TSD' ? 'Ton/Ship/Day' : name === 'TGH' ? 'Ton/Gang/Jam' : name === 'WTP' ? 'Jam' : 'Box/Jam';
                     return [`${Number(val || 0).toLocaleString('id-ID')} ${unit}`, `Parameter ${String(name ?? '')}`];
                   }}
                   labelFormatter={(label) => `Jenis Operasi: ${label}`}
-                />
-                <Legend
-                  wrapperStyle={{ paddingTop: '8px', fontSize: '12px' }}
                 />
 
                 {/* Bar TSD */}
@@ -742,7 +678,7 @@ export default function PortSightKinerja({
                   <Bar
                     dataKey="TSD"
                     name="TSD (Ton/Ship/Day)"
-                    fill="var(--accent-cyan)"
+                    fill={CHART_METRIC_COLORS.primary}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={45}
                   />
@@ -753,7 +689,7 @@ export default function PortSightKinerja({
                   <Bar
                     dataKey="TGH"
                     name="TGH (Ton/Gang/Jam)"
-                    fill="var(--status-good-text)"
+                    fill={CHART_METRIC_COLORS.positive}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={45}
                   />
@@ -764,7 +700,7 @@ export default function PortSightKinerja({
                   <Bar
                     dataKey="WTP"
                     name="WTP (Jam)"
-                    fill="var(--status-alert-text)"
+                    fill={CHART_METRIC_COLORS.warning}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={45}
                   />
@@ -776,14 +712,14 @@ export default function PortSightKinerja({
                     <Bar
                       dataKey="BSH"
                       name="BSH (Box/Ship/Hour)"
-                      fill="var(--accent-cyan)"
+                      fill={CHART_METRIC_COLORS.primary}
                       radius={[4, 4, 0, 0]}
                       maxBarSize={45}
                     />
                     <Bar
                       dataKey="BCH"
                       name="BCH (Box/Crane/Hour)"
-                      fill="#a855f7"
+                      fill={CHART_METRIC_COLORS.accent}
                       radius={[4, 4, 0, 0]}
                       maxBarSize={45}
                     />
@@ -797,6 +733,28 @@ export default function PortSightKinerja({
             </div>
           )}
         </div>
+        {chartGroupedData.length > 0 && (
+          <ChartInlineLegend
+            compact
+            items={
+              chartMetricView === 'WTP'
+                ? [{ label: 'WTP (Jam)', color: CHART_METRIC_COLORS.warning }]
+                : chartMetricView === 'PETIKEMAS'
+                  ? [
+                      { label: 'BSH (Box/Ship/Hour)', color: CHART_METRIC_COLORS.primary },
+                      { label: 'BCH (Box/Crane/Hour)', color: CHART_METRIC_COLORS.accent },
+                    ]
+                  : chartMetricView === 'TSD'
+                    ? [{ label: 'TSD (Ton/Ship/Day)', color: CHART_METRIC_COLORS.primary }]
+                    : chartMetricView === 'TGH'
+                      ? [{ label: 'TGH (Ton/Gang/Jam)', color: CHART_METRIC_COLORS.positive }]
+                      : [
+                          { label: 'TSD (Ton/Ship/Day)', color: CHART_METRIC_COLORS.primary },
+                          { label: 'TGH (Ton/Gang/Jam)', color: CHART_METRIC_COLORS.positive },
+                        ]
+            }
+          />
+        )}
       </div>
 
       {/* 4. BAGIAN TABEL DATA PARAMETER KINERJA OPERASIONAL */}

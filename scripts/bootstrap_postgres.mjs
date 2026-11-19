@@ -64,12 +64,32 @@ const DEPARTMENTS = [
 ];
 
 const EQUIPMENT = [
-  ['eq_qcc', 'QCC', 'Quay Container Crane', 'QCC', 'Alat Dermaga'],
-  ['eq_rtg', 'RTG', 'Rubber Tyred Gantry', 'RTG', 'Alat CY'],
-  ['eq_rs', 'RS', 'Reach Stacker', 'RS', 'Alat CY'],
-  ['eq_tt', 'TT', 'Terminal Tractor', 'TT', 'Alat Angkut'],
-  ['eq_fl', 'FL', 'Forklift', 'FL', 'Alat Bantu'],
-  ['eq_mc', 'MC', 'Mobile Crane', 'MC', 'Alat Dermaga'],
+  ['eq_al01', 'AL01', 'Quay Container Crane', 'QCC', 'OPERASI KAPAL'],
+  ['eq_al02', 'AL02', 'Harbour Mobile Crane', 'HMC', 'OPERASI KAPAL'],
+  ['eq_al03', 'AL03', 'Fixed Crane', 'FC', 'OPERASI KAPAL'],
+  ['eq_al04', 'AL04', 'Rubber Tyred Gantry Crane', 'RTG', 'OPERASI LAPANGAN'],
+  ['eq_al05', 'AL05', 'Reach Stacker', 'RS', 'OPERASI LAPANGAN'],
+  ['eq_al06', 'AL06', 'Side Loader', 'SL', 'OPERASI LAPANGAN'],
+  ['eq_al07', 'AL07', 'Top Loader', 'TL', 'OPERASI LAPANGAN'],
+  ['eq_al08', 'AL08', 'Head Truck', 'HT', 'OPERASI LAPANGAN'],
+  ['eq_al09', 'AL09', 'Terminal Tractor', 'TT', 'OPERASI LAPANGAN'],
+  ['eq_al10', 'AL10', 'Chassis', 'CH', 'OPERASI LAPANGAN'],
+  ['eq_al11', 'AL11', 'Mobile Crane', 'MC', 'OPERASI LAPANGAN'],
+  ['eq_al12', 'AL12', 'Hopper', 'HO', 'OPERASI LAPANGAN'],
+  ['eq_al13', 'AL13', 'Excavator', 'EXC', 'OPERASI LAPANGAN'],
+  ['eq_al14', 'AL14', 'Dump Truck', 'DT', 'OPERASI LAPANGAN'],
+  ['eq_al15', 'AL15', 'Tronton', 'TR', 'OPERASI LAPANGAN'],
+  ['eq_al16', 'AL16', 'Forklift', 'FL', 'OPERASI LAPANGAN'],
+  ['eq_al17', 'AL17', 'Wheel Loader', 'WL', 'OPERASI LAPANGAN'],
+  ['eq_al18', 'AL18', 'Kapal Tunda', 'KT', 'ALAT APUNG'],
+  ['eq_al19', 'AL19', 'Kapal Pandu', 'MP', 'ALAT APUNG'],
+  ['eq_al20', 'AL20', 'Grab', 'GRAB', 'OPERASI KAPAL'],
+  ['eq_al21', 'AL21', 'Timbangan', 'TIMB', 'OPERASI LAPANGAN'],
+  ['eq_al22', 'AL22', 'Trailer', 'TRL', 'OPERASI LAPANGAN'],
+  ['eq_al23', 'AL23', 'Truk', 'TRK', 'OPERASI LAPANGAN'],
+  ['eq_al24', 'AL24', 'Crawler Crane', 'CC', 'OPERASI LAPANGAN'],
+  ['eq_al25', 'AL25', 'Lowbed', 'LB', 'OPERASI LAPANGAN'],
+  ['eq_al26', 'AL26', 'Ramp Door', 'RD', 'OPERASI KAPAL'],
 ];
 
 const KPI_INDICATORS = [
@@ -144,7 +164,12 @@ async function main() {
       await client.query(
         `INSERT INTO equipment_catalog (id, code, name, acronym, category, active)
          VALUES ($1, $2, $3, $4, $5, true)
-         ON CONFLICT (id) DO NOTHING`,
+         ON CONFLICT (id) DO UPDATE SET
+           code = EXCLUDED.code,
+           name = EXCLUDED.name,
+           acronym = EXCLUDED.acronym,
+           category = EXCLUDED.category,
+           active = EXCLUDED.active`,
         [id, code, name, acronym, category]
       );
     }

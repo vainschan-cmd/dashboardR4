@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { User, UserRole } from './types';
+import type { User, UserRole, Permission } from './types';
 import { getSessionFromRequest, type JwtSessionPayload } from './auth';
 import {
   getCanonicalBranchCode,
@@ -7,23 +7,7 @@ import {
   getBranchById,
 } from './constants';
 
-export type Permission =
-  | 'dashboard:read'
-  | 'records:read'
-  | 'reports:export'
-  | 'manual_input:write'
-  | 'import:write'
-  | 'verification:read'
-  | 'verification:approve'
-  | 'templates:read'
-  | 'templates:manage'
-  | 'users:read'
-  | 'users:manage'
-  | 'master_data:read'
-  | 'master_data:manage'
-  | 'system_params:read'
-  | 'system_params:manage'
-  | 'audit_logs:read';
+export type { Permission };
 
 export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
   super_admin: [

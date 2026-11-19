@@ -12,6 +12,8 @@ import {
 } from 'recharts';
 import { Building2, Layers, Warehouse, Search, Waves, PlusCircle } from 'lucide-react';
 import { isBranchMatch } from '@/lib/constants';
+import { CHART_METRIC_COLORS, CHART_TOOLTIP_CONTENT_STYLE } from '@/lib/chartPalette';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
 import LoadingState from '@/components/ui/LoadingState';
 
 interface FasilitasItem {
@@ -201,18 +203,22 @@ export default function PortSightFasilitas({ selectedTerminal = 'ALL', onOpenMan
 
         <div style={{ height: '240px', width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e3557" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+            <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 16 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+              <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+              <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ backgroundColor: 'var(--navy-800)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-on-dark)' }}
+                contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
                 formatter={(val: unknown) => [`${String(val ?? '')} Meter`, 'Panjang Dermaga']}
               />
-              <Bar dataKey="panjang" fill="#0284c7" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="panjang" name="Panjang Dermaga" fill={CHART_METRIC_COLORS.primary} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
+        <ChartInlineLegend
+          compact
+          items={[{ label: 'Panjang Dermaga (Meter)', color: CHART_METRIC_COLORS.primary }]}
+        />
       </div>
 
       {/* Table Section */}

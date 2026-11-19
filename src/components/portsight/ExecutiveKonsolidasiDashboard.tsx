@@ -8,7 +8,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   PieChart,
   Pie,
   Cell,
@@ -25,6 +24,8 @@ import {
   Check,
 } from 'lucide-react';
 import Term from '@/components/ui/Term';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
+import { BERANDA_ENTITAS_COLORS, BERANDA_ENTITAS_ORDER } from '@/lib/berandaSummary';
 import { formatPercent } from '@/lib/formatters';
 
 interface KonsolidasiData {
@@ -88,13 +89,7 @@ interface ExecutiveKonsolidasiDashboardProps {
   onOpenManualInput?: () => void;
 }
 
-const ENTITAS_COLORS: Record<string, string> = {
-  CABANG: '#2563eb', // Blue
-  PJM: '#f97316',    // Orange
-  PMT: '#94a3b8',    // Slate / Silver-Grey
-  PSL: '#facc15',    // Gold / Yellow
-  PTP: '#22c55e',    // Green
-};
+const ENTITAS_COLORS: Record<string, string> = BERANDA_ENTITAS_COLORS;
 
 export default function ExecutiveKonsolidasiDashboard({
   selectedTerminal = 'ALL',
@@ -765,10 +760,6 @@ export default function ExecutiveKonsolidasiDashboard({
                           '',
                         ]}
                       />
-                      <Legend
-                        wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }}
-                        iconSize={8}
-                      />
                       <Bar dataKey="CABANG" stackId="a" fill={ENTITAS_COLORS.CABANG} name="CABANG" />
                       <Bar dataKey="PJM" stackId="a" fill={ENTITAS_COLORS.PJM} name="PJM" />
                       <Bar dataKey="PMT" stackId="a" fill={ENTITAS_COLORS.PMT} name="PMT" />
@@ -777,6 +768,13 @@ export default function ExecutiveKonsolidasiDashboard({
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+                <ChartInlineLegend
+                  compact
+                  items={BERANDA_ENTITAS_ORDER.map((ent) => ({
+                    label: ent,
+                    color: ENTITAS_COLORS[ent],
+                  }))}
+                />
               </div>
 
               {/* Card 2: 10 Cabang Terbesar Pendapatan Area */}
@@ -828,10 +826,6 @@ export default function ExecutiveKonsolidasiDashboard({
                           '',
                         ]}
                       />
-                      <Legend
-                        wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }}
-                        iconSize={8}
-                      />
                       <Bar dataKey="CABANG" stackId="a" fill={ENTITAS_COLORS.CABANG} name="CABANG" />
                       <Bar dataKey="PJM" stackId="a" fill={ENTITAS_COLORS.PJM} name="PJM" />
                       <Bar dataKey="PMT" stackId="a" fill={ENTITAS_COLORS.PMT} name="PMT" />
@@ -840,6 +834,13 @@ export default function ExecutiveKonsolidasiDashboard({
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+                <ChartInlineLegend
+                  compact
+                  items={BERANDA_ENTITAS_ORDER.map((ent) => ({
+                    label: ent,
+                    color: ENTITAS_COLORS[ent],
+                  }))}
+                />
               </div>
             </div>
 
@@ -997,13 +998,17 @@ export default function ExecutiveKonsolidasiDashboard({
                           'Laba Bersih',
                         ]}
                       />
-                      <Legend
-                        wrapperStyle={{ fontSize: '12px', paddingTop: '2px' }}
-                        iconSize={8}
-                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+                <ChartInlineLegend
+                  compact
+                  items={(charts?.kontribusiEntitas || []).map((entry) => ({
+                    label: entry.entitas,
+                    color: ENTITAS_COLORS[entry.entitas] || 'var(--text-muted)',
+                    meta: `(${formatPercent(Number(entry.percentage), 1)})`,
+                  }))}
+                />
               </div>
 
               {/* Card 2: 10 Cabang Terendah Laba Area PJM (Red Ranked Horizontal Bars) */}

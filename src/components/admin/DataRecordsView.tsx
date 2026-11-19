@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Database,
   Search,
@@ -8,8 +8,19 @@ import {
   Clock,
   AlertTriangle,
   RefreshCw,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Eye,
+  Calendar,
+  Building2,
+  UserCheck,
+  FileText,
 } from 'lucide-react';
 import { MonthlyRecord, Branch, Department, User, UserRole } from '@/lib/types';
+import { downloadCsvFile } from '@/lib/governanceNav';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import StatusBadge from '../ui/StatusBadge';
 
 interface DataRecordsViewProps {
@@ -20,6 +31,21 @@ interface DataRecordsViewProps {
   onRefreshNeeded?: () => void;
 }
 
+const MONTH_NAMES = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+];
+
 export default function DataRecordsView({
   branches,
   departments,
@@ -29,8 +55,14 @@ export default function DataRecordsView({
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const isPicCabang = userRole === 'pic_cabang' || (currentUser?.role === 'pic_cabang' && !!currentUser?.branch_id && currentUser.branch_id !== 'R99');
-  const userBranchObj = currentUser?.branch_id ? branches.find(b => b.code === currentUser.branch_id || b.id === currentUser.branch_id) : undefined;
+  const isPicCabang =
+    userRole === 'pic_cabang' ||
+    (currentUser?.role === 'pic_cabang' &&
+      !!currentUser?.branch_id &&
+      currentUser.branch_id !== 'R99');
+  const userBranchObj = currentUser?.branch_id
+    ? branches.find((b) => b.code === currentUser.branch_id || b.id === currentUser.branch_id)
+    : undefined;
 
   // Filters
   const [selectedBranch, setSelectedBranch] = useState<string>(() => {
@@ -43,6 +75,15 @@ export default function DataRecordsView({
   const [selectedMonth, setSelectedMonth] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Slide-Over Detail Drawer
+  const [detailRecord, setDetailRecord] = useState<MonthlyRecord | null>(null);
+  const detailDrawerRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(detailDrawerRef, Boolean(detailRecord), () => setDetailRecord(null));
 
   const fetchRecords = useCallback(async () => {
     setIsLoading(true);
@@ -67,28 +108,86 @@ export default function DataRecordsView({
   }, [fetchRecords]);
 
   // Filtered records
-  const filteredRecords = records.filter((r) => {
-    if (selectedBranch !== 'ALL' && r.branch_id !== selectedBranch) return false;
-    if (selectedDept !== 'ALL' && r.department_id !== selectedDept) return false;
-    if (selectedMonth !== 'ALL' && r.month !== parseInt(selectedMonth, 10)) return false;
-    if (selectedStatus !== 'ALL' && r.verification_status !== selectedStatus) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const match =
-        (r.indicator_name || '').toLowerCase().includes(q) ||
-        (r.indicator_code || '').toLowerCase().includes(q) ||
-        (r.branch_name || '').toLowerCase().includes(q) ||
-        (r.notes || '').toLowerCase().includes(q);
-      if (!match) return false;
-    }
-    return true;
-  });
+  const filteredRecords = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return records.filter((r) => {
+      if (selectedBranch !== 'ALL' && r.branch_id !== selectedBranch) return false;
+      if (selectedDept !== 'ALL' && r.department_id !== selectedDept) return false;
+      if (selectedMonth !== 'ALL' && r.month !== parseInt(selectedMonth, 10)) return false;
+      if (selectedStatus !== 'ALL' && r.verification_status !== selectedStatus) return false;
+      if (q) {
+        const match =
+          (r.indicator_name || '').toLowerCase().includes(q) ||
+          (r.indicator_code || '').toLowerCase().includes(q) ||
+          (r.branch_name || '').toLowerCase().includes(q) ||
+          (r.notes || '').toLowerCase().includes(q) ||
+          (r.uploaded_by || '').toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [records, selectedBranch, selectedDept, selectedMonth, selectedStatus, searchQuery]);
+
+  // Pagination slice
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const paginatedRecords = useMemo(
+    () => filteredRecords.slice(startIdx, startIdx + pageSize),
+    [filteredRecords, startIdx, pageSize]
+  );
 
   // Summary counts
   const totalCount = records.length;
-  const verifiedCount = records.filter(r => r.verification_status === 'verified').length;
-  const pendingCount = records.filter(r => r.verification_status === 'pending_verification').length;
-  const revisionCount = records.filter(r => r.verification_status === 'revision_needed').length;
+  const verifiedCount = records.filter((r) => r.verification_status === 'verified').length;
+  const pendingCount = records.filter((r) => r.verification_status === 'pending_verification').length;
+  const revisionCount = records.filter((r) => r.verification_status === 'revision_needed').length;
+
+  const hasFilters =
+    (!isPicCabang && selectedBranch !== 'ALL') ||
+    selectedDept !== 'ALL' ||
+    selectedMonth !== 'ALL' ||
+    selectedStatus !== 'ALL' ||
+    searchQuery.trim().length > 0;
+
+  const handleExportCsv = () => {
+    const headers = [
+      'Cabang',
+      'Departemen',
+      'Periode',
+      'Kode KPI',
+      'Indikator KPI',
+      'Target RKAP',
+      'Realisasi',
+      'Satuan',
+      'Capaian (%)',
+      'Status Verifikasi',
+      'Pengunggah',
+      'Verifikator',
+      'Catatan',
+    ];
+    const rows = filteredRecords.map((r) => {
+      const branchObj = branches.find((b) => b.id === r.branch_id);
+      const deptObj = departments.find((d) => d.id === r.department_id);
+      return [
+        r.branch_name || branchObj?.name || r.branch_id,
+        deptObj?.name || r.department_name || r.department_id,
+        `${MONTH_NAMES[(r.month || 1) - 1] || r.month} ${r.year}`,
+        r.indicator_code || r.indicator_id,
+        r.indicator_name || r.indicator_id,
+        r.target,
+        r.realization,
+        r.unit || '',
+        r.achievement_pct,
+        r.verification_status,
+        r.uploaded_by || '',
+        r.verified_by || '',
+        r.revision_notes || r.notes || '',
+      ];
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsvFile(`rekaman_data_kinerja_${stamp}.csv`, headers, rows);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -97,9 +196,9 @@ export default function DataRecordsView({
         <div className="card" style={{ padding: '14px 18px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Database size={15} color="var(--accent-blue-text)" />
-            <span>Total Record Tersimpan</span>
+            <span>Total Rekaman Tersimpan</span>
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', marginTop: '6px', fontFamily: 'var(--font-mono)' }}>
             {totalCount.toLocaleString('id-ID')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -112,7 +211,7 @@ export default function DataRecordsView({
             <CheckCircle2 size={15} color="var(--status-good-text)" />
             <span>Terverifikasi Resmi</span>
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-good-text)', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-good-text)', marginTop: '6px', fontFamily: 'var(--font-mono)' }}>
             {verifiedCount.toLocaleString('id-ID')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -125,7 +224,7 @@ export default function DataRecordsView({
             <Clock size={15} color="var(--status-alert-text)" />
             <span>Menunggu Verifikasi</span>
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-alert-text)', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-alert-text)', marginTop: '6px', fontFamily: 'var(--font-mono)' }}>
             {pendingCount.toLocaleString('id-ID')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -138,7 +237,7 @@ export default function DataRecordsView({
             <AlertTriangle size={15} color="var(--status-danger-text)" />
             <span>Perlu Revisi</span>
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-danger-text)', marginTop: '6px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--status-danger-text)', marginTop: '6px', fontFamily: 'var(--font-mono)' }}>
             {revisionCount.toLocaleString('id-ID')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -149,19 +248,30 @@ export default function DataRecordsView({
 
       {/* Main Records Table Card */}
       <div className="card">
-        <div className="card-header">
+        <div className="card-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h2 className="card-title" style={{ fontSize: '16px' }}>
               <Database size={20} color="var(--accent-blue-text)" />
-              <span>Daftar Data Record Kinerja Pelabuhan (Raw Data)</span>
+              <span>Rekaman Data Kinerja Pelabuhan</span>
             </h2>
             <p className="card-subtitle">
-              Eksplorasi data berkala bulanan realisasi vs target RKAP per terminal, departemen, dan indikator KPI resmi.
+              Eksplorasi arsip data realisasi vs target RKAP per cabang &amp; departemen. Klik baris untuk meninjau riwayat verifikasi.
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={filteredRecords.length === 0}
+              className="btn btn-dark btn-sm"
+              title="Ekspor seluruh hasil filter ke berkas CSV"
+            >
+              <Download size={14} />
+              <span>Ekspor CSV ({filteredRecords.length})</span>
+            </button>
+            <button
+              type="button"
               onClick={fetchRecords}
               className="btn btn-secondary btn-sm"
               title="Perbarui data dari database"
@@ -173,39 +283,55 @@ export default function DataRecordsView({
         </div>
 
         {/* Filter Controls Row */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
-          {/* Search Bar */}
+        <div className="gov-filter-bar" style={{ marginBottom: '14px' }}>
           <div style={{ position: 'relative', flex: '1 1 240px', minWidth: '200px' }}>
-            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '11px' }} />
+            <Search
+              size={15}
+              style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-muted)',
+                pointerEvents: 'none',
+              }}
+            />
             <input
               type="text"
               className="form-input"
-              style={{ paddingLeft: '36px', height: '36px', fontSize: '12px' }}
-              placeholder="Cari indikator, terminal, atau catatan..."
+              style={{ paddingLeft: '36px' }}
+              placeholder="Cari indikator, kode KPI, cabang, atau pengunggah..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Cari rekaman data kinerja"
             />
           </div>
 
-          {/* Terminal Filter */}
           <select
             className="filter-select"
             style={{
-              height: '36px',
-              fontSize: '12px',
-              opacity: isPicCabang ? 0.9 : 1,
+              opacity: isPicCabang ? 0.85 : 1,
               cursor: isPicCabang ? 'not-allowed' : 'pointer',
             }}
             value={selectedBranch}
             onChange={(e) => {
               if (!isPicCabang) {
                 setSelectedBranch(e.target.value);
+                setPage(1);
               }
             }}
             disabled={isPicCabang}
-            title={isPicCabang ? `Terkunci: Data khusus cabang ${userBranchObj?.name || currentUser?.branch_id}` : 'Pilih Terminal'}
+            title={
+              isPicCabang
+                ? `Terkunci: Data khusus cabang ${userBranchObj?.name || currentUser?.branch_id}`
+                : 'Pilih Cabang / Terminal'
+            }
+            aria-label="Filter cabang"
           >
-            {!isPicCabang && <option value="ALL">🏢 Semua Terminal</option>}
+            {!isPicCabang && <option value="ALL">Semua Cabang</option>}
             {(isPicCabang && userBranchObj ? [userBranchObj] : branches).map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -213,65 +339,67 @@ export default function DataRecordsView({
             ))}
           </select>
 
-          {/* Department Filter */}
           <select
             className="filter-select"
-            style={{ height: '36px', fontSize: '12px' }}
             value={selectedDept}
-            onChange={(e) => setSelectedDept(e.target.value)}
+            onChange={(e) => {
+              setSelectedDept(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter departemen"
           >
-            <option value="ALL">📂 Semua Departemen</option>
+            <option value="ALL">Semua Departemen</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.code} - {d.name}
+                {d.code} — {d.name}
               </option>
             ))}
           </select>
 
-          {/* Month Filter */}
           <select
             className="filter-select"
-            style={{ height: '36px', fontSize: '12px' }}
             value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+            onChange={(e) => {
+              setSelectedMonth(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter bulan"
           >
-            <option value="ALL">📅 Semua Bulan (YTD)</option>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => (
+            <option value="ALL">Semua Bulan (YTD)</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
               <option key={m} value={m}>
-                Bulan {m} (2026)
+                {MONTH_NAMES[m - 1]} 2026
               </option>
             ))}
           </select>
 
-          {/* Verification Status Filter */}
           <select
             className="filter-select"
-            style={{ height: '36px', fontSize: '12px' }}
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter status verifikasi"
           >
-            <option value="ALL">🛡️ Semua Status Verifikasi</option>
+            <option value="ALL">Semua Status</option>
             <option value="verified">Terverifikasi</option>
             <option value="pending_verification">Menunggu Verifikasi</option>
             <option value="revision_needed">Perlu Revisi</option>
           </select>
-        </div>
 
-        {/* Counter Info */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          <div>
-            Menampilkan <strong style={{ color: 'var(--text-title)' }}>{filteredRecords.length}</strong> baris data dari total {records.length} record
-          </div>
-          {(selectedBranch !== 'ALL' || selectedDept !== 'ALL' || selectedMonth !== 'ALL' || selectedStatus !== 'ALL' || searchQuery) && (
+          {hasFilters && (
             <button
+              type="button"
               onClick={() => {
-                setSelectedBranch('ALL');
+                if (!isPicCabang) setSelectedBranch('ALL');
                 setSelectedDept('ALL');
                 setSelectedMonth('ALL');
                 setSelectedStatus('ALL');
                 setSearchQuery('');
+                setPage(1);
               }}
-              style={{ background: 'none', border: 'none', color: 'var(--accent-blue-text)', cursor: 'pointer', fontSize: '12px' }}
+              className="pwd-action-chip"
             >
               Reset Filter
             </button>
@@ -280,93 +408,433 @@ export default function DataRecordsView({
 
         {/* Table Content */}
         {isLoading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <RefreshCw size={24} className="spin" style={{ margin: '0 auto 10px' }} />
-            <div>Memuat data kinerja pelabuhan...</div>
+          <div className="gov-skeleton-stack" aria-label="Memuat rekaman data kinerja">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div key={n} className="gov-skeleton-row" />
+            ))}
           </div>
         ) : filteredRecords.length === 0 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', backgroundColor: 'var(--bg-inner)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
+          <div
+            style={{
+              padding: '40px 20px',
+              textAlign: 'center',
+              backgroundColor: 'var(--bg-inner)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px dashed var(--border-subtle)',
+            }}
+          >
             <Database size={36} color="var(--text-muted)" style={{ margin: '0 auto 10px' }} />
-            <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)' }}>Tidak Ada Data Ditemukan</h4>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-title)', margin: 0 }}>
+              Tidak Ada Rekaman Ditemukan
+            </h4>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Tidak ada record kinerja yang cocok dengan kombinasi filter yang dipilih.
+              Ubah kombinasi filter cabang, departemen, bulan, atau kata kunci pencarian.
             </p>
           </div>
         ) : (
-          <div className="table-responsive" style={{ maxHeight: '620px', overflowY: 'auto' }}>
-            <table className="card-table data-table">
-              <thead>
-                <tr style={{ position: 'sticky', top: 0, zIndex: 5 }}>
-                  <th scope="col">Terminal / Cabang</th>
-                  <th scope="col">Departemen</th>
-                  <th scope="col">Periode</th>
-                  <th scope="col">Indikator KPI</th>
-                  <th scope="col" style={{ textAlign: 'right' }}>Target RKAP</th>
-                  <th scope="col" style={{ textAlign: 'right' }}>Realisasi</th>
-                  <th scope="col" style={{ textAlign: 'center' }}>Satuan</th>
-                  <th scope="col" style={{ textAlign: 'right' }}>Capaian</th>
-                  <th scope="col" style={{ textAlign: 'center' }}>Status KPI</th>
-                  <th scope="col" style={{ textAlign: 'center' }}>Verifikasi</th>
-                  <th scope="col">Pengunggah</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRecords.map((r) => {
-                  const branchObj = branches.find(b => b.id === r.branch_id);
-                  const deptObj = departments.find(d => d.id === r.department_id);
+          <>
+            <div className="table-responsive" style={{ maxHeight: '580px', overflowY: 'auto' }}>
+              <table className="card-table data-table">
+                <thead>
+                  <tr style={{ position: 'sticky', top: 0, zIndex: 5 }}>
+                    <th scope="col">Terminal / Cabang</th>
+                    <th scope="col">Departemen</th>
+                    <th scope="col">Periode</th>
+                    <th scope="col">Indikator KPI</th>
+                    <th scope="col" style={{ textAlign: 'right' }}>
+                      Target RKAP
+                    </th>
+                    <th scope="col" style={{ textAlign: 'right' }}>
+                      Realisasi
+                    </th>
+                    <th scope="col" style={{ textAlign: 'center' }}>
+                      Satuan
+                    </th>
+                    <th scope="col" style={{ textAlign: 'right' }}>
+                      Capaian
+                    </th>
+                    <th scope="col" style={{ textAlign: 'center' }}>
+                      Verifikasi
+                    </th>
+                    <th scope="col" style={{ textAlign: 'center', width: '76px' }}>
+                      Detail
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedRecords.map((r) => {
+                    const branchObj = branches.find((b) => b.id === r.branch_id);
+                    const deptObj = departments.find((d) => d.id === r.department_id);
 
-                  return (
-                    <tr key={r.id}>
-                      <td data-label="Terminal / Cabang" style={{ fontWeight: 600, color: 'var(--text-title)' }}>
-                        <div>{r.branch_name || branchObj?.name || r.branch_id}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{branchObj?.code}</div>
-                      </td>
-                      <td data-label="Departemen">
-                        <span className="badge badge-neutral">
-                          {deptObj?.code || r.department_id}
-                        </span>
-                      </td>
-                      <td data-label="Periode" style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
-                        Bln {r.month}/{r.year}
-                      </td>
-                      <td data-label="Indikator KPI">
-                        <div style={{ fontWeight: 600, color: 'var(--text-title)' }}>{r.indicator_name || r.indicator_id}</div>
-                        <div style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--accent-blue-text)' }}>{r.indicator_code || r.indicator_id}</div>
-                      </td>
-                      <td data-label="Target RKAP" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                        {r.target?.toLocaleString('id-ID')}
-                      </td>
-                      <td data-label="Realisasi" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-title)' }}>
-                        {r.realization?.toLocaleString('id-ID')}
-                      </td>
-                      <td data-label="Satuan" style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {r.unit}
-                      </td>
-                      <td data-label="Capaian" style={{ textAlign: 'right', fontWeight: 700 }}>
-                        <span style={{ color: r.status_color === 'green' ? 'var(--status-good-text)' : r.status_color === 'yellow' ? 'var(--status-alert-text)' : 'var(--status-danger-text)' }}>
-                          {r.achievement_pct}%
-                        </span>
-                      </td>
-                      <td data-label="Status KPI" style={{ textAlign: 'center' }}>
-                        <StatusBadge type="traffic_light" color={r.status_color} />
-                      </td>
-                      <td data-label="Verifikasi" style={{ textAlign: 'center' }}>
-                        <StatusBadge type="verification" verificationStatus={r.verification_status} />
-                      </td>
-                      <td data-label="Pengunggah" style={{ fontSize: '12px' }}>
-                        <div style={{ color: 'var(--text-secondary)' }}>{r.uploaded_by}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          {r.verification_status === 'verified' && r.verified_by ? `Disahkan: ${r.verified_by}` : r.verification_status === 'revision_needed' ? 'Perlu Revisi' : 'Menunggu'}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    return (
+                      <tr
+                        key={r.id}
+                        onClick={() => setDetailRecord(r)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td data-label="Terminal / Cabang" style={{ fontWeight: 600, color: 'var(--text-title)' }}>
+                          <div>{r.branch_name || branchObj?.name || r.branch_id}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                            {branchObj?.code || r.branch_code}
+                          </div>
+                        </td>
+                        <td data-label="Departemen">
+                          <span className="badge badge-neutral">{deptObj?.code || r.department_id}</span>
+                        </td>
+                        <td data-label="Periode" style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+                          {MONTH_NAMES[(r.month || 1) - 1]?.slice(0, 3) || `Bln ${r.month}`} {r.year}
+                        </td>
+                        <td data-label="Indikator KPI">
+                          <div style={{ fontWeight: 600, color: 'var(--text-title)' }}>
+                            {r.indicator_name || r.indicator_id}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              fontFamily: 'var(--font-mono)',
+                              color: 'var(--accent-blue-text)',
+                            }}
+                          >
+                            {r.indicator_code || r.indicator_id}
+                          </div>
+                        </td>
+                        <td
+                          data-label="Target RKAP"
+                          className="tabular-nums"
+                          style={{ textAlign: 'right', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+                        >
+                          {r.target?.toLocaleString('id-ID')}
+                        </td>
+                        <td
+                          data-label="Realisasi"
+                          className="tabular-nums"
+                          style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-title)', fontFamily: 'var(--font-mono)' }}
+                        >
+                          {r.realization?.toLocaleString('id-ID')}
+                        </td>
+                        <td data-label="Satuan" style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
+                          {r.unit}
+                        </td>
+                        <td
+                          data-label="Capaian"
+                          className="tabular-nums"
+                          style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)' }}
+                        >
+                          <span
+                            style={{
+                              color:
+                                r.status_color === 'green'
+                                  ? 'var(--status-good-text)'
+                                  : r.status_color === 'yellow'
+                                    ? 'var(--status-alert-text)'
+                                    : 'var(--status-danger-text)',
+                            }}
+                          >
+                            {r.achievement_pct}%
+                          </span>
+                        </td>
+                        <td data-label="Verifikasi" style={{ textAlign: 'center' }}>
+                          <StatusBadge type="verification" verificationStatus={r.verification_status} />
+                        </td>
+                        <td data-label="Detail" style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailRecord(r);
+                            }}
+                            className="pwd-action-chip"
+                            title="Lihat rincian & riwayat verifikasi"
+                            aria-label={`Lihat rincian ${r.indicator_name || r.id}`}
+                          >
+                            <Eye size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Footer */}
+            <div className="gov-pagination">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Menampilkan{' '}
+                  <strong style={{ color: 'var(--text-title)', fontFamily: 'var(--font-mono)' }}>
+                    {startIdx + 1}–{Math.min(startIdx + pageSize, filteredRecords.length)}
+                  </strong>{' '}
+                  dari{' '}
+                  <strong style={{ color: 'var(--text-title)', fontFamily: 'var(--font-mono)' }}>
+                    {filteredRecords.length}
+                  </strong>{' '}
+                  rekaman
+                </span>
+
+                <select
+                  className="filter-select"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  aria-label="Jumlah baris per halaman"
+                  style={{ minHeight: '34px', padding: '4px 10px', fontSize: '12px' }}
+                >
+                  <option value={25}>25 / halaman</option>
+                  <option value={50}>50 / halaman</option>
+                  <option value={100}>100 / halaman</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="pwd-action-chip"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft size={14} />
+                  <span>Sebelumnya</span>
+                </button>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  {safePage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="pwd-action-chip"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <span>Berikutnya</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
+
+      {/* Slide-Over Record Detail Drawer */}
+      {detailRecord && (
+        <div className="admin-drawer-overlay" onClick={() => setDetailRecord(null)}>
+          <div
+            ref={detailDrawerRef}
+            className="admin-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="record-detail-title"
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="admin-drawer-header">
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="badge badge-blue" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {detailRecord.indicator_code || detailRecord.indicator_id}
+                  </span>
+                  <StatusBadge type="verification" verificationStatus={detailRecord.verification_status} />
+                </div>
+                <h3
+                  id="record-detail-title"
+                  style={{ margin: '6px 0 0', fontSize: '16px', fontWeight: 700, color: 'var(--text-title)' }}
+                >
+                  {detailRecord.indicator_name || detailRecord.indicator_id}
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  ID Rekaman: {detailRecord.id}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailRecord(null)}
+                className="admin-close-btn"
+                aria-label="Tutup rincian rekaman"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="admin-drawer-body">
+              {/* Performance Highlight Card */}
+              <div className="role-live-summary" style={{ gap: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Capaian Kinerja
+                  </span>
+                  <StatusBadge type="traffic_light" color={detailRecord.status_color} />
+                </div>
+
+                <div className="admin-form-grid-2">
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Realisasi</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-title)' }}>
+                      {detailRecord.realization?.toLocaleString('id-ID')}{' '}
+                      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>
+                        {detailRecord.unit}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Target RKAP</div>
+                    <div style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                      {detailRecord.target?.toLocaleString('id-ID')}{' '}
+                      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>
+                        {detailRecord.unit}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Rasio Capaian terhadap RKAP</span>
+                    <strong
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        color:
+                          detailRecord.status_color === 'green'
+                            ? 'var(--status-good-text)'
+                            : detailRecord.status_color === 'yellow'
+                              ? 'var(--status-alert-text)'
+                              : 'var(--status-danger-text)',
+                      }}
+                    >
+                      {detailRecord.achievement_pct}%
+                    </strong>
+                  </div>
+                  <div className="role-progress-track">
+                    <div
+                      className="role-progress-fill"
+                      style={{ width: `${Math.min(100, Math.max(0, detailRecord.achievement_pct || 0))}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Context Section */}
+              <section className="admin-form-section">
+                <div className="admin-section-title">
+                  <Building2 size={13} />
+                  <span>Konteks Unit &amp; Periode</span>
+                </div>
+                <div className="admin-form-grid-2">
+                  <div className="role-live-summary">
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Cabang / Terminal</span>
+                    <strong style={{ fontSize: '13px', color: 'var(--text-title)' }}>
+                      {detailRecord.branch_name ||
+                        branches.find((b) => b.id === detailRecord.branch_id)?.name ||
+                        detailRecord.branch_id}
+                    </strong>
+                  </div>
+                  <div className="role-live-summary">
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Departemen</span>
+                    <strong style={{ fontSize: '13px', color: 'var(--text-title)' }}>
+                      {detailRecord.department_name ||
+                        departments.find((d) => d.id === detailRecord.department_id)?.name ||
+                        detailRecord.department_id}
+                    </strong>
+                  </div>
+                  <div className="role-live-summary">
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <Calendar size={12} /> Periode Pelaporan
+                    </span>
+                    <strong style={{ fontSize: '13px', color: 'var(--text-title)' }}>
+                      {MONTH_NAMES[(detailRecord.month || 1) - 1] || `Bulan ${detailRecord.month}`}{' '}
+                      {detailRecord.year}
+                    </strong>
+                  </div>
+                  <div className="role-live-summary">
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sumber Input</span>
+                    <strong style={{ fontSize: '13px', color: 'var(--text-title)', fontFamily: 'var(--font-mono)' }}>
+                      {detailRecord.source_type || 'manual / excel'}
+                    </strong>
+                  </div>
+                </div>
+              </section>
+
+              {/* Verification Trail */}
+              <section className="admin-form-section">
+                <div className="admin-section-title">
+                  <UserCheck size={13} />
+                  <span>Jejak Verifikasi &amp; Pengunggah</span>
+                </div>
+                <div className="role-live-summary" style={{ gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Diunggah oleh</span>
+                    <strong style={{ color: 'var(--text-title)' }}>{detailRecord.uploaded_by || '-'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Waktu unggah</span>
+                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                      {detailRecord.uploaded_at
+                        ? new Date(detailRecord.uploaded_at).toLocaleString('id-ID')
+                        : '-'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Diverifikasi oleh</span>
+                    <strong style={{ color: 'var(--text-title)' }}>{detailRecord.verified_by || 'Belum diverifikasi'}</strong>
+                  </div>
+                  {detailRecord.verified_at && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Waktu pengesahan</span>
+                      <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                        {new Date(detailRecord.verified_at).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Notes & Revision Notes */}
+              {(detailRecord.revision_notes || detailRecord.notes) && (
+                <section className="admin-form-section">
+                  <div className="admin-section-title">
+                    <FileText size={13} />
+                    <span>Catatan &amp; Riwayat Revisi</span>
+                  </div>
+                  {detailRecord.revision_notes && (
+                    <div
+                      style={{
+                        padding: '12px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'rgba(217, 119, 6, 0.12)',
+                        border: '1px solid var(--status-alert-border)',
+                        fontSize: '12px',
+                        color: 'var(--status-alert-text)',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong>Catatan Revisi Verifikator:</strong> {detailRecord.revision_notes}
+                    </div>
+                  )}
+                  {detailRecord.notes && (
+                    <div className="role-live-summary" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {detailRecord.notes}
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
+
+            <div className="admin-drawer-footer">
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Mode Baca Detail Rekaman
+              </span>
+              <button
+                type="button"
+                onClick={() => setDetailRecord(null)}
+                className="btn-primary"
+                style={{ padding: '8px 18px', fontSize: '12px' }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

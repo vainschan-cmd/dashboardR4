@@ -19,13 +19,38 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Silakan masukkan kata sandi Anda.').max(256),
 });
 
-export const userRoleEnum = z.enum([
-  'super_admin',
-  'admin_regional',
-  'pic_dept_regional',
-  'pic_cabang',
-  'viewer',
-]);
+const registeredCustomRoleKeys = new Set<string>();
+
+export function registerCustomRoleKey(key: string) {
+  registeredCustomRoleKeys.add(key.toLowerCase());
+}
+
+export function unregisterCustomRoleKey(key: string) {
+  registeredCustomRoleKeys.delete(key.toLowerCase());
+}
+
+export function isAllowedRoleKey(key: unknown): boolean {
+  if (typeof key !== 'string') return false;
+  const clean = key.trim().toLowerCase();
+  if (!clean || clean === 'superuser' || clean === 'root' || clean === 'admin') return false;
+  return (
+    clean === 'super_admin' ||
+    clean === 'admin_regional' ||
+    clean === 'pic_dept_regional' ||
+    clean === 'pic_cabang' ||
+    clean === 'viewer' ||
+    registeredCustomRoleKeys.has(clean)
+  );
+}
+
+export const userRoleEnum = z
+  .string()
+  .trim()
+  .min(3)
+  .max(64)
+  .refine(isAllowedRoleKey, {
+    message: 'Role di luar daftar resmi yang diizinkan.',
+  });
 
 /**
  * Password policy shared by account creation, self-service change, and admin reset.

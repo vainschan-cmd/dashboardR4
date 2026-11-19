@@ -132,21 +132,75 @@ function toNullableNumber(val: unknown): number | null {
 
 interface RawConsolidatedKpiRow {
   pendapatan_total: number;
-  pendapatan_yoy: number | null;
-  pendapatan_rka: number | null;
+  pendapatan_target_rka: number | null;
+  pendapatan_rka_avg: number | null;
   pendapatan_cnt: number;
   beban_total: number;
-  beban_yoy: number | null;
-  beban_rka: number | null;
+  beban_target_rka: number | null;
+  beban_rka_avg: number | null;
   beban_cnt: number;
   laba_usaha_total: number;
-  laba_usaha_yoy: number | null;
-  laba_usaha_rka: number | null;
+  laba_usaha_target_rka: number | null;
+  laba_usaha_rka_avg: number | null;
   laba_usaha_cnt: number;
   laba_bersih_total: number;
-  laba_bersih_yoy: number | null;
-  laba_bersih_rka: number | null;
+  laba_bersih_target_rka: number | null;
+  laba_bersih_rka_avg: number | null;
   laba_bersih_cnt: number;
+}
+
+interface RawPriorConsolidatedKpiRow {
+  pendapatan_total_prior: number;
+  pendapatan_cnt_prior: number;
+  beban_total_prior: number;
+  beban_cnt_prior: number;
+  laba_usaha_total_prior: number;
+  laba_usaha_cnt_prior: number;
+  laba_bersih_total_prior: number;
+  laba_bersih_cnt_prior: number;
+}
+
+/**
+ * Menghitung capaian RKA secara dinamis berdasarkan total realisasi dibagi total target anggaran.
+ * Jika target tidak tersedia (null / 0), fallback ke rata-rata RKA row-level.
+ */
+function computeDynamicRka(
+  realisasi: number,
+  targetRka: number | null,
+  fallbackAvg: number | null
+): number | null {
+  if (targetRka !== null && Number.isFinite(targetRka) && targetRka !== 0) {
+    if ((realisasi > 0 && targetRka < 0) || (realisasi < 0 && targetRka > 0)) {
+      return fallbackAvg !== null && Number.isFinite(fallbackAvg)
+        ? Math.round(fallbackAvg * 100) / 100
+        : null;
+    }
+    const val = (realisasi / targetRka) * 100;
+    return Number.isFinite(val) ? Math.round(val * 100) / 100 : null;
+  }
+  return fallbackAvg !== null && Number.isFinite(fallbackAvg)
+    ? Math.round(fallbackAvg * 100) / 100
+    : null;
+}
+
+/**
+ * Menghitung capaian YoY secara dinamis: Realisasi Periode Berjalan / Realisasi Periode Tahun Lalu * 100.
+ * Menggunakan filter cakupan cabang, entitas, dan status verifikasi yang identik.
+ * Mengembalikan null jika data tahun lalu tidak tersedia atau tanda berbalik arah (contoh rugi ke laba).
+ */
+function computeDynamicYoy(
+  currentReal: number,
+  priorReal: number | null,
+  priorCnt: number
+): number | null {
+  if (!priorCnt || priorReal === null || !Number.isFinite(priorReal) || priorReal === 0) {
+    return null;
+  }
+  if ((currentReal > 0 && priorReal < 0) || (currentReal < 0 && priorReal > 0)) {
+    return null;
+  }
+  const ratio = (currentReal / priorReal) * 100;
+  return Number.isFinite(ratio) ? Math.round(ratio * 100) / 100 : null;
 }
 
 /**
@@ -156,6 +210,8 @@ interface RawConsolidatedKpiRow {
  *   entitas = NULL (Konsolidasi) menjumlahkan seluruh entitas TERMASUK ELIMINASI.
  * - Laba Usaha & Laba Bersih
  * - BOPO = ABS(total_beban) / total_pendapatan * 100
+ * - Capaian RKA dihitung secara dinamis dari Realisasi / Target RKA
+ * - Pertumbuhan YoY dihitung secara dinamis dari Realisasi Berjalan / Realisasi Tahun Lalu
  */
 export async function queryFinansialConsolidatedKpis(
   opts: FinansialKpiQueryOptions
@@ -171,32 +227,71 @@ export async function queryFinansialConsolidatedKpis(
     normalizedEntitas,
   ];
 
-  const [kpiRes, verificationRes] = await Promise.all([
+  const priorYear =
+    typeof opts.year === 'number' && Number.isFinite(opts.year) && opts.year > 2000
+      ? opts.year - 1
+      : null;
+
+  const priorCteParams =
+    priorYear !== null
+      ? [
+          opts.verifiedOnly,
+          priorYear,
+          opts.month,
+          opts.nmCbgList,
+          opts.branchCodes,
+          opts.rbacBranchCodes,
+          normalizedEntitas,
+        ]
+      : null;
+
+  const priorKpiPromise = priorCteParams
+    ? query<RawPriorConsolidatedKpiRow>(
+        `${FINANSIAL_CONSOLIDATION_CTE_SQL}
+         SELECT
+           COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan'), 0)::double precision AS pendapatan_total_prior,
+           COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan')::int AS pendapatan_cnt_prior,
+
+           COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'beban'), 0)::double precision AS beban_total_prior,
+           COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'beban')::int AS beban_cnt_prior,
+
+           COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha'), 0)::double precision AS laba_usaha_total_prior,
+           COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha')::int AS laba_usaha_cnt_prior,
+
+           COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba bersih'), 0)::double precision AS laba_bersih_total_prior,
+           COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba bersih')::int AS laba_bersih_cnt_prior
+         FROM filtered_fin`,
+        priorCteParams
+      )
+    : Promise.resolve({ rows: [] as RawPriorConsolidatedKpiRow[] });
+
+  const [kpiRes, priorRes, verificationRes] = await Promise.all([
     query<RawConsolidatedKpiRow>(
       `${FINANSIAL_CONSOLIDATION_CTE_SQL}
        SELECT
          COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan'), 0)::double precision AS pendapatan_total,
-         AVG(eff_yoy) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan' AND eff_yoy IS NOT NULL)::double precision AS pendapatan_yoy,
-         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan' AND eff_rka IS NOT NULL)::double precision AS pendapatan_rka,
+         SUM(CASE WHEN TRIM(LOWER(rekening)) = 'pendapatan' AND eff_rka IS NOT NULL AND eff_rka <> 0 THEN eff_realisasi / (eff_rka / 100.0) ELSE NULL END)::double precision AS pendapatan_target_rka,
+         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan' AND eff_rka IS NOT NULL)::double precision AS pendapatan_rka_avg,
          COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan')::int AS pendapatan_cnt,
 
          COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'beban'), 0)::double precision AS beban_total,
-         AVG(eff_yoy) FILTER (WHERE TRIM(LOWER(rekening)) = 'beban' AND eff_yoy IS NOT NULL)::double precision AS beban_yoy,
-         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'beban' AND eff_rka IS NOT NULL)::double precision AS beban_rka,
+         SUM(CASE WHEN TRIM(LOWER(rekening)) = 'beban' AND eff_rka IS NOT NULL AND eff_rka <> 0 THEN eff_realisasi / (eff_rka / 100.0) ELSE NULL END)::double precision AS beban_target_rka,
+         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'beban' AND eff_rka IS NOT NULL)::double precision AS beban_rka_avg,
          COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'beban')::int AS beban_cnt,
 
          COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha'), 0)::double precision AS laba_usaha_total,
-         AVG(eff_yoy) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha' AND eff_yoy IS NOT NULL)::double precision AS laba_usaha_yoy,
-         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha' AND eff_rka IS NOT NULL)::double precision AS laba_usaha_rka,
+         SUM(CASE WHEN TRIM(LOWER(rekening)) = 'laba usaha' AND eff_rka IS NOT NULL AND eff_rka <> 0 THEN eff_realisasi / (eff_rka / 100.0) ELSE NULL END)::double precision AS laba_usaha_target_rka,
+         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha' AND eff_rka IS NOT NULL)::double precision AS laba_usaha_rka_avg,
          COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha')::int AS laba_usaha_cnt,
 
          COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba bersih'), 0)::double precision AS laba_bersih_total,
-         AVG(eff_yoy) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba bersih' AND eff_yoy IS NOT NULL)::double precision AS laba_bersih_yoy,
-         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba bersih' AND eff_rka IS NOT NULL)::double precision AS laba_bersih_rka,
+         SUM(CASE WHEN TRIM(LOWER(rekening)) = 'laba bersih' AND eff_rka IS NOT NULL AND eff_rka <> 0 THEN eff_realisasi / (eff_rka / 100.0) ELSE NULL END)::double precision AS laba_bersih_target_rka,
+         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba bersih' AND eff_rka IS NOT NULL)::double precision AS laba_bersih_rka_avg,
          COUNT(*) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba bersih')::int AS laba_bersih_cnt
        FROM filtered_fin`,
       cteParams
     ),
+    priorKpiPromise,
     query<{ verified_count: number; pending_count: number; revision_count: number }>(
       `SELECT
          COUNT(*) FILTER (WHERE verification_status = 'verified')::int AS verified_count,
@@ -221,6 +316,7 @@ export async function queryFinansialConsolidatedKpis(
   ]);
 
   const row = kpiRes.rows[0];
+  const priorRow = priorRes.rows[0];
   const vRow = verificationRes.rows[0];
 
   const pendapatanVal = Number(row?.pendapatan_total || 0);
@@ -230,37 +326,81 @@ export async function queryFinansialConsolidatedKpis(
   const bopoVal =
     pendapatanVal !== 0 ? (Math.abs(bebanVal) / Math.abs(pendapatanVal)) * 100 : 0;
 
+  const pendapatanDynamicRka = computeDynamicRka(
+    pendapatanVal,
+    toNullableNumber(row?.pendapatan_target_rka),
+    toNullableNumber(row?.pendapatan_rka_avg)
+  );
+  const pendapatanDynamicYoy = computeDynamicYoy(
+    pendapatanVal,
+    toNullableNumber(priorRow?.pendapatan_total_prior),
+    Number(priorRow?.pendapatan_cnt_prior || 0)
+  );
+
+  const bebanDynamicRka = computeDynamicRka(
+    bebanVal,
+    toNullableNumber(row?.beban_target_rka),
+    toNullableNumber(row?.beban_rka_avg)
+  );
+  const bebanDynamicYoy = computeDynamicYoy(
+    bebanVal,
+    toNullableNumber(priorRow?.beban_total_prior),
+    Number(priorRow?.beban_cnt_prior || 0)
+  );
+
+  const labaUsahaDynamicRka = computeDynamicRka(
+    labaUsahaVal,
+    toNullableNumber(row?.laba_usaha_target_rka),
+    toNullableNumber(row?.laba_usaha_rka_avg)
+  );
+  const labaUsahaDynamicYoy = computeDynamicYoy(
+    labaUsahaVal,
+    toNullableNumber(priorRow?.laba_usaha_total_prior),
+    Number(priorRow?.laba_usaha_cnt_prior || 0)
+  );
+
+  const labaBersihDynamicRka = computeDynamicRka(
+    labaBersihVal,
+    toNullableNumber(row?.laba_bersih_target_rka),
+    toNullableNumber(row?.laba_bersih_rka_avg)
+  );
+  const labaBersihDynamicYoy = computeDynamicYoy(
+    labaBersihVal,
+    toNullableNumber(priorRow?.laba_bersih_total_prior),
+    Number(priorRow?.laba_bersih_cnt_prior || 0)
+  );
+
   return {
     pendapatan: {
       realisasi: pendapatanVal,
       formatted: formatBerandaSummaryRupiah(pendapatanVal),
       formattedFull: formatRupiahFull(pendapatanVal),
-      rka: toNullableNumber(row?.pendapatan_rka),
-      yoy: toNullableNumber(row?.pendapatan_yoy),
+      rka: pendapatanDynamicRka,
+      yoy: pendapatanDynamicYoy,
       rowCount: Number(row?.pendapatan_cnt || 0),
     },
     beban: {
       realisasi: bebanVal,
       formatted: formatBebanTriliun(bebanVal),
       formattedFull: formatRupiahFull(bebanVal),
-      rka: toNullableNumber(row?.beban_rka),
-      yoy: toNullableNumber(row?.beban_yoy),
+      rka: bebanDynamicRka,
+      yoy: bebanDynamicYoy,
       rowCount: Number(row?.beban_cnt || 0),
     },
     labaUsaha: {
       realisasi: labaUsahaVal,
       formatted: formatBerandaSummaryRupiah(labaUsahaVal),
       formattedFull: formatRupiahFull(labaUsahaVal),
-      rka: toNullableNumber(row?.laba_usaha_rka),
-      yoy: toNullableNumber(row?.laba_usaha_yoy),
+      rka: labaUsahaDynamicRka,
+      yoy: labaUsahaDynamicYoy,
       rowCount: Number(row?.laba_usaha_cnt || 0),
     },
     labaBersih: {
       realisasi: labaBersihVal,
       formatted: formatBerandaSummaryRupiah(labaBersihVal),
       formattedFull: formatRupiahFull(labaBersihVal),
-      rka: toNullableNumber(row?.laba_bersih_rka),
-      yoy: toNullableNumber(row?.laba_bersih_yoy),
+      rka: labaBersihDynamicRka,
+      yoy: labaBersihDynamicYoy,
       rowCount: Number(row?.laba_bersih_cnt || 0),
     },
     bopo: {
@@ -490,7 +630,13 @@ export async function getFinansialModuleSummary(
          MIN(branch_name) AS nama,
          COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan'), 0)::double precision AS pendapatan,
          COALESCE(SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'laba usaha'), 0)::double precision AS laba_usaha,
-         AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan' AND eff_rka IS NOT NULL)::double precision AS rka,
+         COALESCE(
+           (
+             SUM(eff_realisasi) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan') /
+             NULLIF(SUM(CASE WHEN TRIM(LOWER(rekening)) = 'pendapatan' AND eff_rka IS NOT NULL AND eff_rka <> 0 THEN eff_realisasi / (eff_rka / 100.0) END), 0)
+           ) * 100,
+           AVG(eff_rka) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan' AND eff_rka IS NOT NULL)
+         )::double precision AS rka,
          AVG(eff_yoy) FILTER (WHERE TRIM(LOWER(rekening)) = 'pendapatan' AND eff_yoy IS NOT NULL)::double precision AS yoy
        FROM filtered_fin
        GROUP BY branch_code

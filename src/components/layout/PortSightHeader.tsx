@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import {
-  Download,
-  Printer,
   ChevronDown,
   ChevronUp,
   Shield,
@@ -15,15 +13,11 @@ import {
   LogOut,
   Menu,
   X,
-  PlusCircle,
   KeyRound,
   Bell,
 } from 'lucide-react';
 import { User, UserRole } from '@/lib/types';
-import {
-  OFFICIAL_BRANCHES,
-  getSelectedBranchLabel,
-} from '@/lib/constants';
+import { OFFICIAL_BRANCHES, getSelectedBranchLabel } from '@/lib/constants';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface PortSightHeaderProps {
@@ -34,15 +28,39 @@ interface PortSightHeaderProps {
   currentUser: User | null;
   onOpenAuth: (mode?: 'login' | 'register') => void;
   onLogout?: () => void;
-  onExportExcel: () => void;
-  onPrint: () => void;
-  onOpenManualInput?: () => void;
   onOpenPasswordChange?: () => void;
   pendingCount?: number;
   theme: 'dark' | 'light';
   onThemeChange: (theme: 'dark' | 'light') => void;
   onToggleMobileMenu?: () => void;
   isMobileMenuOpen?: boolean;
+}
+
+const TAB_CONTEXT_META: Record<string, { section: string; title: string }> = {
+  beranda: { section: 'Eksekutif', title: 'Ringkasan Eksekutif' },
+  isu_strategis: { section: 'Eksekutif', title: 'Isu Strategis & Program Prioritas' },
+  periode: { section: 'Modul Kinerja', title: 'Analisis Rentang Periode' },
+  keuangan: { section: 'Modul Kinerja', title: 'Kinerja Keuangan & Konsolidasi' },
+  opkom: { section: 'Modul Kinerja', title: 'Operasi & Komersial (Opkom)' },
+  kinerja: { section: 'Modul Kinerja', title: 'Kinerja Pelayanan Operasional' },
+  utilisasi: { section: 'Modul Kinerja', title: 'Utilisasi Dermaga & Lapangan' },
+  peralatan: { section: 'Modul Kinerja', title: 'Kesiapan & Utilisasi Peralatan' },
+  fasilitas: { section: 'Modul Kinerja', title: 'Fasilitas & Infrastruktur' },
+  data_records: { section: 'Tata Kelola', title: 'Rekaman Data Kinerja' },
+  master_data: { section: 'Tata Kelola', title: 'Master Data & Akses' },
+  verification: { section: 'Tata Kelola', title: 'Verifikasi & Monitoring' },
+  import_center: { section: 'Tata Kelola', title: 'Penginputan Data' },
+  templates: { section: 'Tata Kelola', title: 'Pemetaan Template' },
+  audit_trail: { section: 'Tata Kelola', title: 'Jejak Audit Sistem' },
+};
+
+function getInitials(name?: string | null): string {
+  if (!name) return 'U';
+  const clean = name.split(',')[0].trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 export default function PortSightHeader({
@@ -53,9 +71,6 @@ export default function PortSightHeader({
   currentUser,
   onOpenAuth,
   onLogout,
-  onExportExcel,
-  onPrint,
-  onOpenManualInput,
   onOpenPasswordChange,
   pendingCount = 0,
   theme,
@@ -63,12 +78,15 @@ export default function PortSightHeader({
   onToggleMobileMenu,
   isMobileMenuOpen = false,
 }: PortSightHeaderProps) {
-  const [, setAdminMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [isNavbarCollapsed, setIsNavbarCollapsed] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   const logoutDialogRef = useRef<HTMLDivElement>(null);
+  const notifContainerRef = useRef<HTMLDivElement>(null);
+  const accountContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
@@ -82,6 +100,32 @@ export default function PortSightHeader({
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  // Dismiss popovers on outside click or Escape
+  useEffect(() => {
+    if (!notificationsOpen && !accountMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (notificationsOpen && notifContainerRef.current && !notifContainerRef.current.contains(target)) {
+        setNotificationsOpen(false);
+      }
+      if (accountMenuOpen && accountContainerRef.current && !accountContainerRef.current.contains(target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setNotificationsOpen(false);
+        setAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [notificationsOpen, accountMenuOpen]);
 
   useEffect(() => {
     if (!showLogoutConfirm) return;
@@ -97,7 +141,6 @@ export default function PortSightHeader({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showLogoutConfirm, onLogout]);
 
-  // `A11Y-04`: contain Tab inside the confirmation dialog and restore focus.
   useFocusTrap(logoutDialogRef, showLogoutConfirm, () => setShowLogoutConfirm(false));
 
   const handleToggleNavbar = () => {
@@ -111,13 +154,13 @@ export default function PortSightHeader({
       return next;
     });
   };
+
   const effectiveRole = currentUser?.role || userRole;
   const userBranchId = currentUser?.branch_id;
-  const isBod = effectiveRole === 'viewer';
   const isPicCabang = effectiveRole === 'pic_cabang' && !!userBranchId && userBranchId !== 'R99';
   const canManageUsers = effectiveRole === 'super_admin' || effectiveRole === 'admin_regional';
-  const assignedBranch = userBranchId ? OFFICIAL_BRANCHES.find(b => b.code === userBranchId) : undefined;
-  const currentBranchName = OFFICIAL_BRANCHES.find(b => b.code === selectedTerminal)?.name;
+  const assignedBranch = userBranchId ? OFFICIAL_BRANCHES.find((b) => b.code === userBranchId) : undefined;
+  const currentBranchName = OFFICIAL_BRANCHES.find((b) => b.code === selectedTerminal)?.name;
   const isAll = !isPicCabang && (!selectedTerminal || selectedTerminal === 'ALL');
   const selectedBranchTitle = isPicCabang
     ? `[${userBranchId}] ${assignedBranch?.name || userBranchId}`
@@ -126,10 +169,10 @@ export default function PortSightHeader({
       : getSelectedBranchLabel(selectedTerminal);
 
   const getRoleLabel = () => {
-    if (userRole === 'super_admin') return 'Super Admin';
-    if (userRole === 'admin_regional') return 'Admin Regional 4';
-    if (userRole === 'pic_dept_regional') return 'PIC Dept Operasi';
-    if (userRole === 'pic_cabang') {
+    if (effectiveRole === 'super_admin') return 'Super Admin';
+    if (effectiveRole === 'admin_regional') return 'Admin Regional 4';
+    if (effectiveRole === 'pic_dept_regional') return 'PIC Dept Regional';
+    if (effectiveRole === 'pic_cabang') {
       const bCode = currentUser?.branch_id || selectedTerminal;
       const bName = assignedBranch?.name || currentBranchName;
       return bCode && bCode !== 'R99'
@@ -139,468 +182,288 @@ export default function PortSightHeader({
     return 'BOD Regional 4';
   };
 
-  const pageHeadings: Record<string, string> = {
-    beranda: isAll
-      ? 'Summary Eksekutif Regional 4 (Konsolidasi 28 Cabang)'
-      : `Summary Eksekutif - ${selectedBranchTitle}`,
-    isu_strategis: isAll
-      ? 'Dashboard Isu Strategis & Program Prioritas Regional 4'
-      : `Isu Strategis & Program Prioritas - ${selectedBranchTitle}`,
-    periode: isAll
-      ? 'Data per Periode & Analisis Rentang Waktu (Multi-Modul)'
-      : `Data per Periode - ${selectedBranchTitle}`,
-    keuangan: isAll
-      ? 'Dashboard Kinerja Keuangan Pelindo R4'
-      : `Dashboard Kinerja Keuangan - ${selectedBranchTitle}`,
-    opkom: isAll
-      ? 'Dashboard Operasi & Komersial Pelindo R4'
-      : `Dashboard Operasi & Komersial - ${selectedBranchTitle}`,
-    kinerja: isAll
-      ? 'Dashboard Kinerja Pelayanan Operasional Pelindo R4'
-      : `Dashboard Kinerja - ${selectedBranchTitle}`,
-    utilisasi: isAll
-      ? 'Dashboard Utilisasi Dermaga & Lapangan (BOR/YOR/SOR)'
-      : `Dashboard Utilisasi - ${selectedBranchTitle}`,
-    peralatan: isAll
-      ? 'Dashboard Monitoring Kesiapan & Utilisasi Peralatan'
-      : `Dashboard Peralatan - ${selectedBranchTitle}`,
-    fasilitas: isAll
-      ? 'Dashboard Fasilitas & Infrastruktur Pelabuhan Regional 4'
-      : `Dashboard Fasilitas - ${selectedBranchTitle}`,
-    data_records: isAll
-      ? 'Rekaman Data Kinerja Pelabuhan Regional 4'
-      : `Rekaman Data Kinerja - ${selectedBranchTitle}`,
-    master_data: 'Master Data Pelindo Regional 4',
-    verification: 'Verifikasi & Pengesahan Data Kinerja',
-    import_center: 'Pusat Impor Spreadsheet',
-    templates: 'Konfigurasi Template & Pemetaan Kolom',
-    audit_trail: 'Jejak Audit & Riwayat Aktivitas Sistem',
+  const pageContext = TAB_CONTEXT_META[activeTab] || {
+    section: 'Dashboard',
+    title: 'Dashboard Regional 4',
   };
 
-  const handleSelectTab = (tabId: string) => {
-    setActiveTab(tabId);
-    setMobileMenuOpen(false);
-    setAdminMenuOpen(false);
-  };
+  const displayName = currentUser ? currentUser.name.split(',')[0] : 'Tamu';
+  const initials = getInitials(currentUser?.name);
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
 
   return (
     <>
-      {/* 1. TOP HEADER BAR (Collapsible): Brand, Tools, User, Mobile Toggle */}
       <header className={`portsight-header ${isNavbarCollapsed ? 'collapsed' : ''}`}>
         <div className="portsight-header-content">
-          {/* Brand Left */}
-        <div
-          className="brand-wrapper"
-          onClick={() => handleSelectTab('beranda')}
-          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <div
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '3px',
-              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
-              flexShrink: 0,
-            }}
-          >
-            <Image
-              src="/pelindo-logo.png"
-              alt="Logo Pelindo"
-              width={32}
-              height={32}
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', lineHeight: 1 }}>
-            <span className="brand-title">PELINDO R4</span>
-            <span className="brand-accent">PortDash</span>
-          </div>
-        </div>
-
-        {/* Right Section Tools */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Theme Mode Toggle (Terang / Gelap) */}
-          <div className="theme-toggle-group" role="group" aria-label="Pilihan Mode Tampilan">
+          {/* LEFT: Mobile Menu + Compact Mobile Brand + Desktop Active Page Context */}
+          <div className="header-context-left">
             <button
               type="button"
-              onClick={() => onThemeChange('light')}
-              className={`theme-toggle-btn ${theme === 'light' ? 'active' : ''}`}
-              title="Mode Terang (Light Mode)"
-              aria-label="Mode terang"
-              aria-pressed={theme === 'light'}
+              onClick={() => onToggleMobileMenu?.()}
+              className="mobile-menu-btn"
+              aria-label="Buka menu navigasi"
+              aria-expanded={isMobileMenuOpen}
             >
-              <Sun size={12} aria-hidden="true" />
-              <span className="hidden-on-mobile">Terang</span>
+              {isMobileMenuOpen ? <X size={17} aria-hidden="true" /> : <Menu size={17} aria-hidden="true" />}
+              {pendingCount > 0 && !isMobileMenuOpen && (
+                <span className="header-mobile-dot" aria-hidden="true" />
+              )}
             </button>
+
             <button
               type="button"
-              onClick={() => onThemeChange('dark')}
-              className={`theme-toggle-btn ${theme === 'dark' ? 'active' : ''}`}
-              title="Mode Gelap (Dark Mode)"
-              aria-label="Mode gelap"
-              aria-pressed={theme === 'dark'}
+              className="header-mobile-brand"
+              onClick={() => setActiveTab('beranda')}
+              aria-label="Kembali ke Beranda PortDash"
             >
-              <Moon size={12} aria-hidden="true" />
-              <span className="hidden-on-mobile">Gelap</span>
+              <span className="header-mobile-logo">
+                <Image
+                  src="/pelindo-logo.png"
+                  alt="Logo Pelindo"
+                  width={26}
+                  height={26}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              </span>
+              <span className="brand-title" style={{ fontSize: '13px', fontWeight: 800 }}>PortDash</span>
             </button>
+
+            <div className="header-page-context">
+              <div className="header-breadcrumb-row">
+                <span className="header-section-label">{pageContext.section}</span>
+                <span className="header-breadcrumb-sep" aria-hidden="true">/</span>
+                <h1 className="header-page-title">{pageContext.title}</h1>
+              </div>
+              <span className="header-scope-subtitle" title={selectedBranchTitle}>
+                {selectedBranchTitle}
+              </span>
+            </div>
           </div>
 
-          {/* User Profile Pill */}
-          <button
-            type="button"
-            onClick={() => onOpenAuth('login')}
-            className="btn-dark"
-            style={{
-              padding: '4px 9px',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              borderRadius: 'var(--radius-pill)',
-              backgroundColor: 'var(--bg-inner)',
-              border: '1px solid var(--border-subtle)',
-              maxWidth: '180px',
-            }}
-            title="Ganti Akun PIC"
-          >
-            <UserCheck size={12} color="var(--accent-blue)" style={{ flexShrink: 0 }} />
-            <span
-              style={{
-                fontWeight: 700,
-                color: 'var(--text-title)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {currentUser ? currentUser.name.split(',')[0] : 'Tamu'}
-            </span>
-            <span
-              className="hidden-on-mobile"
-              style={{ color: 'var(--accent-cyan)', fontSize: '12px', fontFamily: 'var(--font-mono)' }}
-            >
-              [{currentUser?.nipp || '-'}]
-            </span>
-          </button>
-
-          {/* Logout Button */}
-          {onLogout && (
-            <>
-              {onOpenPasswordChange && (
+          {/* RIGHT: Utility Icon Cluster (Notif + Theme) + Unified Account Dropdown */}
+          <div className="header-actions-right">
+            <div className="header-utility-cluster">
+              {/* Notifications */}
+              <div ref={notifContainerRef} style={{ position: 'relative' }}>
                 <button
                   type="button"
-                  onClick={onOpenPasswordChange}
-                  className="btn-dark"
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    borderRadius: 'var(--radius-pill)',
-                    cursor: 'pointer',
-                    fontWeight: 600,
+                  onClick={() => {
+                    setNotificationsOpen((prev) => !prev);
+                    setAccountMenuOpen(false);
                   }}
-                  title="Ubah kata sandi akun Anda"
+                  className={`header-icon-btn ${notificationsOpen ? 'active' : ''}`}
+                  title="Notifikasi Verifikasi & Status Data"
+                  aria-label={`Notifikasi: ${pendingCount} menunggu verifikasi`}
+                  aria-expanded={notificationsOpen}
                 >
-                  <KeyRound size={12} strokeWidth={1.75} />
-                  <span className="hidden-on-mobile">Kata Sandi</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowLogoutConfirm(true)}
-                className="btn-dark"
-                style={{
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  borderRadius: 'var(--radius-pill)',
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: 'var(--status-danger-text)',
-                  cursor: 'pointer',
-                  fontWeight: 700,
-                }}
-                title="Keluar dari Akun (Logout)"
-              >
-                <LogOut size={12} strokeWidth={1.75} color="var(--status-danger-text)" />
-                <span className="hidden-on-mobile">Keluar</span>
-              </button>
-            </>
-          )}
-
-          {/* Desktop Only Tools (Hidden on Mobile/Tablet) */}
-          <div className="header-desktop-tools">
-            {onOpenManualInput && !isBod && (
-              <button
-                type="button"
-                onClick={onOpenManualInput}
-                className="btn-primary"
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  borderRadius: 'var(--radius-pill)',
-                  fontWeight: 700,
-                  backgroundColor: 'var(--accent-orange-fill, #c2410c)',
-                  borderColor: 'var(--accent-orange-fill, #c2410c)',
-                  color: 'var(--text-on-accent)',
-                  boxShadow: '0 2px 6px rgba(249, 115, 22, 0.35)',
-                  cursor: 'pointer',
-                }}
-                title="Input Data Manual (Finance, Opkom, Kinerja, Utilisasi, Peralatan, Fasilitas)"
-              >
-                <PlusCircle size={12} />
-                <span>+ Input Manual</span>
-              </button>
-            )}
-
-            {/* Tombol Daftar Akun Baru: Hanya muncul untuk role Super Admin & Administrator */}
-            {canManageUsers && (
-              <button
-                type="button"
-                onClick={() => onOpenAuth('register')}
-                className="btn-primary"
-                style={{
-                  padding: '4px 9px',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  borderRadius: 'var(--radius-pill)',
-                  fontWeight: 700,
-                }}
-                title="Daftar Akun Baru PIC / Pengguna (Super Admin & Administrator)"
-              >
-                <UserPlus size={11} />
-                <span>Daftar</span>
-              </button>
-            )}
-
-            {/* Informasi Role Aktif Pengguna (Sesuai Konfigurasi User) */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                backgroundColor: 'rgba(2, 132, 199, 0.12)',
-                border: '1px solid rgba(2, 132, 199, 0.35)',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
-                fontWeight: 700,
-                color: 'var(--accent-cyan)',
-              }}
-              title={`Hak akses akun: ${getRoleLabel()}`}
-            >
-              <Shield size={11} color="var(--accent-cyan)" aria-hidden="true" />
-              <span className="sr-only">Hak akses: </span>
-              <span>{getRoleLabel()}</span>
-            </div>
-
-            {/* Notifikasi Verifikasi & Revisi (FEAT-02) */}
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="btn-dark"
-                style={{ padding: '4px 8px', fontSize: '12px', position: 'relative' }}
-                title="Notifikasi Verifikasi & Status Data"
-                aria-label={`Notifikasi: ${pendingCount} menunggu verifikasi`}
-              >
-                <Bell size={12} aria-hidden="true" />
-                {pendingCount > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '-3px',
-                      right: '-3px',
-                      minWidth: '13px',
-                      height: '13px',
-                      borderRadius: 'var(--radius-pill)',
-                      backgroundColor: 'var(--status-alert-border)',
-                      color: 'var(--text-on-alert)',
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '0 2px',
-                    }}
-                  >
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
-
-              {notificationsOpen && (
-                <div
-                  role="dialog"
-                  aria-label="Daftar notifikasi verifikasi"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 6px)',
-                    right: 0,
-                    width: '280px',
-                    backgroundColor: 'var(--bg-card)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--card-shadow)',
-                    padding: '12px',
-                    zIndex: 50,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '8px',
-                      borderBottom: '1px solid var(--border-subtle)',
-                      paddingBottom: '6px',
-                    }}
-                  >
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>
-                      Pemberitahuan Verifikasi
+                  <Bell size={15} aria-hidden="true" />
+                  {pendingCount > 0 && (
+                    <span className="header-notif-badge" aria-hidden="true">
+                      {pendingCount > 99 ? '99+' : pendingCount}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setNotificationsOpen(false)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: '2px',
-                      }}
-                      aria-label="Tutup panel notifikasi"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
+                  )}
+                </button>
 
-                  {pendingCount > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        Terdapat <strong>{pendingCount} data</strong> yang menunggu proses verifikasi atau tindak lanjut revisi pada periode aktif.
-                      </div>
+                {notificationsOpen && (
+                  <div
+                    role="dialog"
+                    aria-label="Daftar notifikasi verifikasi"
+                    className="header-popover"
+                    style={{ width: '290px' }}
+                  >
+                    <div className="header-popover-head">
+                      <span>Pemberitahuan Verifikasi</span>
                       <button
                         type="button"
-                        className="btn btn-primary"
-                        onClick={() => {
-                          setActiveTab('verification');
-                          setNotificationsOpen(false);
-                        }}
-                        style={{ fontSize: '11px', padding: '4px 8px', width: '100%', justifyContent: 'center' }}
+                        onClick={() => setNotificationsOpen(false)}
+                        className="header-popover-close"
+                        aria-label="Tutup panel notifikasi"
                       >
-                        Buka Modul Verifikasi
+                        <X size={13} aria-hidden="true" />
                       </button>
                     </div>
-                  ) : (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '8px 0' }}>
-                      Tidak ada rekaman pending verifikasi saat ini. Seluruh data konsisten dan terverifikasi.
+
+                    {pendingCount > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '8px' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          Terdapat <strong style={{ color: 'var(--text-title)' }}>{pendingCount} data</strong> yang menunggu verifikasi atau tindak lanjut revisi.
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => {
+                            setActiveTab('verification');
+                            setNotificationsOpen(false);
+                          }}
+                          style={{ fontSize: '12px', padding: '6px 10px', width: '100%', justifyContent: 'center' }}
+                        >
+                          Buka Modul Verifikasi
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '12px 4px' }}>
+                        Tidak ada rekaman menunggu verifikasi saat ini. Seluruh data telah konsisten.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onThemeChange(nextTheme)}
+                className="header-icon-btn"
+                title={theme === 'dark' ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+                aria-label={theme === 'dark' ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+              >
+                {theme === 'dark' ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}
+              </button>
+            </div>
+
+            <span className="header-divider" aria-hidden="true" />
+
+            {/* Unified Account Profile Menu */}
+            <div ref={accountContainerRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountMenuOpen((prev) => !prev);
+                  setNotificationsOpen(false);
+                }}
+                className={`header-account-trigger ${accountMenuOpen ? 'active' : ''}`}
+                aria-haspopup="menu"
+                aria-expanded={accountMenuOpen}
+                aria-label={`Menu akun ${displayName}`}
+              >
+                <span className="header-avatar" aria-hidden="true">
+                  {initials}
+                </span>
+                <span className="header-account-summary hidden-on-mobile">
+                  <span className="header-account-name">{displayName}</span>
+                  <span className="header-account-role">{getRoleLabel()}</span>
+                </span>
+                <ChevronDown
+                  size={13}
+                  aria-hidden="true"
+                  style={{
+                    color: 'var(--text-muted)',
+                    transform: accountMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s ease',
+                    flexShrink: 0,
+                  }}
+                />
+              </button>
+
+              {accountMenuOpen && (
+                <div role="menu" aria-label="Menu akun pengguna" className="header-popover header-account-menu">
+                  {/* Account Identity Header */}
+                  <div className="header-account-card">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <strong style={{ fontSize: '13px', color: 'var(--text-title)' }}>{displayName}</strong>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontFamily: 'var(--font-mono)',
+                          color: 'var(--accent-blue-text)',
+                          fontWeight: 700,
+                        }}
+                      >
+                        [{currentUser?.nipp || '-'}]
+                      </span>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                      <span className="header-role-chip">
+                        <Shield size={10} aria-hidden="true" />
+                        {getRoleLabel()}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                        {currentUser?.branch_id || 'R99'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Account Management Actions */}
+                  {onOpenPasswordChange && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="header-account-item"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        onOpenPasswordChange();
+                      }}
+                    >
+                      <KeyRound size={14} aria-hidden="true" />
+                      <span>Ubah Kata Sandi</span>
+                    </button>
+                  )}
+
+                  {canManageUsers && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="header-account-item"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        onOpenAuth('register');
+                      }}
+                    >
+                      <UserPlus size={14} aria-hidden="true" />
+                      <span>Daftar Akun Baru</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="header-account-item"
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      onOpenAuth('login');
+                    }}
+                  >
+                    <UserCheck size={14} aria-hidden="true" />
+                    <span>Ganti Akun PIC</span>
+                  </button>
+
+                  {onLogout && (
+                    <>
+                      <div className="header-menu-separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="header-account-item danger"
+                        onClick={() => {
+                          setAccountMenuOpen(false);
+                          setShowLogoutConfirm(true);
+                        }}
+                      >
+                        <LogOut size={14} aria-hidden="true" />
+                        <span>Keluar dari Akun</span>
+                      </button>
+                    </>
                   )}
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={onExportExcel}
-              className="btn-dark"
-              style={{ padding: '4px 8px', fontSize: '12px' }}
-              title="Ekspor data Excel (.xlsx)"
-              aria-label="Ekspor data ke Excel"
-            >
-              <Download size={12} aria-hidden="true" />
-            </button>
-
-            <button
-              type="button"
-              onClick={onPrint}
-              className="btn-dark"
-              style={{ padding: '4px 8px', fontSize: '12px' }}
-              title="Cetak Ringkasan"
-              aria-label="Cetak ringkasan halaman"
-            >
-              <Printer size={12} aria-hidden="true" />
-            </button>
           </div>
-
-          {/* Mobile Menu Hamburger Button to Toggle Sidebar */}
-          <button
-            type="button"
-            onClick={() => {
-              if (onToggleMobileMenu) {
-                onToggleMobileMenu();
-              } else {
-                setMobileMenuOpen(!mobileMenuOpen);
-              }
-            }}
-            className="mobile-menu-btn"
-            style={{
-              padding: '6px 8px',
-              borderRadius: 'var(--radius-sm)',
-              background: (isMobileMenuOpen || mobileMenuOpen) ? 'var(--accent-blue)' : 'var(--bg-inner)',
-              color: (isMobileMenuOpen || mobileMenuOpen) ? 'var(--text-on-accent)' : 'var(--text-main)',
-              border: '1px solid var(--border-subtle)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-            }}
-            aria-label="Menu navigasi"
-            aria-expanded={isMobileMenuOpen || mobileMenuOpen}
-          >
-            {(isMobileMenuOpen || mobileMenuOpen) ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
-            {pendingCount > 0 && !(isMobileMenuOpen || mobileMenuOpen) && (
-              <span
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: '#fbbf24',
-                }}
-              />
-            )}
-          </button>
-        </div>
         </div>
 
-        {/* 1. Tombol Trigger Panah: Chevron Up / Down di Bagian Tengah Bawah Navbar */}
+        {/* Central Bottom Collapse Handle */}
         <div className="navbar-toggle-container">
           <button
             type="button"
             className="navbar-toggle-btn"
             onClick={handleToggleNavbar}
-            title={isNavbarCollapsed ? "Tampilkan Seluruh Navbar (v)" : "Ciutkan Navbar ke Atas (^)"}
-            aria-label={isNavbarCollapsed ? "Tampilkan Navbar" : "Ciutkan Navbar"}
+            title={isNavbarCollapsed ? 'Tampilkan Header' : 'Ciutkan Header'}
+            aria-label={isNavbarCollapsed ? 'Tampilkan Header' : 'Ciutkan Header'}
           >
-            {isNavbarCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            {isNavbarCollapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
           </button>
         </div>
       </header>
 
-      {/* PAGE SUBHEADER: Heading */}
-      <div className="portsight-subheader">
-        <h1 className="page-heading">
-          {pageHeadings[activeTab] || 'Dashboard Regional 4'}
-        </h1>
-      </div>
-
-      {/* In-App Logout Confirmation Modal (Accessible with Escape & Enter) */}
+      {/* Single Accessible Logout Confirmation Dialog */}
       {showLogoutConfirm && (
         <div
           className="modal-overlay"
@@ -647,9 +510,8 @@ export default function PortSightHeader({
                   fontSize: '12px',
                   fontWeight: 700,
                   borderRadius: '6px',
-                  // `#ef4444` under white type measured 3.76:1. Red-800 clears AA (5.91:1).
                   backgroundColor: '#b91c1c',
-                  color: 'var(--text-title)',
+                  color: 'var(--text-on-accent)',
                   border: 'none',
                   cursor: 'pointer',
                 }}

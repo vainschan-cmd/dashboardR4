@@ -73,7 +73,14 @@ export default function StatusBadge({
     case 'belum_upload':
     default:
       return (
-        <span className="badge" style={{ backgroundColor: '#f1f5f9', color: 'var(--text-muted)', border: '1px solid #e2e8f0' }}>
+        <span
+          className="badge"
+          style={{
+            backgroundColor: 'var(--bg-inner)',
+            color: 'var(--text-muted)',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
           <span>Belum Upload</span>
         </span>
       );

@@ -9,7 +9,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend,
   Cell,
   ReferenceLine,
 } from 'recharts';
@@ -32,6 +31,8 @@ import {
 import { formatBebanTriliun, formatRupiahFull } from '@/lib/formatters';
 import { isBranchMatch, parseSelectedBranches } from '@/lib/constants';
 import { formatIdDecimal2, formatIdPercent2 } from '@/lib/berandaSummary';
+import { CHART_METRIC_COLORS, ENTITY_CHART_COLORS } from '@/lib/chartPalette';
+import ChartInlineLegend from '@/components/ui/ChartInlineLegend';
 import {
   ENTITAS_SEMUA,
   FINANSIAL_ENTITAS_LIST,
@@ -858,13 +859,21 @@ export default function PortSightKeuangan({
                 <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} unit=" M" />
                 <ReferenceLine y={0} stroke="var(--border-subtle)" />
                 <Tooltip content={<PeriodTrendTooltip />} />
-                <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="PendapatanM" name="Pendapatan" fill="#0284c7" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="BebanM" name="Beban" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="LabaUsahaM" name="Laba Usaha" fill="var(--status-good-text)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="PendapatanM" name="Pendapatan" fill={CHART_METRIC_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="BebanM" name="Beban" fill={CHART_METRIC_COLORS.negative} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="LabaUsahaM" name="Laba Usaha" fill={CHART_METRIC_COLORS.positive} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          <ChartInlineLegend
+            compact
+            items={[
+              { label: 'Pendapatan', color: CHART_METRIC_COLORS.primary },
+              { label: 'Beban', color: CHART_METRIC_COLORS.negative },
+              { label: 'Laba Usaha', color: CHART_METRIC_COLORS.positive },
+            ]}
+          />
 
           {/* Ringkasan beban per periode selalu dalam Triliun (T) */}
           {periodTrendData.length > 0 && (
@@ -929,13 +938,21 @@ export default function PortSightKeuangan({
                 <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} unit=" M" />
                 <ReferenceLine y={0} stroke="var(--border-subtle)" />
                 <Tooltip content={<EntityBreakdownTooltip />} />
-                <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="PendapatanM" name="Pendapatan" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="BebanM" name="Beban" fill="var(--status-danger-text)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="LabaUsahaM" name="Laba Usaha" fill="#34d399" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="PendapatanM" name="Pendapatan" fill={CHART_METRIC_COLORS.primary} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="BebanM" name="Beban" fill={CHART_METRIC_COLORS.negative} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="LabaUsahaM" name="Laba Usaha" fill={CHART_METRIC_COLORS.positive} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          <ChartInlineLegend
+            compact
+            items={[
+              { label: 'Pendapatan', color: CHART_METRIC_COLORS.primary },
+              { label: 'Beban', color: CHART_METRIC_COLORS.negative },
+              { label: 'Laba Usaha', color: CHART_METRIC_COLORS.positive },
+            ]}
+          />
 
           {/* Ringkasan beban per entitas & konsolidasi selalu dalam Triliun (T) */}
           {entityBreakdownData.length > 0 && (
@@ -1010,16 +1027,27 @@ export default function PortSightKeuangan({
               <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
               <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} unit=" M" />
               <Tooltip content={<TopBranchesTooltip />} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Bar dataKey="PendapatanM" name="Pendapatan" fill="#0284c7" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="LabaUsahaM" name="Laba Usaha" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="PendapatanM" name="Pendapatan" fill={CHART_METRIC_COLORS.primary} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="LabaUsahaM" name="Laba Usaha" fill={CHART_METRIC_COLORS.positive} radius={[4, 4, 0, 0]}>
                 {topBranchesChartData.map((entry, idx) => (
-                  <Cell key={`cell-${idx}`} fill={entry.LabaUsahaM >= 0 ? '#10b981' : '#ef4444'} />
+                  <Cell
+                    key={`cell-${idx}`}
+                    fill={entry.LabaUsahaM >= 0 ? CHART_METRIC_COLORS.positive : CHART_METRIC_COLORS.negative}
+                  />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        <ChartInlineLegend
+          compact
+          items={[
+            { label: 'Pendapatan', color: CHART_METRIC_COLORS.primary },
+            { label: 'Laba Usaha (+)', color: CHART_METRIC_COLORS.positive },
+            { label: 'Laba Usaha (-)', color: CHART_METRIC_COLORS.negative },
+          ]}
+        />
       </div>
 
       {/* Tabel Rekapitulasi 9 Field Standar */}
@@ -1117,11 +1145,23 @@ export default function PortSightKeuangan({
                           className={`badge ${
                             r.ENTITAS === 'ELIMINASI'
                               ? 'badge-red'
-                              : r.ENTITAS === 'CABANG'
-                                ? 'badge-blue'
-                                : 'badge-neutral'
+                              : 'badge-neutral'
                           }`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                         >
+                          {r.ENTITAS in ENTITY_CHART_COLORS && (
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 2,
+                                backgroundColor:
+                                  ENTITY_CHART_COLORS[r.ENTITAS as keyof typeof ENTITY_CHART_COLORS],
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
                           {r.ENTITAS}
                         </span>
                       </td>

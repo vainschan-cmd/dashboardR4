@@ -65,6 +65,8 @@ export interface DashboardModuleViewProps {
   onOpenDrilldown: (item: DrilldownItem) => void;
   onOpenComparisonModal: () => void;
   onOpenManualInput: (moduleName?: string) => void;
+  onExportExcel?: () => void;
+  onPrint?: () => void;
   onReload: () => void;
   onUpdateSystemParams: (params: SystemParameters) => void;
   onUpdateDbConfig: (config: DatabaseConfig) => void;
@@ -95,6 +97,8 @@ export default function DashboardModuleView(props: DashboardModuleViewProps) {
     onOpenDrilldown,
     onOpenComparisonModal,
     onOpenManualInput,
+    onExportExcel,
+    onPrint,
     onReload,
     onUpdateSystemParams,
     onUpdateDbConfig,
@@ -210,6 +214,9 @@ export default function DashboardModuleView(props: DashboardModuleViewProps) {
           userRole={userRole}
           username={username}
           onImportSuccess={onReload}
+          onOpenManualInput={manualInput ? () => manualInput() : undefined}
+          onExportExcel={onExportExcel}
+          onPrint={onPrint}
         />
       );
 

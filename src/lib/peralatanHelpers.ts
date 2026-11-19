@@ -1,3 +1,4 @@
+import { ENTITY_CHART_COLORS } from './chartPalette';
 import { getCanonicalBranchCode } from './constants';
 import type {
   PeralatanGrupEntitas,
@@ -5,13 +6,13 @@ import type {
   PeralatanRecord,
 } from './types';
 
-export const PERALATAN_ENTITAS_LIST: PeralatanGrupEntitas[] = ['MTI', 'PMT', 'PTP', 'R4'];
+export const PERALATAN_ENTITAS_LIST: PeralatanGrupEntitas[] = ['R4', 'PMT', 'MTI', 'PTP'];
 
 export const PERALATAN_ENTITAS_COLORS: Record<PeralatanGrupEntitas, string> = {
-  MTI: '#2563eb', // Biru
-  PMT: '#10b981', // Hijau
-  PTP: '#f97316', // Oranye
-  R4: '#9333ea',  // Ungu
+  R4: ENTITY_CHART_COLORS.CABANG,   // '#2563eb' (Biru) - Cabang Regional 4 (sesuai Summary CABANG)
+  PMT: ENTITY_CHART_COLORS.PMT,     // '#94a3b8' (Abu-abu) - Pelindo Multi Terminal
+  MTI: ENTITY_CHART_COLORS.PSL,     // '#ca8a04' (Kuning tua / Emas) - Pelindo Solusi Logistik / MTI
+  PTP: ENTITY_CHART_COLORS.PTP,     // '#f97316' (Orange) - Pelindo Terminal Petikemas
 };
 
 export const PERALATAN_KATEGORI_LIST = ['Alat CY', 'Alat Dermaga', 'Alat Bantu'] as const;
@@ -344,4 +345,48 @@ export function buildBreakdownByJenisChart(rows: PeralatanRecord[]): BreakdownJe
     (a, b) => b.total - a.total || a.jenis_alat.localeCompare(b.jenis_alat)
   );
 }
+
+export interface BreakdownBranchChartRow {
+  nama_cabang: string;
+  breakdown: number;
+  ready: number;
+  total: number;
+  readinessPct: number;
+}
+
+/**
+ * Builds top branches with highest BREAKDOWN units, sorted descending by breakdown count.
+ */
+export function buildBreakdownByBranchChart(
+  rows: PeralatanRecord[],
+  limit = 10
+): BreakdownBranchChartRow[] {
+  const byBranch = new Map<string, { breakdown: number; ready: number; total: number }>();
+
+  for (const r of rows) {
+    const branch = String(r.nama_cabang || 'Lainnya').trim() || 'Lainnya';
+    let entry = byBranch.get(branch);
+    if (!entry) {
+      entry = { breakdown: 0, ready: 0, total: 0 };
+      byBranch.set(branch, entry);
+    }
+    entry.total++;
+    const kondisi = normalizeKondisi(r.kondisi);
+    if (kondisi === 'BREAKDOWN') entry.breakdown++;
+    else if (kondisi === 'READY' || kondisi === 'READY DENGAN CATATAN') entry.ready++;
+  }
+
+  return Array.from(byBranch.entries())
+    .map(([nama_cabang, stat]) => ({
+      nama_cabang,
+      breakdown: stat.breakdown,
+      ready: stat.ready,
+      total: stat.total,
+      readinessPct: stat.total > 0 ? Math.round((stat.ready / stat.total) * 100) : 0,
+    }))
+    .filter((r) => r.breakdown > 0)
+    .sort((a, b) => b.breakdown - a.breakdown || a.nama_cabang.localeCompare(b.nama_cabang))
+    .slice(0, limit);
+}
+
 

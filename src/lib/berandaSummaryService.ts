@@ -312,18 +312,20 @@ export async function getBerandaSummaryData(
     ),
   ]);
 
-  // Map BOPO per cabang (ordered A-Z)
-  const bopoPerCabang: BerandaBopoBranchRow[] = bopoRes.rows.map((row) => {
-    const pend = Number(row.pendapatan || 0);
-    const beb = Number(row.beban || 0);
-    return {
-      nmCbg: String(row.nm_cbg || ''),
-      branchCode: String(row.branch_code || ''),
-      pendapatan: pend,
-      beban: beb,
-      bopo: pend !== 0 ? (Math.abs(beb) / Math.abs(pend)) * 100 : 0,
-    };
-  });
+  // Map BOPO per cabang (ordered ascending by BOPO percentage)
+  const bopoPerCabang: BerandaBopoBranchRow[] = bopoRes.rows
+    .map((row) => {
+      const pend = Number(row.pendapatan || 0);
+      const beb = Number(row.beban || 0);
+      return {
+        nmCbg: String(row.nm_cbg || ''),
+        branchCode: String(row.branch_code || ''),
+        pendapatan: pend,
+        beban: beb,
+        bopo: pend !== 0 ? (Math.abs(beb) / Math.abs(pend)) * 100 : 0,
+      };
+    })
+    .sort((a, b) => a.bopo - b.bopo || a.nmCbg.localeCompare(b.nmCbg));
 
   // Map % Kontribusi Laba Area Per Entitas
   const entityMap = new Map<string, number>();
@@ -347,9 +349,8 @@ export async function getBerandaSummaryData(
     };
   });
 
-  // Map Bottom 10 PJM reversed so smallest negative sits at top, largest negative at bottom
-  const bottom10LabaPjm: BerandaPjmBottomRow[] = [...bottom10PjmRes.rows]
-    .reverse()
+  // Map Bottom 10 PJM ascending so lowest value / deepest loss sits at top
+  const bottom10LabaPjm: BerandaPjmBottomRow[] = bottom10PjmRes.rows
     .map((row) => {
       const realisasi = Number(row.total_val || 0);
       return {
@@ -358,7 +359,8 @@ export async function getBerandaSummaryData(
         realisasi,
         nilaiJt: realisasi / 1e6,
       };
-    });
+    })
+    .sort((a, b) => a.realisasi - b.realisasi || a.nmCbg.localeCompare(b.nmCbg));
 
   return {
     success: true,

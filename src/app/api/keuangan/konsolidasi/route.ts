@@ -217,7 +217,7 @@ export async function GET(req: NextRequest) {
       FROM module_finansial b
       JOIN module_finansial p ON b.branch_code = p.branch_code AND b.year = p.year AND b.month = p.month
       WHERE b.year = $1 AND b.month = $2 AND b.rekening = 'Beban' AND p.rekening = 'Pendapatan' ${bopoB.clause} ${bopoVerifiedFilter}
-      ORDER BY b.branch_name ASC
+      ORDER BY bopo ASC, b.branch_name ASC
       `,
       [year, month, ...bopoB.vals]
     );

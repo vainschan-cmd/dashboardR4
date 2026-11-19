@@ -37,3 +37,73 @@ export function checkPasswordStrength(password: string): PasswordCheck {
 }
 
 export const PASSWORD_HINT = `Minimal ${MIN_PASSWORD_LENGTH} karakter, hindari pola berulang atau kata yang mudah ditebak.`;
+
+export interface PasswordStrengthDetails {
+  score: 0 | 1 | 2 | 3 | 4;
+  label: 'Belum diisi' | 'Lemah' | 'Cukup' | 'Kuat' | 'Sangat Kuat';
+  criteria: {
+    minLength: boolean;
+    distinctChars: boolean;
+    noEdgeSpaces: boolean;
+    mixedVariety: boolean;
+  };
+  valid: boolean;
+}
+
+export function evaluatePasswordStrength(password: string): PasswordStrengthDetails {
+  const value = String(password ?? '');
+  if (!value) {
+    return {
+      score: 0,
+      label: 'Belum diisi',
+      criteria: {
+        minLength: false,
+        distinctChars: false,
+        noEdgeSpaces: true,
+        mixedVariety: false,
+      },
+      valid: false,
+    };
+  }
+
+  const minLength = value.length >= MIN_PASSWORD_LENGTH && value.length <= MAX_PASSWORD_LENGTH;
+  const distinctChars = new Set(value).size >= MIN_DISTINCT_CHARACTERS;
+  const noEdgeSpaces = !/^\s|\s$/.test(value);
+  const hasLower = /[a-z]/.test(value);
+  const hasUpper = /[A-Z]/.test(value);
+  const hasDigitOrSymbol = /[\d\W_]/.test(value);
+  const mixedVariety = hasLower && hasUpper && hasDigitOrSymbol;
+  const check = checkPasswordStrength(value);
+
+  let score: 0 | 1 | 2 | 3 | 4 = 1;
+  if (check.valid) {
+    score = 3;
+    if (mixedVariety && value.length >= 14) {
+      score = 4;
+    } else if (!mixedVariety && value.length < 14) {
+      score = 2;
+    }
+  } else if (value.length >= 8 && distinctChars) {
+    score = 2;
+  }
+
+  const labels: Record<0 | 1 | 2 | 3 | 4, PasswordStrengthDetails['label']> = {
+    0: 'Belum diisi',
+    1: 'Lemah',
+    2: 'Cukup',
+    3: 'Kuat',
+    4: 'Sangat Kuat',
+  };
+
+  return {
+    score,
+    label: labels[score],
+    criteria: {
+      minLength,
+      distinctChars,
+      noEdgeSpaces,
+      mixedVariety,
+    },
+    valid: check.valid,
+  };
+}

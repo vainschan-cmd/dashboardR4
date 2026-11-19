@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   X,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { MonthlyRecord } from '@/lib/types';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import StatusBadge from './StatusBadge';
 
 interface DetailDrilldownModalProps {
@@ -25,6 +26,9 @@ export default function DetailDrilldownModal({
   onClose,
   allRecords,
 }: DetailDrilldownModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, Boolean(record), onClose);
+
   if (!record) return null;
 
   // History for this indicator and branch
@@ -35,7 +39,15 @@ export default function DetailDrilldownModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '680px' }}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="detail-drilldown-title"
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '680px' }}
+      >
         <div className="modal-header">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -53,13 +65,15 @@ export default function DetailDrilldownModal({
               <StatusBadge type="traffic_light" color={record.status_color} />
               <StatusBadge type="verification" verificationStatus={record.verification_status} />
             </div>
-            <h3 className="modal-title" style={{ marginTop: '6px' }}>
+            <h3 id="detail-drilldown-title" className="modal-title" style={{ marginTop: '6px' }}>
               {record.indicator_name || record.indicator_id}
             </h3>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Tutup modal detail"
             style={{
               background: 'none',
               border: 'none',
@@ -78,14 +92,14 @@ export default function DetailDrilldownModal({
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',
             gap: '12px',
-            backgroundColor: '#f8fafc',
-            border: '1px solid #e2e8f0',
+            backgroundColor: 'var(--bg-inner)',
+            border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-lg)',
             padding: '16px'
           }}>
             <div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Target Rencana</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--navy-900)', marginTop: '4px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-title)', marginTop: '4px' }}>
                 {record.target.toLocaleString('id-ID')}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{record.unit}</div>

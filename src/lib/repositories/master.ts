@@ -1,5 +1,6 @@
 import type { Branch, Department, EquipmentItem, KPIIndicator, TemplateConfig } from '../types';
 import { OFFICIAL_BRANCHES } from '../constants';
+import { getPool } from '../db/connection';
 
 const STATIC_BRANCHES: Branch[] = OFFICIAL_BRANCHES.map((b) => ({
   id: b.id,
@@ -29,13 +30,33 @@ const STATIC_DEPARTMENTS: Department[] = [
   { id: 'dept_sdm', code: 'SDM', name: 'SDM & Umum', pic_name: 'PIC SDM', pic_email: 'sdm@pelindo.co.id', active: true, description: 'Sumber Daya Manusia & Umum' },
 ];
 
-const STATIC_EQUIPMENT: EquipmentItem[] = [
-  { id: 'eq_qcc', code: 'QCC', name: 'Quay Container Crane', acronym: 'QCC', category: 'Alat Dermaga', active: true },
-  { id: 'eq_rtg', code: 'RTG', name: 'Rubber Tyred Gantry', acronym: 'RTG', category: 'Alat CY', active: true },
-  { id: 'eq_rs', code: 'RS', name: 'Reach Stacker', acronym: 'RS', category: 'Alat CY', active: true },
-  { id: 'eq_tt', code: 'TT', name: 'Terminal Tractor', acronym: 'TT', category: 'Alat Angkut', active: true },
-  { id: 'eq_fl', code: 'FL', name: 'Forklift', acronym: 'FL', category: 'Alat Bantu', active: true },
-  { id: 'eq_mc', code: 'MC', name: 'Mobile Crane', acronym: 'MC', category: 'Alat Dermaga', active: true },
+export const STATIC_EQUIPMENT: EquipmentItem[] = [
+  { id: 'eq_al01', code: 'AL01', name: 'Quay Container Crane', acronym: 'QCC', category: 'OPERASI KAPAL', active: true, unit_count: 20, record_count: 262 },
+  { id: 'eq_al02', code: 'AL02', name: 'Harbour Mobile Crane', acronym: 'HMC', category: 'OPERASI KAPAL', active: true, unit_count: 0, record_count: 0 },
+  { id: 'eq_al03', code: 'AL03', name: 'Fixed Crane', acronym: 'FC', category: 'OPERASI KAPAL', active: true, unit_count: 4, record_count: 58 },
+  { id: 'eq_al04', code: 'AL04', name: 'Rubber Tyred Gantry Crane', acronym: 'RTG', category: 'OPERASI LAPANGAN', active: true, unit_count: 61, record_count: 625 },
+  { id: 'eq_al05', code: 'AL05', name: 'Reach Stacker', acronym: 'RS', category: 'OPERASI LAPANGAN', active: true, unit_count: 16, record_count: 481 },
+  { id: 'eq_al06', code: 'AL06', name: 'Side Loader', acronym: 'SL', category: 'OPERASI LAPANGAN', active: true, unit_count: 10, record_count: 91 },
+  { id: 'eq_al07', code: 'AL07', name: 'Top Loader', acronym: 'TL', category: 'OPERASI LAPANGAN', active: true, unit_count: 0, record_count: 0 },
+  { id: 'eq_al08', code: 'AL08', name: 'Head Truck', acronym: 'HT', category: 'OPERASI LAPANGAN', active: true, unit_count: 44, record_count: 959 },
+  { id: 'eq_al09', code: 'AL09', name: 'Terminal Tractor', acronym: 'TT', category: 'OPERASI LAPANGAN', active: true, unit_count: 63, record_count: 645 },
+  { id: 'eq_al10', code: 'AL10', name: 'Chassis', acronym: 'CH', category: 'OPERASI LAPANGAN', active: true, unit_count: 134, record_count: 1555 },
+  { id: 'eq_al11', code: 'AL11', name: 'Mobile Crane', acronym: 'MC', category: 'OPERASI LAPANGAN', active: true, unit_count: 7, record_count: 93 },
+  { id: 'eq_al12', code: 'AL12', name: 'Hopper', acronym: 'HO', category: 'OPERASI LAPANGAN', active: true, unit_count: 3, record_count: 27 },
+  { id: 'eq_al13', code: 'AL13', name: 'Excavator', acronym: 'EXC', category: 'OPERASI LAPANGAN', active: true, unit_count: 4, record_count: 36 },
+  { id: 'eq_al14', code: 'AL14', name: 'Dump Truck', acronym: 'DT', category: 'OPERASI LAPANGAN', active: true, unit_count: 0, record_count: 0 },
+  { id: 'eq_al15', code: 'AL15', name: 'Tronton', acronym: 'TR', category: 'OPERASI LAPANGAN', active: true, unit_count: 20, record_count: 438 },
+  { id: 'eq_al16', code: 'AL16', name: 'Forklift', acronym: 'FL', category: 'OPERASI LAPANGAN', active: true, unit_count: 44, record_count: 600 },
+  { id: 'eq_al17', code: 'AL17', name: 'Wheel Loader', acronym: 'WL', category: 'OPERASI LAPANGAN', active: true, unit_count: 0, record_count: 0 },
+  { id: 'eq_al18', code: 'AL18', name: 'Kapal Tunda', acronym: 'KT', category: 'ALAT APUNG', active: true, unit_count: 0, record_count: 0 },
+  { id: 'eq_al19', code: 'AL19', name: 'Kapal Pandu', acronym: 'MP', category: 'ALAT APUNG', active: true, unit_count: 0, record_count: 0 },
+  { id: 'eq_al20', code: 'AL20', name: 'Grab', acronym: 'GRAB', category: 'OPERASI KAPAL', active: true, unit_count: 2, record_count: 18 },
+  { id: 'eq_al21', code: 'AL21', name: 'Timbangan', acronym: 'TIMB', category: 'OPERASI LAPANGAN', active: true, unit_count: 0, record_count: 0 },
+  { id: 'eq_al22', code: 'AL22', name: 'Trailer', acronym: 'TRL', category: 'OPERASI LAPANGAN', active: true, unit_count: 9, record_count: 110 },
+  { id: 'eq_al23', code: 'AL23', name: 'Truk', acronym: 'TRK', category: 'OPERASI LAPANGAN', active: true, unit_count: 2, record_count: 20 },
+  { id: 'eq_al24', code: 'AL24', name: 'Crawler Crane', acronym: 'CC', category: 'OPERASI LAPANGAN', active: true, unit_count: 1, record_count: 10 },
+  { id: 'eq_al25', code: 'AL25', name: 'Lowbed', acronym: 'LB', category: 'OPERASI LAPANGAN', active: true, unit_count: 1, record_count: 9 },
+  { id: 'eq_al26', code: 'AL26', name: 'Ramp Door', acronym: 'RD', category: 'OPERASI KAPAL', active: true, unit_count: 1, record_count: 9 },
 ];
 
 const STATIC_INDICATORS: KPIIndicator[] = [
@@ -109,8 +130,75 @@ export const masterRepository = {
     );
   },
 
-  // Equipment Catalog
-  getEquipmentCatalog: (): EquipmentItem[] => {
+  // Equipment Catalog (from PostgreSQL equipment_catalog with fallback)
+  getEquipmentCatalog: async (): Promise<EquipmentItem[]> => {
+    try {
+      const pool = getPool();
+      const res = await pool.query(
+        `SELECT
+           ec.id,
+           ec.code,
+           ec.name,
+           ec.acronym,
+           ec.category,
+           ec.active,
+           COALESCE(stats.unit_count, 0)::int as unit_count,
+           COALESCE(stats.record_count, 0)::int as record_count
+         FROM equipment_catalog ec
+         LEFT JOIN (
+           SELECT
+             CASE
+               WHEN UPPER(jenis_alat) LIKE '%QUAY%' THEN 'AL01'
+               WHEN UPPER(jenis_alat) LIKE '%HARBOUR%' THEN 'AL02'
+               WHEN UPPER(jenis_alat) LIKE '%FIXED%' THEN 'AL03'
+               WHEN UPPER(jenis_alat) LIKE '%RUBBER%' THEN 'AL04'
+               WHEN UPPER(jenis_alat) LIKE '%REACH%' THEN 'AL05'
+               WHEN UPPER(jenis_alat) LIKE '%SIDE%' THEN 'AL06'
+               WHEN UPPER(jenis_alat) LIKE '%TOP%' THEN 'AL07'
+               WHEN UPPER(jenis_alat) LIKE '%HEAD%' THEN 'AL08'
+               WHEN UPPER(jenis_alat) LIKE '%TERMINAL%' THEN 'AL09'
+               WHEN UPPER(jenis_alat) LIKE '%CHASSIS%' THEN 'AL10'
+               WHEN UPPER(jenis_alat) LIKE '%MOBILE%' THEN 'AL11'
+               WHEN UPPER(jenis_alat) LIKE '%HOPPER%' THEN 'AL12'
+               WHEN UPPER(jenis_alat) LIKE '%EXCAVATOR%' THEN 'AL13'
+               WHEN UPPER(jenis_alat) LIKE '%DUMP%' THEN 'AL14'
+               WHEN UPPER(jenis_alat) LIKE '%TRONTON%' THEN 'AL15'
+               WHEN UPPER(jenis_alat) LIKE '%FORKLIFT%' THEN 'AL16'
+               WHEN UPPER(jenis_alat) LIKE '%WHEEL%' THEN 'AL17'
+               WHEN UPPER(jenis_alat) LIKE '%TUNDA%' THEN 'AL18'
+               WHEN UPPER(jenis_alat) LIKE '%PANDU%' THEN 'AL19'
+               WHEN UPPER(jenis_alat) LIKE '%GRAB%' THEN 'AL20'
+               WHEN UPPER(jenis_alat) LIKE '%TIMBANGAN%' THEN 'AL21'
+               WHEN UPPER(jenis_alat) LIKE '%TRAILER%' THEN 'AL22'
+               WHEN UPPER(jenis_alat) = 'TRUK' THEN 'AL23'
+               WHEN UPPER(jenis_alat) LIKE '%CRAWLER%' THEN 'AL24'
+               WHEN UPPER(jenis_alat) LIKE '%LOWB%' THEN 'AL25'
+               WHEN UPPER(jenis_alat) LIKE '%RAMP%' THEN 'AL26'
+               ELSE NULL
+             END as mapped_code,
+             COUNT(DISTINCT nama_alat) as unit_count,
+             COUNT(*) as record_count
+           FROM module_peralatan
+           GROUP BY 1
+         ) stats ON stats.mapped_code = ec.code
+         WHERE ec.active = TRUE
+         ORDER BY ec.code ASC`
+      );
+      if (res.rows && res.rows.length > 0) {
+        return res.rows.map((r) => ({
+          id: String(r.id),
+          code: String(r.code).trim(),
+          name: String(r.name).trim(),
+          acronym: String(r.acronym || '').trim(),
+          category: String(r.category || 'OPERASIONAL').trim(),
+          active: Boolean(r.active),
+          unit_count: Number(r.unit_count || 0),
+          record_count: Number(r.record_count || 0),
+        }));
+      }
+    } catch {
+      // Fallback to static catalog if DB connection is unavailable
+    }
     return STATIC_EQUIPMENT;
   },
 
